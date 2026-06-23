@@ -111,6 +111,22 @@ public static class SchemaValidator
             return;
         }
 
-        // Placeholder; full arrow-target resolution is added in Task 2.
+        foreach (var filler in relation.AllowedSubjects)
+        {
+            // Subject-set fillers (e.g. group#member) name a relation, not an arrow target.
+            if (filler.Relation is not null)
+                continue;
+
+            if (!types.TryGetValue(filler.Type, out var target))
+            {
+                errors.Add($"Permission '{type.Name}.{permission}' arrows into type " +
+                           $"'{filler.Type}', which is not declared.");
+                continue;
+            }
+
+            if (!HasPermission(target, arrow.Permission))
+                errors.Add($"Permission '{type.Name}.{permission}' arrows to " +
+                           $"'{filler.Type}.{arrow.Permission}', which is not a permission on '{filler.Type}'.");
+        }
     }
 }
