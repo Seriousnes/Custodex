@@ -4,7 +4,7 @@ using Relkit.Core.Conditions;
 
 namespace Relkit.Core.Evaluation;
 
-public sealed partial class EngineDrivenAuthorizer : IAuthorizer
+public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuthorizer
 {
     private readonly ISchemaStore _schemaStore;
     private readonly IRelationStore _relations;
@@ -51,6 +51,9 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer
             request with { Explain = false }, ct);
         return (allowed, conditionTouched);
     }
+
+    Task<(bool Allowed, bool ConditionTouched)> ICacheableAuthorizer.CheckInternalAsync(
+        CheckRequest request, CancellationToken ct) => CheckInternalAsync(request, ct);
 
     private async Task<(bool Allowed, bool ConditionTouched, ExplainNode? Explain)> RunCheckAsync(
         CheckRequest request, CancellationToken ct)
