@@ -12,7 +12,11 @@ public static class ConformanceRunner
 {
     private static readonly TenantContext Tenant = new("conformance", "t");
 
-    public static async Task<CheckResult> RunAsync(ConformanceCase c, CancellationToken ct = default)
+    public static Task<CheckResult> RunAsync(ConformanceCase c, CancellationToken ct = default)
+        => RunAsync(c, new NullConditionEvaluator(), ct);
+
+    public static async Task<CheckResult> RunAsync(
+        ConformanceCase c, IConditionEvaluator conditions, CancellationToken ct = default)
     {
         // Validate the schema through the real m0/03 validator so malformed cases fail loudly.
         // SchemaValidator is a static class (m0/03); EmptyConditionBody passes validation there
@@ -33,7 +37,7 @@ public static class ConformanceRunner
             await attributes.SetAsync(Tenant, seed.Object, seed.Attributes, uow, ct);
         await uow.CommitAsync(ct);
 
-        var authorizer = new EngineDrivenAuthorizer(schemaStore, relations, attributes, new NullConditionEvaluator());
+        var authorizer = new EngineDrivenAuthorizer(schemaStore, relations, attributes, conditions);
 
         var request = new CheckRequest(
             Tenant, c.Object, c.Permission, c.Subject,
@@ -44,6 +48,14 @@ public static class ConformanceRunner
     public static async Task AssertAsync(ConformanceCase c)
     {
         var result = await RunAsync(c);
+        result.Allowed.ShouldBe(c.Expected,
+            $"Conformance case '{c.Name}': expected Allowed={c.Expected} for " +
+            $"{c.Subject} on {c.Object}#{c.Permission}, got {result.Allowed}.");
+    }
+
+    public static async Task AssertAsync(ConformanceCase c, IConditionEvaluator conditions)
+    {
+        var result = await RunAsync(c, conditions);
         result.Allowed.ShouldBe(c.Expected,
             $"Conformance case '{c.Name}': expected Allowed={c.Expected} for " +
             $"{c.Subject} on {c.Object}#{c.Permission}, got {result.Allowed}.");
