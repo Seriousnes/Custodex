@@ -10,6 +10,10 @@ public static class SchemaValidator
         var types = IndexTypes(schema, errors);
         var conditions = IndexConditions(schema, errors);
 
+        foreach (var cond in schema.Conditions)
+            if (cond.Body is not EmptyConditionBody)
+                errors.AddRange(ConditionBodyChecker.Check(cond));
+
         foreach (var type in schema.Types)
         {
             foreach (var perm in type.Permissions)
