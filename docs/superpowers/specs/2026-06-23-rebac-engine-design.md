@@ -79,7 +79,7 @@ The engine answers four questions: point **Check**, **ListObjects** (which resou
 |---|---|
 | `Relkit.Abstractions` | Public contracts: `IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`, and the storage/cache provider interfaces. No implementation. This is the dependency for consumers and third-party providers. |
 | `Relkit.Core` | The engine: schema model, evaluation, condition evaluation, caching orchestration. Depends only on `Relkit.Abstractions`. Contains zero domain concepts and zero database code. |
-| `Relkit.Storage.Postgres` | Implements the storage and cache provider interfaces against Postgres using lightweight data access (Dapper / raw ADO.NET, required for the recursive CTEs). Enlists in an externally-supplied connection and transaction so its writes can commit atomically inside the consuming application's unit of work. Depends on Npgsql, not on EF Core. The first and only provider built initially. |
+| `Relkit.Storage.Postgres` | Implements the storage and cache provider interfaces against Postgres. The first and only provider built initially. |
 | `Relkit.Service` | ASP.NET host exposing gRPC + REST over `Relkit.Core`. Built in milestone M3. The library does not depend on it. |
 | `Relkit.Client` | A .NET client for the service that implements the same `IAuthorizer` interface over gRPC, so a consumer switches between in-process and remote by changing one DI registration. Built in M3. |
 
@@ -165,11 +165,11 @@ Structural scoping is expressed as relationships so it stays indexable and lista
 
 ```
 Store   (one per consuming app — owns one versioned schema lineage)
-  └─ Tenant   (data-isolation scope — a tenant_id discriminator, not a physical partition)
+  └─ Tenant   (data-isolation partition; the zoo app has many)
        └─ Relation tuples + object attributes
 ```
 
-The zoo application is one Store with many Tenants. A small single-tenant consumer is one Store with one Tenant. An AaaS customer is its own Store. All tenants share one database and one schema; a tenant is a `tenant_id` discriminator value, never a separate database or partition.
+The zoo application is one Store with many Tenants. A small single-tenant consumer is one Store with one Tenant. An AaaS customer is its own Store.
 
 ### 6.2 The tuple
 
@@ -192,9 +192,7 @@ Example: `category:drugs#dispenser@group:vets#member with within_hours(start=8, 
 | `cache_entries` | UNLOGGED; key, value, epoch, expires_at — the Postgres-native cache (M2) |
 | `change_log` | store_id, tenant_id, actor, operation (write/delete/schema), target (tuple or schema ref), before (jsonb, null), after (jsonb, null), occurred_at — append-only config-change audit |
 
-`relation_tuples` is indexed in both directions: forward on `(store, tenant, object_type, object_id, relation)` for Check, and reverse on `(store, tenant, subject_type, subject_id)` for traversal and ListSubjects.
-
-Tenant isolation follows the shared-database, shared-schema, discriminator-column model: every engine table carries `store_id` and `tenant_id`, related by foreign keys to `stores` and `tenants`, and **every storage operation filters on `store_id + tenant_id` as a hard, non-optional predicate**. The engine treats tenant scoping as a core invariant of its own data access rather than relying on an ambient filter — defence in depth that runs parallel to, and independent of, the consuming application's own EF Core global query filters and save interceptor protecting its domain tables.
+`relation_tuples` is indexed in both directions: forward on `(store, tenant, object_type, object_id, relation)` for Check, and reverse on `(store, tenant, subject_type, subject_id)` for traversal and ListSubjects. Every query is filtered by `store_id + tenant_id`; composite indexes provide isolation at the target scale, with row-level security or partitioning available for an AaaS deployment that requires hard isolation.
 
 ### 6.4 Attribute synchronization
 
@@ -203,10 +201,6 @@ The consuming application pushes the authz-relevant resource fields into `object
 ### 6.5 Change audit
 
 Every tuple, attribute, and schema write records an append-only entry in `change_log` — actor, operation, target, before/after, and timestamp — within the same transaction as the change, so the audit cannot drift from the data. Write requests therefore carry an `actor` supplied by the consuming application (the engine does not invent identity). This answers configuration questions such as "who granted dr-smith drug access, and when." It records authorization *configuration* changes, not individual check decisions; high-volume decision logging is left to the consuming application's telemetry.
-
-### 6.6 Data access and transaction enlistment
-
-The Postgres provider uses lightweight data access (Dapper / raw ADO.NET over Npgsql), which the recursive CTEs require, and does not depend on EF Core — keeping the engine reusable for any consumer. When the consuming application supplies a `DbConnection` and `DbTransaction` (or an ambient `TransactionScope`), the provider enlists in it so engine writes commit atomically within the application's unit of work (§9.2); otherwise it manages its own transaction. The storage interfaces remain provider-agnostic, so an EF-Core-native provider could be added later without changing the engine.
 
 ## 7. Evaluation engine
 
@@ -264,7 +258,7 @@ Layers: per-request memoization dedupes repeated sub-checks; a cross-request che
 
 ### 9.2 Consistency
 
-Tuple writes, attribute syncs, reverse-index maintenance, and the cache-epoch bump occur in a single Postgres transaction, giving strong read-your-writes consistency. That transaction can be **the consuming application's own ambient transaction**: the Postgres provider enlists in a supplied `DbConnection`/`DbTransaction` (or a `TransactionScope`), so a domain write and its authorization writes commit together — *create animal, write its `enclosure` tuple, sync its `is_quarantine` attribute* succeeds or fails as one unit. When no ambient transaction is supplied, the provider opens and commits its own. The system targets small-to-medium scale (per tenant: dozens to low-hundreds of users, low-thousands of resources, tens of thousands of tuples, low query rates) and relies on relational transaction guarantees as its complete consistency story.
+Tuple writes, attribute syncs, reverse-index maintenance, and the cache-epoch bump occur in a single Postgres transaction, giving strong read-your-writes consistency. The system targets small-to-medium scale (per tenant: dozens to low-hundreds of users, low-thousands of resources, tens of thousands of tuples, low query rates) and relies on relational transaction guarantees as its complete consistency story.
 
 ## 10. Public API surface and error handling
 
@@ -322,7 +316,7 @@ The governing distinction is *deny* versus *error*: allow/deny is always a retur
 | Milestone | Delivers |
 |---|---|
 | **M0 — Engine core** | `Abstractions`, schema model, fluent builder, validation, in-memory provider, engine-driven traversal (oracle), all four operations, conformance and differential harness. |
-| **M1 — Postgres + usable library** | The CTE nested-algebra spike (Section 7.1) first, then: Postgres provider, CTE primary path, transactional writes, epoch cache, on-the-fly ListObjects with the pagination contract, ABAC conditions, wildcard grants, `Explain`. The Blazor application adopts the engine here. |
+| **M1 — Postgres + usable library** | The CTE nested-algebra spike (Section 7.1) first, then: Postgres provider, CTE primary path, transactional writes with config-change audit, epoch cache, on-the-fly ListObjects with the pagination contract, ABAC conditions, wildcard grants, `Explain`. The Blazor application adopts the engine here. |
 | **M2 — Performance** | Maintained reverse index and Postgres-native `UNLOGGED` cache, diffed against the oracle. |
 | **M3 — Service / AaaS** | `Relkit.Service` (gRPC + REST + OpenAPI), `Relkit.Client`, authn, multi-store, DSL parser, container image. |
 
