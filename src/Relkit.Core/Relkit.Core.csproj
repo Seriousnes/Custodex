@@ -11,4 +11,8 @@
 		<RootNamespace>Relkit</RootNamespace>
 	</PropertyGroup>
 
+	<ItemGroup>
+	  <InternalsVisibleTo Include="Relkit.Core.Tests" />
+	</ItemGroup>
+
 </Project>

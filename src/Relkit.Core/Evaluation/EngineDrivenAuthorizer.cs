@@ -35,12 +35,50 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer
 
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
-        var index = await LoadSchemaAsync(request.Tenant.Store, ct);
-        var ctx = new EvalContext(_options);
-        var allowed = await CheckPermissionAsync(
-            index, request.Tenant, request.Object, request.Permission, request.Subject,
-            request.Context, ctx, explain: null, ct);
-        return new CheckResult(allowed);
+        var (allowed, _, explain) = await RunCheckAsync(request, ct);
+        return new CheckResult(allowed, explain);
+    }
+
+    /// <summary>
+    /// Internal entry point used by the m0/08 caching decorator: returns the decision
+    /// together with whether any condition was reached, so the cache can avoid storing
+    /// condition-dependent results. Never emits an Explain tree (caching path).
+    /// </summary>
+    internal async Task<(bool Allowed, bool ConditionTouched)> CheckInternalAsync(
+        CheckRequest request, CancellationToken ct = default)
+    {
+        var (allowed, conditionTouched, _) = await RunCheckAsync(
+            request with { Explain = false }, ct);
+        return (allowed, conditionTouched);
+    }
+
+    private async Task<(bool Allowed, bool ConditionTouched, ExplainNode? Explain)> RunCheckAsync(
+        CheckRequest request, CancellationToken ct)
+    {
+        using var activity = RelkitDiagnostics.ActivitySource.StartActivity("relkit.check");
+        activity?.SetTag("relkit.object", request.Object.ToString());
+        activity?.SetTag("relkit.permission", request.Permission);
+        activity?.SetTag("relkit.subject", request.Subject.ToString());
+
+        var start = Stopwatch.GetTimestamp();
+        try
+        {
+            var index = await LoadSchemaAsync(request.Tenant.Store, ct);
+            var ctx = new EvalContext(_options);
+            var roots = request.Explain ? new List<ExplainNode>() : null;
+            var allowed = await CheckPermissionAsync(
+                index, request.Tenant, request.Object, request.Permission, request.Subject,
+                request.Context, ctx, roots, ct);
+
+            activity?.SetTag("relkit.allowed", allowed);
+            activity?.SetTag("relkit.condition_touched", ctx.ConditionTouched);
+            return (allowed, ctx.ConditionTouched, roots is { Count: > 0 } ? roots[0] : null);
+        }
+        finally
+        {
+            var elapsedMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            RelkitDiagnostics.CheckDuration.Record(elapsedMs);
+        }
     }
 
     /// <summary>
