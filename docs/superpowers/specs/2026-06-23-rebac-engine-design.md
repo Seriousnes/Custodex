@@ -44,7 +44,7 @@ The engine answers four questions: point **Check**, **ListObjects** (which resou
 2. **Application schema** — authored once by the consuming application's developer (entity types and how permissions are computed). Shared across all that Store's tenants; versioned with the application.
 3. **Tenant data** — groups, memberships, grants, exclusions, conditioned grants, and synced resource attributes. Authored by tenant administrators through the application's UI, with no developer involvement. This is the runtime-configurable layer, expressed entirely as data.
 
-"Runtime configurable with no engineers in the loop" applies to layer 3. Layer 2 is a deliberate, versioned developer artifact.
+"Runtime configurable with no engineers in the loop" applies to layer 3. Layer 2 is a deliberate, versioned developer artifact. Tenants compose freely within the rule shapes the schema models; introducing a genuinely new rule shape (new intersection or condition logic the developer did not anticipate) is a layer-2 schema change. The worked examples in Section 12 are all expressible within a single schema, so the zoo application's needs sit entirely in layer 3.
 
 ## 4. Architecture and packages
 
@@ -79,7 +79,7 @@ The engine answers four questions: point **Check**, **ListObjects** (which resou
 |---|---|
 | `Relkit.Abstractions` | Public contracts: `IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`, and the storage/cache provider interfaces. No implementation. This is the dependency for consumers and third-party providers. |
 | `Relkit.Core` | The engine: schema model, evaluation, condition evaluation, caching orchestration. Depends only on `Relkit.Abstractions`. Contains zero domain concepts and zero database code. |
-| `Relkit.Storage.Postgres` | Implements the storage and cache provider interfaces against Postgres. The first and only provider built initially. |
+| `Relkit.Storage.Postgres` | Implements the storage and cache provider interfaces against Postgres using lightweight data access (Dapper / raw ADO.NET, required for the recursive CTEs). Enlists in an externally-supplied connection and transaction so its writes can commit atomically inside the consuming application's unit of work. Depends on Npgsql, not on EF Core. The first and only provider built initially. |
 | `Relkit.Service` | ASP.NET host exposing gRPC + REST over `Relkit.Core`. Built in milestone M3. The library does not depend on it. |
 | `Relkit.Client` | A .NET client for the service that implements the same `IAuthorizer` interface over gRPC, so a consumer switches between in-process and remote by changing one DI registration. Built in M3. |
 
@@ -115,6 +115,8 @@ type animal:
   relation site:      site
   relation blocked:   user | group#member        # exclusion slot
 ```
+
+A subject may be a **wildcard**, `type:*`, meaning every instance of that type within the tenant. `user:*` expresses a public grant ("any user in the tenant may view animals") and is also the mechanism for marking a resource with a structural flag that gates other permissions: a tuple `enclosure:Q1#is_quarantine@user:*` makes `enclosure->is_quarantine` resolve to the universal set for `Q1`, which a permission can then intersect with or exclude (Section 12.5). Wildcards keep these gates inside the relationship algebra, so they remain indexable and listable.
 
 ### 5.3 Permissions and the algebra
 
@@ -163,11 +165,11 @@ Structural scoping is expressed as relationships so it stays indexable and lista
 
 ```
 Store   (one per consuming app — owns one versioned schema lineage)
-  └─ Tenant   (data-isolation partition; the zoo app has many)
+  └─ Tenant   (data-isolation scope — a tenant_id discriminator, not a physical partition)
        └─ Relation tuples + object attributes
 ```
 
-The zoo application is one Store with many Tenants. A small single-tenant consumer is one Store with one Tenant. An AaaS customer is its own Store.
+The zoo application is one Store with many Tenants. A small single-tenant consumer is one Store with one Tenant. An AaaS customer is its own Store. All tenants share one database and one schema; a tenant is a `tenant_id` discriminator value, never a separate database or partition.
 
 ### 6.2 The tuple
 
@@ -186,14 +188,25 @@ Example: `category:drugs#dispenser@group:vets#member with within_hours(start=8, 
 | `tenants` | store_id, tenant_id |
 | `relation_tuples` | store_id, tenant_id, object_type, object_id, relation, subject_type, subject_id, subject_relation (null), condition_name (null), condition_params (jsonb, null) |
 | `object_attributes` | store_id, tenant_id, object_type, object_id, attributes (jsonb) |
-| `reverse_index` | store_id, tenant_id, subject, permission, object_type, object_id, conditioned (bool) — the maintained expansion (M2) |
+| `reverse_index` | store_id, tenant_id, schema_version, subject, permission, object_type, object_id, conditioned (bool) — the maintained expansion (M2) |
 | `cache_entries` | UNLOGGED; key, value, epoch, expires_at — the Postgres-native cache (M2) |
+| `change_log` | store_id, tenant_id, actor, operation (write/delete/schema), target (tuple or schema ref), before (jsonb, null), after (jsonb, null), occurred_at — append-only config-change audit |
 
-`relation_tuples` is indexed in both directions: forward on `(store, tenant, object_type, object_id, relation)` for Check, and reverse on `(store, tenant, subject_type, subject_id)` for traversal and ListSubjects. Every query is filtered by `store_id + tenant_id`; composite indexes provide isolation at the target scale, with row-level security or partitioning available for an AaaS deployment that requires hard isolation.
+`relation_tuples` is indexed in both directions: forward on `(store, tenant, object_type, object_id, relation)` for Check, and reverse on `(store, tenant, subject_type, subject_id)` for traversal and ListSubjects.
+
+Tenant isolation follows the shared-database, shared-schema, discriminator-column model: every engine table carries `store_id` and `tenant_id`, related by foreign keys to `stores` and `tenants`, and **every storage operation filters on `store_id + tenant_id` as a hard, non-optional predicate**. The engine treats tenant scoping as a core invariant of its own data access rather than relying on an ambient filter — defence in depth that runs parallel to, and independent of, the consuming application's own EF Core global query filters and save interceptor protecting its domain tables.
 
 ### 6.4 Attribute synchronization
 
 The consuming application pushes the authz-relevant resource fields into `object_attributes` when domain data changes, the same way it writes tuples. The engine is self-contained: conditions and the candidate-filtering step of ListObjects read attributes directly, in one store, working identically in-process and over the network. Ambient values (`now`, the requesting subject) are supplied as request context, not stored.
+
+### 6.5 Change audit
+
+Every tuple, attribute, and schema write records an append-only entry in `change_log` — actor, operation, target, before/after, and timestamp — within the same transaction as the change, so the audit cannot drift from the data. Write requests therefore carry an `actor` supplied by the consuming application (the engine does not invent identity). This answers configuration questions such as "who granted dr-smith drug access, and when." It records authorization *configuration* changes, not individual check decisions; high-volume decision logging is left to the consuming application's telemetry.
+
+### 6.6 Data access and transaction enlistment
+
+The Postgres provider uses lightweight data access (Dapper / raw ADO.NET over Npgsql), which the recursive CTEs require, and does not depend on EF Core — keeping the engine reusable for any consumer. When the consuming application supplies a `DbConnection` and `DbTransaction` (or an ambient `TransactionScope`), the provider enlists in it so engine writes commit atomically within the application's unit of work (§9.2); otherwise it manages its own transaction. The storage interfaces remain provider-agnostic, so an EF-Core-native provider could be added later without changing the engine.
 
 ## 7. Evaluation engine
 
@@ -201,7 +214,9 @@ The algebra — union, intersection, exclusion, arrow traversal, group nesting, 
 
 ### 7.1 Execution paths
 
-- **Postgres provider — recursive CTEs (primary path).** This is what the zoo application runs. CTEs handle the recursive parts natively: nested-group expansion, arrow inheritance, ListObjects candidate generation, and reverse-index maintenance. Recursive reachability runs in the CTE; intersection, exclusion, and condition evaluation are applied in a thin layer over the CTE result set rather than contorted into a single query.
+- **Postgres provider — recursive CTEs (primary path).** This is what the zoo application runs. CTEs handle the recursive parts natively: nested-group expansion, arrow inheritance, ListObjects candidate generation, and reverse-index maintenance. Recursive reachability runs in the CTE; intersection, exclusion, and condition evaluation are composed over the CTE result set rather than contorted into a single query.
+
+  **Validation spike (M0/M1, before the plan commits to a CTE-primary boundary):** intersection and exclusion interleave *with* traversal at every level — when `animal.edit` arrows into `enclosure.edit` and `enclosure.edit` itself contains `- blocked`, a top-level post-filter cannot see the inner exclusion. ListObjects is hit hardest because it composes nested algebra across a whole type. The spike proves how much nested exclusion/intersection-through-arrows the CTE can absorb. The supported shape that always works is **CTEs for reachability sub-queries with the algebra composed in the engine layer**; the spike determines how far the pure-CTE path extends past that. The differential harness catches any divergence; the spike exists so the boundary is known in week one rather than discovered mid-build.
 - **Engine-driven traversal (supported alternative).** A C# walk over the algebra that issues simple, batched, indexed lookups through `IRelationStore`. It serves three purposes: the portable path for any non-Postgres provider, an in-memory provider for fast unit tests, and the differential oracle that proves the CTE path correct. A provider may additionally override a hot path with a native query as an optimization; the portable path never depends on that.
 
 Keeping the storage contract small (`getTuples(object, relation)`, `getTuples(subject)`) is what delivers database-agnosticism.
@@ -218,11 +233,17 @@ Keeping the storage contract small (`getTuples(object, relation)`, `getTuples(su
 ### 7.3 ListObjects in two milestones
 
 - **Milestone 1 — correctness oracle.** Reverse-traverse from the subject: gather tuples where the subject (or a group it belongs to) appears, walk forward to candidate objects of the target type, confirm the permission holds, then evaluate conditions per candidate. Always correct; heavier when a subject has broad access, which is acceptable at the target scale. This is also available as the ground-truth path.
-- **Milestone 2 — maintained reverse index.** `reverse_index` holds resolved *structural* grants: `(store, tenant, subject, permission, object_type, object_id, conditioned)`. ListObjects becomes one indexed scan plus a condition re-check only on rows flagged `conditioned`. The index is maintained incrementally inside the write transaction when tuples or attributes change (recomputing the affected closure), with a full-rebuild path. Conditioned grants are stored but flagged and never assumed, so request-time predicates remain correct.
+- **Milestone 2 — maintained reverse index.** `reverse_index` holds resolved *structural* grants: `(store, tenant, schema_version, subject, permission, object_type, object_id, conditioned)`. ListObjects becomes one indexed scan plus a condition re-check only on rows flagged `conditioned`. The index is maintained incrementally inside the write transaction when tuples or attributes change (recomputing the affected closure), with a full-rebuild path. Conditioned grants are stored but flagged and never assumed, so request-time predicates remain correct.
+
+  Two explicit plan items make this safe. **Exclusion maintenance is the landmine:** adding a `blocked` tuple must *remove* index rows, removing it must *re-add* them (including objects reachable by multiple independent grant paths), and the same applies to arrow-reachable changes. The incremental closure computation owns this; the full-rebuild path is the always-correct safety net it is validated against. **The index is stamped with `schema_version`:** a schema change invalidates the index rather than silently serving stale rows, and triggers a rebuild.
 
 ### 7.4 Correctness backbone
 
 A differential, property-based harness generates random schemas and tuple sets and asserts that the CTE path, the engine-driven oracle, and the reverse index agree for Check, ListObjects, and ListSubjects across thousands of cases. The fast paths are trusted only when the oracle agrees.
+
+### 7.5 ListObjects pagination
+
+Because conditioned rows are re-checked and may be dropped after the indexed scan, paginating at the storage level alone would return unpredictable page sizes (a request for 50 could yield 37). The contract is therefore **over-fetch and refill**: the engine fetches past the requested page size, evaluates conditions, and returns exactly the requested count (or fewer only at the true end of results), together with an opaque continuation cursor that encodes the underlying scan position. `ListObjectsAsync` returns `{ ObjectIds, ContinuationToken? }`; callers page by passing the token back.
 
 ## 8. ABAC condition evaluation
 
@@ -243,7 +264,7 @@ Layers: per-request memoization dedupes repeated sub-checks; a cross-request che
 
 ### 9.2 Consistency
 
-Tuple writes, attribute syncs, reverse-index maintenance, and the cache-epoch bump occur in a single Postgres transaction, giving strong read-your-writes consistency. The system targets small-to-medium scale (per tenant: dozens to low-hundreds of users, low-thousands of resources, tens of thousands of tuples, low query rates) and relies on relational transaction guarantees as its complete consistency story.
+Tuple writes, attribute syncs, reverse-index maintenance, and the cache-epoch bump occur in a single Postgres transaction, giving strong read-your-writes consistency. That transaction can be **the consuming application's own ambient transaction**: the Postgres provider enlists in a supplied `DbConnection`/`DbTransaction` (or a `TransactionScope`), so a domain write and its authorization writes commit together — *create animal, write its `enclosure` tuple, sync its `is_quarantine` attribute* succeeds or fails as one unit. When no ambient transaction is supplied, the provider opens and commits its own. The system targets small-to-medium scale (per tenant: dozens to low-hundreds of users, low-thousands of resources, tens of thousands of tuples, low query rates) and relies on relational transaction guarantees as its complete consistency story.
 
 ## 10. Public API surface and error handling
 
@@ -253,13 +274,14 @@ Tuple writes, attribute syncs, reverse-index maintenance, and the cache-epoch bu
 IAuthorizer            // decision API (read)
   CheckAsync(req)            -> { Allowed, Explain? }
   BatchCheckAsync(reqs)      -> results[]
-  ListObjectsAsync(req)      -> objectIds[]    (subject, type, permission, filter, paging)
+  ListObjectsAsync(req)      -> { ObjectIds, ContinuationToken? }   (subject, type, permission, filter, page size + cursor)
   ListSubjectsAsync(req)     -> subjects[]
 
-IRelationManager       // facts (write, transactional batches)
+IRelationManager       // facts (write, transactional batches; each write carries an actor and is audited)
   WriteTuplesAsync / DeleteTuplesAsync
   WriteAttributesAsync       // sync authz-relevant resource fields
   ReadTuplesAsync            // admin / audit
+  ReadChangeLogAsync         // config-change audit history
 
 ISchemaManager         // application-developer layer
   ValidateSchema / SetActiveSchema / GetSchema    (fluent builder or DSL)
@@ -300,7 +322,7 @@ The governing distinction is *deny* versus *error*: allow/deny is always a retur
 | Milestone | Delivers |
 |---|---|
 | **M0 — Engine core** | `Abstractions`, schema model, fluent builder, validation, in-memory provider, engine-driven traversal (oracle), all four operations, conformance and differential harness. |
-| **M1 — Postgres + usable library** | Postgres provider, CTE primary path, transactional writes, epoch cache, on-the-fly ListObjects, ABAC conditions, `Explain`. The Blazor application adopts the engine here. |
+| **M1 — Postgres + usable library** | The CTE nested-algebra spike (Section 7.1) first, then: Postgres provider, CTE primary path, transactional writes with config-change audit, epoch cache, on-the-fly ListObjects with the pagination contract, ABAC conditions, wildcard grants, `Explain`. The Blazor application adopts the engine here. |
 | **M2 — Performance** | Maintained reverse index and Postgres-native `UNLOGGED` cache, diffed against the oracle. |
 | **M3 — Service / AaaS** | `Relkit.Service` (gRPC + REST + OpenAPI), `Relkit.Client`, authn, multi-store, DSL parser, container image. |
 
@@ -349,17 +371,27 @@ Melbourne is untouched, so "cannot access other sites" follows automatically fro
 animal:EL-001#can_manage@user:carol
 ```
 
-### 12.5 Structural condition — "only quarantine-trained vets may access animals in a quarantine enclosure"
+### 12.5 Structural gate — "only quarantine-trained vets may access animals in a quarantine enclosure"
+
+The word "only" means base access must be *revoked* inside a quarantine enclosure, not merely supplemented. Union cannot restrict an existing path, so the gate is built from **exclusion and intersection**, with a wildcard tuple marking the enclosure as quarantine.
 
 ```
+# data
+enclosure:Q1#is_quarantine@user:*            # marks Q1 as a quarantine enclosure (universal set)
 animal:EL-001#enclosure@enclosure:Q1
-enclosure:Q1#in@group:quarantine
+group:vets#member@user:dr-smith
 group:quarantine-trained#member@user:dr-smith
-permission:  animal.access = base_access ∪ ( enclosure->quarantine_gate
-                                              & (group:vets#member ∪ group:vet-nurses#member)
-                                              & group:quarantine-trained#member )
+
+# schema
+permission enclosure.is_quarantine = is_quarantine
+permission animal.access =
+      ( base_access - enclosure->is_quarantine )
+    + ( enclosure->is_quarantine
+        & (group:vets#member + group:vet-nurses#member)
+        & group:quarantine-trained#member )
 ```
-Modelled with relationships and intersection so it remains indexable and listable.
+
+Inside a quarantine enclosure `enclosure->is_quarantine` is the universal set, so `base_access - enclosure->is_quarantine` is empty (base access revoked) and the second branch reduces to quarantine-trained vets and vet-nurses. Outside quarantine it is empty, so `base_access` passes through unchanged and the second branch contributes nothing. Modelled with relationships, intersection, and exclusion so it remains indexable and listable.
 
 ### 12.6 Request-time condition — time-bounded dispensing
 

@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "src/Relkit.AppHost/Relkit.AppHost.csproj"
+  }
+}

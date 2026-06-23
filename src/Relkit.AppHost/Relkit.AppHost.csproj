@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>2b4245c7-d5ae-4b9e-9cb5-d71ec768b324</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Relkit.Client\Relkit.Client.csproj" />
+    <ProjectReference Include="..\Relkit.Service\Relkit.Service.csproj" />
+  </ItemGroup>
+
+</Project>
