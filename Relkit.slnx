@@ -1,9 +1,13 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Relkit.Storage.InMemory/Relkit.Storage.InMemory.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Relkit.Abstractions.Tests/Relkit.Abstractions.Tests.csproj" Id="6ba2306f-43eb-438a-b5c7-7ddbb98bffc6" />
     <Project Path="tests/Relkit.Benchmarks/Relkit.Benchmarks.csproj" />
     <Project Path="tests/Relkit.Conformance/Relkit.Conformance.csproj" />
     <Project Path="tests/Relkit.Core.Tests/Relkit.Core.Tests.csproj" />
+    <Project Path="tests/Relkit.Storage.InMemory.Tests/Relkit.Storage.InMemory.Tests.csproj" />
     <Project Path="tests/Relkit.Storage.Postgres.Tests/Relkit.Storage.Postgres.Tests.csproj" />
   </Folder>
   <Project Path="src/Relkit.Abstractions/Relkit.Abstractions.csproj" Id="db87549c-4b8d-4c66-acf6-6d2bfa6debf4" />
