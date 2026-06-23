@@ -267,6 +267,16 @@ The solution targets .NET Aspire (see the layout above). Every affected plan app
 - **Local orchestration is the AppHost.** `Relkit.AppHost` provisions a Postgres resource and runs `Relkit.Service` against it for development — this replaces docker-compose *for dev*. A production `Dockerfile` (M3/06) still applies for deploying the image.
 - **The `Relkit.Service` host** calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()`; M3/01–03 build their gRPC/REST/auth surface on top of that host rather than a bare `WebApplication`.
 
+## Aspire integration
+
+The solution targets .NET Aspire (see the layout above). Every affected plan applies these rules.
+
+- **Projects already exist** — M0/01 and any plan that "creates a project" instead **adds packages/references/source to the existing project**. The solution file is `Relkit.slnx`; add projects to it only if a plan introduces a genuinely new one (none should — the seven src + five test projects already exist).
+- **Observability flows through `Relkit.ServiceDefaults`.** `ServiceDefaults` already configures OpenTelemetry (traces/metrics/logs + OTLP export), so plans must NOT build a parallel OTel pipeline. The library still owns `RelkitDiagnostics` (the `"Relkit"` `ActivitySource` + `Meter`, M0/01); the integration point is registering them into the OTel pipeline. Implement `AddRelkitInstrumentation()` (M1/09) as OpenTelemetry builder extensions: `tracing.AddSource("Relkit")` and `metrics.AddMeter("Relkit")`, called from `Relkit.Service` after `AddServiceDefaults()`. Enable Aspire's commented-out `AddGrpcClientInstrumentation()` for the service.
+- **Health checks flow through ServiceDefaults.** Reuse `MapDefaultEndpoints()` (`/health`, `/alive`). M3/06's `PostgresHealthCheck` is registered as a health check tagged `"ready"` (consumed by `/health`); do not hand-map `/health/ready` separately.
+- **Local orchestration is the AppHost.** `Relkit.AppHost` provisions a Postgres resource and runs `Relkit.Service` against it for development — this replaces docker-compose *for dev*. A production `Dockerfile` (M3/06) still applies for deploying the image.
+- **The `Relkit.Service` host** calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()`; M3/01–03 build their gRPC/REST/auth surface on top of that host rather than a bare `WebApplication`.
+
 ## Milestone → plan-file map
 
 ### M0 — Engine core (`m0/`)
