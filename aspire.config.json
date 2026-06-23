@@ -1,5 +1,5 @@
 {
   "appHost": {
-    "path": "src/Relkit.AppHost/Relkit.AppHost.csproj"
+    "path": "src/Custodex.AppHost/Custodex.AppHost.csproj"
   }
 }
