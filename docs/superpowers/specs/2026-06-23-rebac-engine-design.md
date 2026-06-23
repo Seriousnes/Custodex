@@ -322,7 +322,7 @@ The governing distinction is *deny* versus *error*: allow/deny is always a retur
 | Milestone | Delivers |
 |---|---|
 | **M0 — Engine core** | `Abstractions`, schema model, fluent builder, validation, in-memory provider, engine-driven traversal (oracle), all four operations, conformance and differential harness. |
-| **M1 — Postgres + usable library** | The CTE nested-algebra spike (Section 7.1) first, then: Postgres provider, CTE primary path, transactional writes with config-change audit, epoch cache, on-the-fly ListObjects with the pagination contract, ABAC conditions, wildcard grants, `Explain`. The Blazor application adopts the engine here. |
+| **M1 — Postgres + usable library** | The CTE nested-algebra spike (Section 7.1) first, then: Postgres provider, CTE primary path, transactional writes, epoch cache, on-the-fly ListObjects with the pagination contract, ABAC conditions, wildcard grants, `Explain`. The Blazor application adopts the engine here. |
 | **M2 — Performance** | Maintained reverse index and Postgres-native `UNLOGGED` cache, diffed against the oracle. |
 | **M3 — Service / AaaS** | `Relkit.Service` (gRPC + REST + OpenAPI), `Relkit.Client`, authn, multi-store, DSL parser, container image. |
 
