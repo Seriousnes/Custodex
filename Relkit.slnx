@@ -1,6 +1,13 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Relkit.Abstractions/Relkit.Abstractions.csproj" Id="db87549c-4b8d-4c66-acf6-6d2bfa6debf4" />
+    <Project Path="src/Relkit.AppHost/Relkit.AppHost.csproj" Id="2ee6f37f-4d92-4a22-b9bd-01b5dd70ba9a" />
+    <Project Path="src/Relkit.Client/Relkit.Client.csproj" />
+    <Project Path="src/Relkit.Core/Relkit.Core.csproj" Id="e5a977c7-5d0d-4d64-b358-056400fbcde1" />
+    <Project Path="src/Relkit.Service/Relkit.Service.csproj" />
+    <Project Path="src/Relkit.ServiceDefaults/Relkit.ServiceDefaults.csproj" />
     <Project Path="src/Relkit.Storage.InMemory/Relkit.Storage.InMemory.csproj" />
+    <Project Path="src/Relkit.Storage.Postgres/Relkit.Storage.Postgres.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Relkit.Abstractions.Tests/Relkit.Abstractions.Tests.csproj" Id="6ba2306f-43eb-438a-b5c7-7ddbb98bffc6" />
@@ -10,11 +17,4 @@
     <Project Path="tests/Relkit.Storage.InMemory.Tests/Relkit.Storage.InMemory.Tests.csproj" />
     <Project Path="tests/Relkit.Storage.Postgres.Tests/Relkit.Storage.Postgres.Tests.csproj" />
   </Folder>
-  <Project Path="src/Relkit.Abstractions/Relkit.Abstractions.csproj" Id="db87549c-4b8d-4c66-acf6-6d2bfa6debf4" />
-  <Project Path="src/Relkit.AppHost/Relkit.AppHost.csproj" Id="2ee6f37f-4d92-4a22-b9bd-01b5dd70ba9a" />
-  <Project Path="src/Relkit.Client/Relkit.Client.csproj" />
-  <Project Path="src/Relkit.Core/Relkit.Core.csproj" Id="e5a977c7-5d0d-4d64-b358-056400fbcde1" />
-  <Project Path="src/Relkit.Service/Relkit.Service.csproj" />
-  <Project Path="src/Relkit.ServiceDefaults/Relkit.ServiceDefaults.csproj" />
-  <Project Path="src/Relkit.Storage.Postgres/Relkit.Storage.Postgres.csproj" />
 </Solution>
