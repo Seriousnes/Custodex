@@ -150,4 +150,37 @@ public class AlgebraTests
             Tuple("enclosure", "Q1", "is_quarantine", new SubjectRef("user", "*")));
         (await auth.CheckAsync(Req(new EntityRef("animal", "EL-001"), "quarantined", "anyone"))).Allowed.ShouldBeTrue();
     }
+
+    [Fact]
+    public async Task Arrow_relation_fallback_resolves_when_target_has_no_such_permission()
+    {
+        // enclosure has a relation 'gate' but NO permission named 'gate'.
+        // animal.guarded = enclosure->gate must fall back to resolving the 'gate' relation on the enclosure.
+        var schema = new SchemaBuilder("v1")
+            .Type("enclosure", t => t
+                .Relation("gate", s => s.Wildcard("user")))
+            .Type("animal", t => t
+                .Relation("enclosure", s => s.Type("enclosure"))
+                .Permission("guarded", p => p.Arrow("enclosure", "gate")))
+            .Build();
+        var auth = await NewAsync(schema,
+            Tuple("animal", "EL-001", "enclosure", new SubjectRef("enclosure", "Q1")),
+            Tuple("enclosure", "Q1", "gate", new SubjectRef("user", "*")));
+        (await auth.CheckAsync(Req(new EntityRef("animal", "EL-001"), "guarded", "anyone"))).Allowed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Conditioned_branch_passes_through_when_condition_is_satisfied()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("doc", t => t
+                .Relation("viewer", s => s.User())
+                .Permission("view", p => p.Relation("viewer").Conditioned("always")))
+            .Condition("always", c => { })
+            .Build();
+        var auth = await NewAsync(schema, Tuple("doc", "D1", "viewer", new SubjectRef("user", "alice")));
+        // NullConditionEvaluator treats 'always' as satisfied, so alice (a viewer) is allowed; bob is not.
+        (await auth.CheckAsync(Req(new EntityRef("doc", "D1"), "view", "alice"))).Allowed.ShouldBeTrue();
+        (await auth.CheckAsync(Req(new EntityRef("doc", "D1"), "view", "bob"))).Allowed.ShouldBeFalse();
+    }
 }
