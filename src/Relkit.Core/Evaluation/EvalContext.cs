@@ -17,6 +17,7 @@ public sealed class EvalContext
     private readonly EvaluationOptions _options;
     private readonly Dictionary<EvalFrame, bool> _memo = new();
     private readonly HashSet<EvalFrame> _onPath = new();
+    private readonly HashSet<EvalFrame> _relationOnPath = new();
     private int _depth;
 
     public EvalContext(EvaluationOptions options) => _options = options;
@@ -50,9 +51,33 @@ public sealed class EvalContext
         return true;
     }
 
-    private void Leave(EvalFrame frame)
+    /// <summary>
+    /// Enters <paramref name="frame"/> on the current relation-resolution path. Returns false
+    /// (without entering) if the frame is already on the relation path — a relation cycle,
+    /// which the caller treats as a non-contributing <c>false</c>. Throws when the depth bound
+    /// is exceeded. Shares <c>_depth</c> with <see cref="TryEnter"/>. Dispose the returned scope to leave.
+    /// </summary>
+    public bool TryEnterRelation(EvalFrame frame, out PathScope scope)
     {
-        _onPath.Remove(frame);
+        if (_relationOnPath.Contains(frame))
+        {
+            scope = PathScope.NoOp;
+            return false;
+        }
+        if (_depth >= _options.MaxDepth)
+            throw new EvaluationLimitException(
+                $"Evaluation depth bound of {_options.MaxDepth} exceeded resolving relation {frame.Object}#{frame.Permission}@{frame.Subject}.");
+
+        _relationOnPath.Add(frame);
+        _depth++;
+        scope = new PathScope(this, frame, isRelation: true);
+        return true;
+    }
+
+    private void Leave(EvalFrame frame, bool isRelation)
+    {
+        if (isRelation) _relationOnPath.Remove(frame);
+        else _onPath.Remove(frame);
         _depth--;
     }
 
@@ -60,8 +85,10 @@ public sealed class EvalContext
     {
         private readonly EvalContext? _ctx;
         private readonly EvalFrame _frame;
-        internal PathScope(EvalContext ctx, EvalFrame frame) { _ctx = ctx; _frame = frame; }
+        private readonly bool _isRelation;
+        internal PathScope(EvalContext ctx, EvalFrame frame, bool isRelation = false)
+        { _ctx = ctx; _frame = frame; _isRelation = isRelation; }
         public static PathScope NoOp => default;
-        public void Dispose() => _ctx?.Leave(_frame);
+        public void Dispose() => _ctx?.Leave(_frame, _isRelation);
     }
 }

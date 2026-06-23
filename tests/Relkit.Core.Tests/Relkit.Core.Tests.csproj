@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Relkit.Core\Relkit.Core.csproj" />
+    <ProjectReference Include="..\..\src\Relkit.Storage.InMemory\Relkit.Storage.InMemory.csproj" />
   </ItemGroup>
 
 </Project>
