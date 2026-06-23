@@ -59,4 +59,21 @@ public class ReverseReachabilityTests
         var candidates = await auth.CandidateObjectsForTest(T, new SubjectRef("user", "alice"), "species");
         candidates.Select(c => c.Id).ShouldBe(new[] { "kangaroo" });
     }
+
+    [Fact]
+    public async Task Gathers_objects_via_non_group_member_subject_sets()
+    {
+        // 'team#member' and 'group#manager' are arbitrary subject-sets that Check confirms
+        // but the original group#member-only climb would have missed. (Candidate enumeration
+        // is pure tuple-graph BFS and does not consult the schema, so the type/relation names
+        // used here need not be declared in Build().)
+        var (auth, _) = await NewAsync(
+            Tuple("species", "kangaroo", "editor", new SubjectRef("team", "T", "member")),
+            Tuple("team", "T", "member", new SubjectRef("user", "alice")),
+            Tuple("species", "wallaby", "editor", new SubjectRef("group", "G", "manager")),
+            Tuple("group", "G", "manager", new SubjectRef("user", "alice")));
+
+        var candidates = await auth.CandidateObjectsForTest(T, new SubjectRef("user", "alice"), "species");
+        candidates.Select(c => c.Id).ShouldBe(new[] { "kangaroo", "wallaby" });
+    }
 }

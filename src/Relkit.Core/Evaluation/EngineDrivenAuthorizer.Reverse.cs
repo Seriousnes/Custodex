@@ -43,12 +43,13 @@ public sealed partial class EngineDrivenAuthorizer
                 if (string.Equals(obj.Type, objectType, StringComparison.Ordinal))
                     found.Add(obj.Id);
 
-                // A group whose membership names this principal => climb to the group-as-member.
-                if (string.Equals(obj.Type, "group", StringComparison.Ordinal)
-                    && string.Equals(tuple.Relation, "member", StringComparison.Ordinal))
-                {
-                    subjectQueue.Enqueue(new SubjectRef(obj.Type, obj.Id, "member"));
-                }
+                // The principal fills obj#relation; the set obj:id#relation may be
+                // referenced as a subject-set anywhere in the graph, so climb to it for
+                // every inbound tuple (generalizes the original group#member-only climb).
+                // Check confirms arbitrary subject-sets, so candidate gen must follow them
+                // all; the visited-set guard keeps this terminating, and a climb into a set
+                // that is never referenced as a subject simply finds nothing.
+                subjectQueue.Enqueue(new SubjectRef(obj.Type, obj.Id, tuple.Relation));
 
                 // Any object reached is a potential start for structural-edge walks.
                 if (visitedObjects.Add(obj)) objectQueue.Enqueue(obj);
