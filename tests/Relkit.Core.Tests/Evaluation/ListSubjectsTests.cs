@@ -90,4 +90,19 @@ public class ListSubjectsTests
         page2.Subjects.Select(s => s.Id).ShouldBe(new[] { "b" });
         page2.ContinuationToken.ShouldBeNull();
     }
+
+    [Fact]
+    public async Task Cyclic_group_membership_does_not_hang_collection()
+    {
+        // group a <-> b membership cycle. Without a relation-level cycle guard in the
+        // leaf-user collector, this would recurse unbounded (stack overflow / hang).
+        var auth = await NewAsync(
+            Tuple("doc", "D1", "viewer", new SubjectRef("group", "a", "member")),
+            Tuple("group", "a", "member", new SubjectRef("group", "b", "member")),
+            Tuple("group", "b", "member", new SubjectRef("group", "a", "member")),
+            Tuple("group", "a", "member", new SubjectRef("user", "alice")));
+
+        var result = await auth.ListSubjectsAsync(Req());
+        result.Subjects.Select(s => s.Id).ShouldBe(new[] { "alice" });
+    }
 }

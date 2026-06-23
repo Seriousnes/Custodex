@@ -127,6 +127,14 @@ public sealed partial class EngineDrivenAuthorizer
         SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
         SortedSet<string> users, HashSet<EvalFrame> visited, Action<bool> onWildcardUser, CancellationToken ct)
     {
+        // Cycle guard for relation recursion. A distinct sentinel subject keeps these
+        // relation frames from colliding with the permission frames added in
+        // CollectLeafUsersAsync (which use "<collect>"). Global dedup is correct for
+        // collection: each (object, relation) contributes the same candidate users on
+        // every visit, so visiting once gathers the complete superset.
+        if (!visited.Add(new EvalFrame(obj, relation, new SubjectRef("user", "<collect-rel>"))))
+            return;
+
         var tuples = await _relations.GetByObjectAsync(tenant, obj, relation, ct);
         foreach (var tuple in tuples)
         {
