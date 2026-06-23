@@ -30,5 +30,15 @@ public sealed partial class SchemaBuilder
         return this;
     }
 
+    public SchemaBuilder Condition(
+        string name, Action<ConditionParamBuilder> @params, Func<ConditionBodyBuilder, ConditionExpr> body)
+    {
+        var paramBuilder = new ConditionParamBuilder();
+        @params(paramBuilder);
+        var bodyExpr = body(new ConditionBodyBuilder());
+        _conditions.Add(new ConditionDef(name, paramBuilder.Build(), bodyExpr));
+        return this;
+    }
+
     public Schema Build() => new(_version, _types, _conditions);
 }
