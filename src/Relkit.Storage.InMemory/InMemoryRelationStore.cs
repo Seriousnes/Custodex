@@ -52,6 +52,24 @@ public sealed class InMemoryRelationStore : IRelationStore
         }
     }
 
+    /// <summary>Type universe for the ListObjects oracle: distinct object ids of a type in this tenant.</summary>
+    public Task<IReadOnlyList<string>> ListObjectIdsAsync(
+        TenantContext t, string objectType, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            IReadOnlyList<string> result =
+                _data.TryGetValue(KeyOf(t), out var bucket)
+                    ? bucket.Values
+                        .Where(x => string.Equals(x.Object.Type, objectType, StringComparison.Ordinal))
+                        .Select(x => x.Object.Id)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList()
+                    : [];
+            return Task.FromResult(result);
+        }
+    }
+
     public Task WriteAsync(
         TenantContext t, IReadOnlyList<RelationTuple> add, IReadOnlyList<RelationTuple> remove,
         IUnitOfWork uow, CancellationToken ct = default)

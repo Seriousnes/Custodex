@@ -7,9 +7,6 @@ public sealed partial class EngineDrivenAuthorizer
     public Task<IReadOnlyList<CheckResult>> BatchCheckAsync(BatchCheckRequest request, CancellationToken ct = default)
         => throw new NotImplementedException("Implemented in m0/07.");
 
-    public Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
-        => throw new NotImplementedException("Implemented in m0/07.");
-
     public Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
         => throw new NotImplementedException("Implemented in m0/07.");
 }
