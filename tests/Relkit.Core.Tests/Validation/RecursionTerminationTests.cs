@@ -69,4 +69,19 @@ public class RecursionTerminationTests
 
         SchemaValidator.Validate(schema).IsValid.ShouldBeTrue();
     }
+
+    [Fact]
+    public void Permission_referencing_a_same_named_relation_is_not_a_cycle()
+    {
+        // 'enclosure' has a relation 'is_quarantine' AND a permission 'is_quarantine' = RelationRef("is_quarantine").
+        // The authorizer resolves the RelationRef as the RELATION (it never recurses into a same-named
+        // permission), so this is NOT a permission self-cycle and must validate.
+        var schema = new SchemaBuilder("v1")
+            .Type("enclosure", t => t
+                .Relation("is_quarantine", s => s.Wildcard("user"))
+                .Permission("is_quarantine", p => p.Relation("is_quarantine")))
+            .Build();
+
+        SchemaValidator.Validate(schema).IsValid.ShouldBeTrue();
+    }
 }

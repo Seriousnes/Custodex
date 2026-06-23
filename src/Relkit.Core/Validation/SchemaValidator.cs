@@ -200,11 +200,11 @@ public static class SchemaValidator
     {
         switch (expr)
         {
-            case RelationRef r when HasPermission(type, r.Relation):
+            case RelationRef r when !HasRelation(type, r.Relation) && HasPermission(type, r.Relation):
                 yield return (type.Name, r.Relation);
                 break;
             case RelationRef:
-                break;   // names a relation; not a permission edge
+                break;   // names a relation (possibly shadowing a same-named permission); resolved as a relation, not a permission edge
             case Union u:
                 foreach (var e in ExprEdges(type, u.Left, types)) yield return e;
                 foreach (var e in ExprEdges(type, u.Right, types)) yield return e;
