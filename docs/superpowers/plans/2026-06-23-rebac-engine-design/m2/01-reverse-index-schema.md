@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Define the `IIndexStore` contract members in `Relkit.Abstractions` (intentionally empty in the foundation contract today) and implement `NpgsqlIndexStore` over the `reverse_index` table from `m1/01`, plus the `ReverseIndexRow` value type and the `SubjectKey` encoding the index stores subjects under. This is the storage seam the full rebuild (`m2/02`) and incremental maintenance (`m2/03`) write through, and the index-backed `ListObjects` (`m2/04`) reads through.
+**Goal:** Define the `IIndexStore` contract members in `Custodex.Abstractions` (intentionally empty in the foundation contract today) and implement `NpgsqlIndexStore` over the `reverse_index` table from `m1/01`, plus the `ReverseIndexRow` value type and the `SubjectKey` encoding the index stores subjects under. This is the storage seam the full rebuild (`m2/02`) and incremental maintenance (`m2/03`) write through, and the index-backed `ListObjects` (`m2/04`) reads through.
 
 **Architecture:** The `reverse_index` table (`m1/01` DDL) holds resolved **structural (unconditioned) grants**: `(store_id, tenant_id, schema_version, subject, permission, object_type, object_id, conditioned)`. A row asserts "`subject` holds `permission` on `object_type:object_id` structurally; if `conditioned` is true, a request-time condition was reached on the grant path and must be re-evaluated before the grant is honoured." `subject` is the canonical `SubjectRef` string (`user:alice`, `group:vets#member`, `user:*`). The store is a thin, mechanical CRUD seam over that table — no algebra lives here; the expansion that decides which rows exist lives in `m2/02`/`m2/03`. Every operation hard-filters `(store_id, tenant_id, schema_version)` (spec §6.3 / §7.3).
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (`Relkit.Abstractions`, where `IIndexStore` lives — empty today), `m1/01` (`reverse_index` DDL, `MigrationRunner`, `PostgresFixture`), `m1/03` (`NpgsqlUnitOfWork`/`NpgsqlUnitOfWorkFactory` — index writes enlist in the caller's unit of work so they commit with the data write per spec §7.3/§9.2), `m1/04` (`Json` helper, the `NpgsqlRelationStore`/`NpgsqlSchemaStore` patterns).
+See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (`Custodex.Abstractions`, where `IIndexStore` lives — empty today), `m1/01` (`reverse_index` DDL, `MigrationRunner`, `PostgresFixture`), `m1/03` (`NpgsqlUnitOfWork`/`NpgsqlUnitOfWorkFactory` — index writes enlist in the caller's unit of work so they commit with the data write per spec §7.3/§9.2), `m1/04` (`Json` helper, the `NpgsqlRelationStore`/`NpgsqlSchemaStore` patterns).
 
 ## Shared decisions (locked — used verbatim by m2/02, m2/03, m2/04, m2/06)
 
@@ -28,8 +28,8 @@ These M2 plans share the index table and its row shape. Pin them once, here, and
 ### Task 1: Add the `reverse_index` natural-key unique index (migration 002)
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Migrations/002_reverse_index_unique.sql`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexSchemaTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Migrations/002_reverse_index_unique.sql`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexSchemaTests.cs`
 
 **Interfaces:**
 - Produces: a unique index `ux_reverse_index_natural` on the locked natural key, so the upsert in Task 3 has a conflict target. Applied by the existing `MigrationRunner` (`m1/01`) — it picks up any embedded `Migrations/*.sql` in name order.
@@ -39,12 +39,12 @@ These M2 plans share the index table and its row shape. Pin them once, here, and
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexSchemaTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexSchemaTests.cs
 using Dapper;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class ReverseIndexSchemaTests(PostgresFixture fx)
@@ -89,13 +89,13 @@ public class ReverseIndexSchemaTests(PostgresFixture fx)
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ReverseIndexSchemaTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ReverseIndexSchemaTests`
 Expected: FAIL — `ux_reverse_index_natural` does not exist.
 
 - [ ] **Step 3: Write the migration**
 
 ```sql
--- src/Relkit.Storage.Postgres/Migrations/002_reverse_index_unique.sql
+-- src/Custodex.Storage.Postgres/Migrations/002_reverse_index_unique.sql
 
 -- Natural key for reverse_index upserts/deletes (locked in m2/01 shared decisions).
 -- conditioned is intentionally NOT in the key: flipping it is an in-place UPDATE.
@@ -107,13 +107,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_reverse_index_natural
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ReverseIndexSchemaTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ReverseIndexSchemaTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Migrations/002_reverse_index_unique.sql tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexSchemaTests.cs
+git add src/Custodex.Storage.Postgres/Migrations/002_reverse_index_unique.sql tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexSchemaTests.cs
 git commit -m "feat: add reverse_index natural-key unique index migration"
 ```
 
@@ -122,9 +122,9 @@ git commit -m "feat: add reverse_index natural-key unique index migration"
 ### Task 2: Define the `IIndexStore` contract and `ReverseIndexRow`
 
 **Files:**
-- Modify: `src/Relkit.Abstractions/Storage.cs`
-- Create: `src/Relkit.Abstractions/ReverseIndexRow.cs`
-- Test: `tests/Relkit.Abstractions.Tests/IndexStoreContractTests.cs`
+- Modify: `src/Custodex.Abstractions/Storage.cs`
+- Create: `src/Custodex.Abstractions/ReverseIndexRow.cs`
+- Test: `tests/Custodex.Abstractions.Tests/IndexStoreContractTests.cs`
 
 **Interfaces:**
 - Produces: the populated `IIndexStore` interface (empty `{ }` today in `m0/01`) and the `ReverseIndexRow` record. **This is a contract addition** — report it (see this plan's return). `IIndexStore` members:
@@ -136,18 +136,18 @@ git commit -m "feat: add reverse_index natural-key unique index migration"
   - `Task ClearAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)` — drop **all** index rows for a (store, tenant) across every schema_version (the start of a full rebuild and the schema-change invalidation, `m2/02`).
   - `Task<bool> IsBuiltAsync(TenantContext t, string schemaVersion, CancellationToken ct = default)` — the `RebuildMarker` read: has the index been built for this (store, tenant, schema_version)? A schema change yields a new version whose marker is absent, so a stale index is never served (spec §7.3).
   - `Task MarkBuiltAsync(TenantContext t, string schemaVersion, IUnitOfWork uow, CancellationToken ct = default)` — the `RebuildMarker` write: record that the index is current for this (store, tenant, schema_version).
-- Consumes: `TenantContext`, `IUnitOfWork` from `Relkit.Abstractions`.
+- Consumes: `TenantContext`, `IUnitOfWork` from `Custodex.Abstractions`.
 
 > **Why these members.** `UpsertAsync`/`DeleteForObjectAsync`/`QueryObjectsAsync`/`MarkBuiltAsync` (the `RebuildMarkerAsync` role) are the four named in the orchestrator brief; `DeleteRowsAsync`/`ReadForObjectAsync`/`ClearAsync`/`IsBuiltAsync` are the additional primitives the rebuild (`m2/02`) and the exclusion-correct incremental diff (`m2/03`) require. All are `(store, tenant, schema_version)`-scoped. `ReverseIndexRow` carries only the per-row columns (`subject`, `permission`, `object_type`, `object_id`, `conditioned`); the scope is passed alongside so a row value is reusable across schema versions in tests.
 
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Abstractions.Tests/IndexStoreContractTests.cs
+// tests/Custodex.Abstractions.Tests/IndexStoreContractTests.cs
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Abstractions.Tests;
+namespace Custodex.Abstractions.Tests;
 
 public class IndexStoreContractTests
 {
@@ -180,14 +180,14 @@ public class IndexStoreContractTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Abstractions.Tests --filter IndexStoreContractTests`
+Run: `dotnet test tests/Custodex.Abstractions.Tests --filter IndexStoreContractTests`
 Expected: FAIL — `ReverseIndexRow` not defined and `IIndexStore` has no members.
 
 - [ ] **Step 3: Define `ReverseIndexRow` and populate `IIndexStore`**
 
 ```csharp
-// src/Relkit.Abstractions/ReverseIndexRow.cs
-namespace Relkit.Abstractions;
+// src/Custodex.Abstractions/ReverseIndexRow.cs
+namespace Custodex.Abstractions;
 
 /// <summary>
 /// One maintained reverse-index row: <paramref name="Subject"/> (a canonical SubjectRef string)
@@ -204,10 +204,10 @@ public sealed record ReverseIndexRow(
     bool Conditioned);
 ```
 
-Replace the empty `IIndexStore { }` in `src/Relkit.Abstractions/Storage.cs` with:
+Replace the empty `IIndexStore { }` in `src/Custodex.Abstractions/Storage.cs` with:
 
 ```csharp
-// in src/Relkit.Abstractions/Storage.cs — replaces `public interface IIndexStore { }`
+// in src/Custodex.Abstractions/Storage.cs — replaces `public interface IIndexStore { }`
 public interface IIndexStore
 {
     /// <summary>Insert-or-update each row on its natural key, setting <c>conditioned</c>.</summary>
@@ -248,13 +248,13 @@ public interface IIndexStore
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Abstractions.Tests --filter IndexStoreContractTests`
+Run: `dotnet test tests/Custodex.Abstractions.Tests --filter IndexStoreContractTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Abstractions/ReverseIndexRow.cs src/Relkit.Abstractions/Storage.cs tests/Relkit.Abstractions.Tests/IndexStoreContractTests.cs
+git add src/Custodex.Abstractions/ReverseIndexRow.cs src/Custodex.Abstractions/Storage.cs tests/Custodex.Abstractions.Tests/IndexStoreContractTests.cs
 git commit -m "feat: define IIndexStore members and ReverseIndexRow contract"
 ```
 
@@ -263,8 +263,8 @@ git commit -m "feat: define IIndexStore members and ReverseIndexRow contract"
 ### Task 3: The `index_build_markers` table (migration 003)
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Migrations/003_index_build_markers.sql`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/IndexBuildMarkerSchemaTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Migrations/003_index_build_markers.sql`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/IndexBuildMarkerSchemaTests.cs`
 
 **Interfaces:**
 - Produces: `index_build_markers(store_id, tenant_id, schema_version, built_at, PK(store_id, tenant_id, schema_version))`, the table backing `IsBuiltAsync`/`MarkBuiltAsync`. A marker row's presence means "the index is current for this (store, tenant, schema_version)." This is the `RebuildMarker` (spec §7.3): a schema change produces a new `schema_version` with no marker, so the index-backed `ListObjects` (`m2/04`) sees the index is not built for the active version and falls back / triggers a rebuild rather than serving stale rows.
@@ -274,12 +274,12 @@ git commit -m "feat: define IIndexStore members and ReverseIndexRow contract"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/IndexBuildMarkerSchemaTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/IndexBuildMarkerSchemaTests.cs
 using Dapper;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class IndexBuildMarkerSchemaTests(PostgresFixture fx)
@@ -300,13 +300,13 @@ public class IndexBuildMarkerSchemaTests(PostgresFixture fx)
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexBuildMarkerSchemaTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexBuildMarkerSchemaTests`
 Expected: FAIL — table does not exist.
 
 - [ ] **Step 3: Write the migration**
 
 ```sql
--- src/Relkit.Storage.Postgres/Migrations/003_index_build_markers.sql
+-- src/Custodex.Storage.Postgres/Migrations/003_index_build_markers.sql
 
 -- index_build_markers: presence => the reverse_index is current for (store, tenant, schema_version).
 -- M2 maintenance infrastructure for the spec §7.3 schema-version staleness check (CONTRACT GAP).
@@ -322,13 +322,13 @@ CREATE TABLE IF NOT EXISTS index_build_markers (
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexBuildMarkerSchemaTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexBuildMarkerSchemaTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Migrations/003_index_build_markers.sql tests/Relkit.Storage.Postgres.Tests/Index/IndexBuildMarkerSchemaTests.cs
+git add src/Custodex.Storage.Postgres/Migrations/003_index_build_markers.sql tests/Custodex.Storage.Postgres.Tests/Index/IndexBuildMarkerSchemaTests.cs
 git commit -m "feat: add index_build_markers table migration"
 ```
 
@@ -337,8 +337,8 @@ git commit -m "feat: add index_build_markers table migration"
 ### Task 4: Implement `NpgsqlIndexStore`
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlIndexStore.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/NpgsqlIndexStoreTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlIndexStore.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/NpgsqlIndexStoreTests.cs`
 
 **Interfaces:**
 - Produces: `NpgsqlIndexStore(string connectionString) : IIndexStore`, every member implemented in Dapper over `reverse_index` and `index_build_markers`. Writes enlist in the supplied `NpgsqlUnitOfWork` (so they commit with the data write); reads open their own short-lived connection. Every statement hard-filters `(store_id, tenant_id)` and, where row-scoped, `schema_version`.
@@ -349,14 +349,14 @@ git commit -m "feat: add index_build_markers table migration"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/NpgsqlIndexStoreTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/NpgsqlIndexStoreTests.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Storage.Postgres;
+using Custodex.Abstractions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class NpgsqlIndexStoreTests(PostgresFixture fx) : IAsyncLifetime
@@ -504,18 +504,18 @@ public class NpgsqlIndexStoreTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter NpgsqlIndexStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter NpgsqlIndexStoreTests`
 Expected: FAIL — `NpgsqlIndexStore` does not exist.
 
 - [ ] **Step 3: Implement the store**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlIndexStore.cs
+// src/Custodex.Storage.Postgres/NpgsqlIndexStore.cs
 using Dapper;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Dapper-backed <see cref="IIndexStore"/> over the reverse_index and index_build_markers tables.
@@ -663,13 +663,13 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter NpgsqlIndexStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter NpgsqlIndexStoreTests`
 Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/NpgsqlIndexStore.cs tests/Relkit.Storage.Postgres.Tests/Index/NpgsqlIndexStoreTests.cs
+git add src/Custodex.Storage.Postgres/NpgsqlIndexStore.cs tests/Custodex.Storage.Postgres.Tests/Index/NpgsqlIndexStoreTests.cs
 git commit -m "feat: implement NpgsqlIndexStore over reverse_index"
 ```
 
@@ -679,7 +679,7 @@ git commit -m "feat: implement NpgsqlIndexStore over reverse_index"
 
 - [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`.
 - [ ] `IIndexStore` is no longer empty: it declares `UpsertAsync`, `DeleteForObjectAsync`, `DeleteRowsAsync`, `QueryObjectsAsync`, `ReadForObjectAsync`, `ClearAsync`, `IsBuiltAsync`, `MarkBuiltAsync` (reported as a contract addition).
-- [ ] `ReverseIndexRow` exists in `Relkit.Abstractions` with `(Subject, Permission, ObjectType, ObjectId, Conditioned)`.
+- [ ] `ReverseIndexRow` exists in `Custodex.Abstractions` with `(Subject, Permission, ObjectType, ObjectId, Conditioned)`.
 - [ ] `reverse_index` has `ux_reverse_index_natural` (natural key, conditioned excluded) and keeps `ix_reverse_index_scan` from `m1/01`.
 - [ ] `index_build_markers` exists; presence marks the index current for a (store, tenant, schema_version).
 - [ ] `NpgsqlIndexStore` upserts in-place on the natural key, scans ordinal-sorted with a cursor, and hard-filters (store, tenant[, schema_version]) on every statement.

@@ -17,8 +17,8 @@ See `../README.md` → Global Constraints and the Calibration section. Depends o
 ### Task 1: Reuse the valid-model generator and add a write-sequence generator
 
 **Files:**
-- Create: `tests/Relkit.Storage.Postgres.Tests/Differential/IndexModelGenerators.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Differential/GeneratorSanityTests.cs`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Differential/IndexModelGenerators.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Differential/GeneratorSanityTests.cs`
 
 **Interfaces:**
 - Consumes: `ModelGenerator` from `m1/08` (curated valid-schema skeletons + tuple generator) and `SchemaValidator` (m0/03).
@@ -27,12 +27,12 @@ See `../README.md` → Global Constraints and the Calibration section. Depends o
 - [ ] **Step 1: Write the failing sanity test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Differential/GeneratorSanityTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Differential/GeneratorSanityTests.cs
 using CsCheck;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Differential;
+namespace Custodex.Storage.Postgres.Tests.Differential;
 
 public class GeneratorSanityTests
 {
@@ -51,17 +51,17 @@ public class GeneratorSanityTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter GeneratorSanityTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter GeneratorSanityTests`
 Expected: FAIL — `IndexModelGenerators` not defined.
 
 - [ ] **Step 3: Implement the generators**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Differential/IndexModelGenerators.cs
+// tests/Custodex.Storage.Postgres.Tests/Differential/IndexModelGenerators.cs
 using CsCheck;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres.Tests.Differential;
+namespace Custodex.Storage.Postgres.Tests.Differential;
 
 public sealed record WriteOp(bool Add, RelationTuple Tuple);
 
@@ -85,13 +85,13 @@ public static class IndexModelGenerators
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter GeneratorSanityTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter GeneratorSanityTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Differential
+git add tests/Custodex.Storage.Postgres.Tests/Differential
 git commit -m "test: add reverse-index differential model generators"
 ```
 
@@ -100,7 +100,7 @@ git commit -m "test: add reverse-index differential model generators"
 ### Task 2: Fresh-rebuild ≡ oracle
 
 **Files:**
-- Create: `tests/Relkit.Storage.Postgres.Tests/Differential/IndexRebuildEquivalenceTests.cs`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Differential/IndexRebuildEquivalenceTests.cs`
 
 **Interfaces:**
 - Consumes: `IndexBackedAuthorizer` (m2/04) over a rebuilt index; `EngineDrivenAuthorizer` (oracle); `ReverseIndexRebuilder` (m2/02). Both authorizers built over the same Testcontainers Postgres model via the m1/08 dual-seed helper, extended with an index path.
@@ -108,12 +108,12 @@ git commit -m "test: add reverse-index differential model generators"
 - [ ] **Step 1: Write the failing property test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Differential/IndexRebuildEquivalenceTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Differential/IndexRebuildEquivalenceTests.cs
 using CsCheck;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Differential;
+namespace Custodex.Storage.Postgres.Tests.Differential;
 
 [Collection("postgres")]   // shares the Testcontainers fixture
 public class IndexRebuildEquivalenceTests(PostgresFixture fx)
@@ -139,16 +139,16 @@ public class IndexRebuildEquivalenceTests(PostgresFixture fx)
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexRebuildEquivalenceTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexRebuildEquivalenceTests`
 Expected: FAIL — `DifferentialHarness.RebuildIndexAsync`/`IndexBacked` not present until the harness is extended.
 
 - [ ] **Step 3: Extend the m1/08 harness with an index path**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Differential/DifferentialHarness.Index.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/Differential/DifferentialHarness.Index.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres.Tests.Differential;
+namespace Custodex.Storage.Postgres.Tests.Differential;
 
 public partial class DifferentialHarness
 {
@@ -168,13 +168,13 @@ public partial class DifferentialHarness
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexRebuildEquivalenceTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexRebuildEquivalenceTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Differential
+git add tests/Custodex.Storage.Postgres.Tests/Differential
 git commit -m "test: assert rebuilt reverse index equals oracle"
 ```
 
@@ -183,7 +183,7 @@ git commit -m "test: assert rebuilt reverse index equals oracle"
 ### Task 3: Incremental ≡ rebuild ≡ oracle after write sequences
 
 **Files:**
-- Create: `tests/Relkit.Storage.Postgres.Tests/Differential/IndexIncrementalEquivalenceTests.cs`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Differential/IndexIncrementalEquivalenceTests.cs`
 
 **Interfaces:**
 - Consumes: `IncrementalIndexMaintainer` (m2/03) invoked inside each write's unit of work; the rebuild and oracle paths for comparison.
@@ -193,12 +193,12 @@ This is the test that proves incremental maintenance under exclusion/arrow chang
 - [ ] **Step 1: Write the failing property test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Differential/IndexIncrementalEquivalenceTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Differential/IndexIncrementalEquivalenceTests.cs
 using CsCheck;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Differential;
+namespace Custodex.Storage.Postgres.Tests.Differential;
 
 [Collection("postgres")]
 public class IndexIncrementalEquivalenceTests(PostgresFixture fx)
@@ -236,16 +236,16 @@ public class IndexIncrementalEquivalenceTests(PostgresFixture fx)
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexIncrementalEquivalenceTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexIncrementalEquivalenceTests`
 Expected: FAIL — `ApplyWriteAsync`/`RebuildScratchIndexAsync`/`ScratchIndexBacked` not present.
 
 - [ ] **Step 3: Add the write-application and scratch-rebuild helpers**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Differential/DifferentialHarness.Incremental.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/Differential/DifferentialHarness.Incremental.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres.Tests.Differential;
+namespace Custodex.Storage.Postgres.Tests.Differential;
 
 public partial class DifferentialHarness
 {
@@ -274,13 +274,13 @@ public partial class DifferentialHarness
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexIncrementalEquivalenceTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexIncrementalEquivalenceTests`
 Expected: PASS. Any failing CsCheck case prints the minimal shrunk write-sequence that broke incremental maintenance — fix `m2/03`, not this test.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Differential
+git add tests/Custodex.Storage.Postgres.Tests/Differential
 git commit -m "test: assert incremental reverse index equals rebuild and oracle"
 ```
 

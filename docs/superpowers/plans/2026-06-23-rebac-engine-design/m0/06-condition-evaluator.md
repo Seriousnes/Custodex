@@ -10,34 +10,34 @@
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; identifiers are non-empty ordinal strings; **determinism — ambient time enters only through `RequestContext.Now`**, never `DateTime.Now`. Depends on `m0/01` (`Relkit.Abstractions`, the `ConditionExpr` marker), `m0/02` (`SchemaBuilder`, `EmptyConditionBody`), and `m0/03` (`ConditionParamChecker`, reused for body-time param typing). Concrete `ConditionExpr` nodes and the evaluator live in `Relkit.Core` (consistent with `EmptyConditionBody`).
+See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; identifiers are non-empty ordinal strings; **determinism — ambient time enters only through `RequestContext.Now`**, never `DateTime.Now`. Depends on `m0/01` (`Custodex.Abstractions`, the `ConditionExpr` marker), `m0/02` (`SchemaBuilder`, `EmptyConditionBody`), and `m0/03` (`ConditionParamChecker`, reused for body-time param typing). Concrete `ConditionExpr` nodes and the evaluator live in `Custodex.Core` (consistent with `EmptyConditionBody`).
 
 ---
 
 ### Task 1: Concrete `ConditionExpr` body nodes
 
 **Files:**
-- Create: `src/Relkit.Core/Conditions/ConditionExprNodes.cs`
-- Test: `tests/Relkit.Core.Tests/Conditions/ConditionExprNodesTests.cs`
+- Create: `src/Custodex.Core/Conditions/ConditionExprNodes.cs`
+- Test: `tests/Custodex.Core.Tests/Conditions/ConditionExprNodesTests.cs`
 
 **Interfaces:**
-- Produces, all deriving from `Relkit.Abstractions.ConditionExpr`:
+- Produces, all deriving from `Custodex.Abstractions.ConditionExpr`:
   - Literals: `LiteralBool(bool)`, `LiteralInt(long)`, `LiteralDouble(double)`, `LiteralString(string)`.
   - Refs: `ParamRef(string Name)`, `AttributeRef(string Field)` (`resource[field]`), `ContextNow` (`context.now`), `ContextSubject` (`context.subject`).
   - Operators: `Compare(ConditionExpr Left, CompareOp Op, ConditionExpr Right)`, `BoolOp(ConditionExpr Left, BoolConnective Op, ConditionExpr Right)`, `Not(ConditionExpr Inner)`, `Arithmetic(ConditionExpr Left, ArithOp Op, ConditionExpr Right)`, `InList(ConditionExpr Item, IReadOnlyList<ConditionExpr> Items)`, `HourOf(ConditionExpr Timestamp)`.
   - Enums: `CompareOp { Eq, Ne, Lt, Le, Gt, Ge }`, `BoolConnective { And, Or }`, `ArithOp { Add, Sub, Mul, Div }`.
-- Consumes: `ConditionExpr` from `Relkit.Abstractions`.
+- Consumes: `ConditionExpr` from `Custodex.Abstractions`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Core.Tests/Conditions/ConditionExprNodesTests.cs
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
+// tests/Custodex.Core.Tests/Conditions/ConditionExprNodesTests.cs
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Conditions;
+namespace Custodex.Core.Tests.Conditions;
 
 public class ConditionExprNodesTests
 {
@@ -72,16 +72,16 @@ public class ConditionExprNodesTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Conditions.ConditionExprNodesTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Conditions.ConditionExprNodesTests`
 Expected: FAIL — the node types do not exist.
 
 - [ ] **Step 3: Implement the body nodes**
 
 ```csharp
-// src/Relkit.Core/Conditions/ConditionExprNodes.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Conditions/ConditionExprNodes.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Conditions;
+namespace Custodex.Core.Conditions;
 
 public enum CompareOp { Eq, Ne, Lt, Le, Gt, Ge }
 public enum BoolConnective { And, Or }
@@ -107,13 +107,13 @@ public sealed record HourOf(ConditionExpr Timestamp) : ConditionExpr; // date-ti
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Conditions.ConditionExprNodesTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Conditions.ConditionExprNodesTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: add concrete condition-body AST nodes"
 ```
 
@@ -122,9 +122,9 @@ git commit -m "feat: add concrete condition-body AST nodes"
 ### Task 2: The evaluation value model and result
 
 **Files:**
-- Create: `src/Relkit.Core/Conditions/CelValue.cs`
-- Create: `src/Relkit.Core/Conditions/ConditionResult.cs`
-- Test: `tests/Relkit.Core.Tests/Conditions/CelValueTests.cs`
+- Create: `src/Custodex.Core/Conditions/CelValue.cs`
+- Create: `src/Custodex.Core/Conditions/ConditionResult.cs`
+- Test: `tests/Custodex.Core.Tests/Conditions/CelValueTests.cs`
 
 **Interfaces:**
 - Produces:
@@ -138,12 +138,12 @@ git commit -m "feat: add concrete condition-body AST nodes"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Core.Tests/Conditions/CelValueTests.cs
-using Relkit.Core.Conditions;
+// tests/Custodex.Core.Tests/Conditions/CelValueTests.cs
+using Custodex.Core.Conditions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Conditions;
+namespace Custodex.Core.Tests.Conditions;
 
 public class CelValueTests
 {
@@ -174,14 +174,14 @@ public class CelValueTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Conditions.CelValueTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Conditions.CelValueTests`
 Expected: FAIL — `CelValue`/`ConditionResult` do not exist.
 
 - [ ] **Step 3: Implement the value model**
 
 ```csharp
-// src/Relkit.Core/Conditions/CelValue.cs
-namespace Relkit.Core.Conditions;
+// src/Custodex.Core/Conditions/CelValue.cs
+namespace Custodex.Core.Conditions;
 
 public enum CelKind { Bool, Int, Double, String, Timestamp }
 
@@ -217,8 +217,8 @@ public sealed class CelValue
 ```
 
 ```csharp
-// src/Relkit.Core/Conditions/ConditionResult.cs
-namespace Relkit.Core.Conditions;
+// src/Custodex.Core/Conditions/ConditionResult.cs
+namespace Custodex.Core.Conditions;
 
 public sealed record ConditionResult(bool Allowed, string? Diagnostic)
 {
@@ -230,13 +230,13 @@ public sealed record ConditionResult(bool Allowed, string? Diagnostic)
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Conditions.CelValueTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Conditions.CelValueTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: add CelValue model and ConditionResult"
 ```
 
@@ -245,12 +245,12 @@ git commit -m "feat: add CelValue model and ConditionResult"
 ### Task 3: The sandboxed `ConditionEvaluator`
 
 **Files:**
-- Create: `src/Relkit.Core/Conditions/ConditionEvaluator.cs`
-- Test: `tests/Relkit.Core.Tests/Conditions/ConditionEvaluatorTests.cs`
+- Create: `src/Custodex.Core/Conditions/ConditionEvaluator.cs`
+- Test: `tests/Custodex.Core.Tests/Conditions/ConditionEvaluatorTests.cs`
 
 **Interfaces:**
 - Produces: `ConditionEvaluator.Evaluate(ConditionDef definition, IReadOnlyDictionary<string, object?> attributes, RequestContext context, IReadOnlyDictionary<string, object?> parameters) -> ConditionResult`.
-- Consumes: `ConditionDef`, `RequestContext`, `SubjectRef` from `Relkit.Abstractions`; the body nodes and `CelValue`/`ConditionResult` from Tasks 1–2.
+- Consumes: `ConditionDef`, `RequestContext`, `SubjectRef` from `Custodex.Abstractions`; the body nodes and `CelValue`/`ConditionResult` from Tasks 1–2.
 
 The evaluator walks the body to a `CelValue`, requiring the top-level result to be `Bool`. Reference resolution:
 
@@ -264,13 +264,13 @@ Comparisons require comparable kinds (two numerics, two strings, two timestamps,
 - [ ] **Step 1: Write the failing tests** (the three spec conditions)
 
 ```csharp
-// tests/Relkit.Core.Tests/Conditions/ConditionEvaluatorTests.cs
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
+// tests/Custodex.Core.Tests/Conditions/ConditionEvaluatorTests.cs
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Conditions;
+namespace Custodex.Core.Tests.Conditions;
 
 public class ConditionEvaluatorTests
 {
@@ -374,16 +374,16 @@ public class ConditionEvaluatorTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Conditions.ConditionEvaluatorTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Conditions.ConditionEvaluatorTests`
 Expected: FAIL — `ConditionEvaluator` does not exist.
 
 - [ ] **Step 3: Implement the evaluator**
 
 ```csharp
-// src/Relkit.Core/Conditions/ConditionEvaluator.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Conditions/ConditionEvaluator.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Conditions;
+namespace Custodex.Core.Conditions;
 
 public static class ConditionEvaluator
 {
@@ -578,13 +578,13 @@ public static class ConditionEvaluator
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Conditions.ConditionEvaluatorTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Conditions.ConditionEvaluatorTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: add sandboxed typed condition evaluator"
 ```
 
@@ -593,9 +593,9 @@ git commit -m "feat: add sandboxed typed condition evaluator"
 ### Task 4: `SchemaBuilder.Condition(name, params, bodyExpr)` overload
 
 **Files:**
-- Modify: `src/Relkit.Core/SchemaBuilder.cs`
-- Create: `src/Relkit.Core/ConditionBodyBuilder.cs`
-- Test: `tests/Relkit.Core.Tests/ConditionBodyBuilderTests.cs`
+- Modify: `src/Custodex.Core/SchemaBuilder.cs`
+- Create: `src/Custodex.Core/ConditionBodyBuilder.cs`
+- Test: `tests/Custodex.Core.Tests/ConditionBodyBuilderTests.cs`
 
 **Interfaces:**
 - Produces:
@@ -608,14 +608,14 @@ The params-only overload from `m0/02` (`Condition(string, Action<ConditionParamB
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Core.Tests/ConditionBodyBuilderTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
+// tests/Custodex.Core.Tests/ConditionBodyBuilderTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests;
+namespace Custodex.Core.Tests;
 
 public class ConditionBodyBuilderTests
 {
@@ -669,17 +669,17 @@ public class ConditionBodyBuilderTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ConditionBodyBuilderTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ConditionBodyBuilderTests`
 Expected: FAIL — `ConditionBodyBuilder` and the new overload do not exist.
 
 - [ ] **Step 3: Implement the body builder**
 
 ```csharp
-// src/Relkit.Core/ConditionBodyBuilder.cs
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
+// src/Custodex.Core/ConditionBodyBuilder.cs
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
 
-namespace Relkit.Core;
+namespace Custodex.Core;
 
 public sealed class ConditionBodyBuilder
 {
@@ -718,7 +718,7 @@ public sealed class ConditionBodyBuilder
 - [ ] **Step 4: Add the `Condition` overload to `SchemaBuilder`**
 
 ```csharp
-// src/Relkit.Core/SchemaBuilder.cs  (add this method to the SchemaBuilder class)
+// src/Custodex.Core/SchemaBuilder.cs  (add this method to the SchemaBuilder class)
     public SchemaBuilder Condition(
         string name, Action<ConditionParamBuilder> @params, Func<ConditionBodyBuilder, ConditionExpr> body)
     {
@@ -734,18 +734,18 @@ public sealed class ConditionBodyBuilder
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ConditionBodyBuilderTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ConditionBodyBuilderTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Run the full Core suite to confirm the m0/02 builder test still passes**
 
-Run: `dotnet test tests/Relkit.Core.Tests`
+Run: `dotnet test tests/Custodex.Core.Tests`
 Expected: PASS — including `SchemaBuilderTests` (the params-only `Condition` overload).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: add Condition(name, params, body) builder overload with CEL-shaped body builder"
 ```
 
@@ -754,9 +754,9 @@ git commit -m "feat: add Condition(name, params, body) builder overload with CEL
 ### Task 5: Extend `SchemaValidator` to type-check condition bodies
 
 **Files:**
-- Create: `src/Relkit.Core/Validation/ConditionBodyChecker.cs`
-- Modify: `src/Relkit.Core/Validation/SchemaValidator.cs`
-- Test: `tests/Relkit.Core.Tests/Validation/ConditionBodyCheckTests.cs`
+- Create: `src/Custodex.Core/Validation/ConditionBodyChecker.cs`
+- Modify: `src/Custodex.Core/Validation/SchemaValidator.cs`
+- Test: `tests/Custodex.Core.Tests/Validation/ConditionBodyCheckTests.cs`
 
 **Interfaces:**
 - Produces: `ConditionBodyChecker.Check(ConditionDef) -> IReadOnlyList<string>` (per-condition body errors), called from `SchemaValidator.Validate` over every `ConditionDef` whose body is not `EmptyConditionBody`.
@@ -767,15 +767,15 @@ This is the body-AST type-check deferred from `m0/03` (which only checks paramet
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Validation/ConditionBodyCheckTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Validation;
+// tests/Custodex.Core.Tests/Validation/ConditionBodyCheckTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Validation;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Validation;
+namespace Custodex.Core.Tests.Validation;
 
 public class ConditionBodyCheckTests
 {
@@ -838,17 +838,17 @@ public class ConditionBodyCheckTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.ConditionBodyCheckTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.ConditionBodyCheckTests`
 Expected: FAIL — `ConditionBodyChecker` does not exist and `SchemaValidator` does not call it.
 
 - [ ] **Step 3: Implement the body checker**
 
 ```csharp
-// src/Relkit.Core/Validation/ConditionBodyChecker.cs
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
+// src/Custodex.Core/Validation/ConditionBodyChecker.cs
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
 
-namespace Relkit.Core.Validation;
+namespace Custodex.Core.Validation;
 
 public static class ConditionBodyChecker
 {
@@ -956,28 +956,28 @@ public static class ConditionBodyChecker
 - [ ] **Step 4: Wire the body checker into `SchemaValidator`**
 
 ```csharp
-// src/Relkit.Core/Validation/SchemaValidator.cs  (in Validate, after IndexConditions and before the per-permission loop)
+// src/Custodex.Core/Validation/SchemaValidator.cs  (in Validate, after IndexConditions and before the per-permission loop)
         foreach (var cond in schema.Conditions)
             if (cond.Body is not EmptyConditionBody)
                 errors.AddRange(ConditionBodyChecker.Check(cond));
 ```
 
-> `EmptyConditionBody` is the placeholder record declared in `Relkit.Core` (`m0/02`'s `SchemaBuilder.cs`); it is in scope here without an extra using.
+> `EmptyConditionBody` is the placeholder record declared in `Custodex.Core` (`m0/02`'s `SchemaBuilder.cs`); it is in scope here without an extra using.
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.ConditionBodyCheckTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.ConditionBodyCheckTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 6: Run the full Core suite**
 
-Run: `dotnet test tests/Relkit.Core.Tests`
+Run: `dotnet test tests/Custodex.Core.Tests`
 Expected: PASS — `m0/03` validation tests and `m0/02` builder tests still green.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: type-check condition bodies during schema validation"
 ```
 
@@ -986,7 +986,7 @@ git commit -m "feat: type-check condition bodies during schema validation"
 ## Self-review checklist (run after all tasks)
 
 - [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`.
-- [ ] The body AST is CEL-shaped (literals, param/attribute/context refs, comparison/boolean/arithmetic/`in`/hour ops) and derives from `Relkit.Abstractions.ConditionExpr`.
+- [ ] The body AST is CEL-shaped (literals, param/attribute/context refs, comparison/boolean/arithmetic/`in`/hour ops) and derives from `Custodex.Abstractions.ConditionExpr`.
 - [ ] `ConditionEvaluator` evaluates `within_hours`, `at_least`, and `is_creator`; a missing attribute or type mismatch is a deny with a diagnostic, not an exception.
 - [ ] Ambient time enters only through `RequestContext.Now`; no `DateTime.Now`/`DateTimeOffset.UtcNow` in the evaluator.
 - [ ] `SchemaBuilder.Condition(name, params, bodyExpr)` attaches a real body; the params-only overload from `m0/02` still produces `EmptyConditionBody` and its test still passes.

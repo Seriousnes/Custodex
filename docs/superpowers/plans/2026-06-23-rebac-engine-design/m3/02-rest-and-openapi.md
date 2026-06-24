@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a minimal-API REST surface to `Relkit.Service` over the **same** engine the gRPC services use (`m3/01`): decision endpoints `POST /v1/check`, `/v1/batch-check`, `/v1/list-objects`, `/v1/list-subjects`, and management endpoints for tuples, attributes, change-log, schema, stores, and tenants. Document the whole surface with OpenAPI/Swagger (spec §11.4, §10.1). Tests exercise the endpoints through `WebApplicationFactory` against Testcontainers Postgres.
+**Goal:** Add a minimal-API REST surface to `Custodex.Service` over the **same** engine the gRPC services use (`m3/01`): decision endpoints `POST /v1/check`, `/v1/batch-check`, `/v1/list-objects`, `/v1/list-subjects`, and management endpoints for tuples, attributes, change-log, schema, stores, and tenants. Document the whole surface with OpenAPI/Swagger (spec §11.4, §10.1). Tests exercise the endpoints through `WebApplicationFactory` against Testcontainers Postgres.
 
-**Architecture:** REST is a second thin front door beside gRPC. The endpoints depend only on the public `Relkit.Abstractions` interfaces (`IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`) resolved from DI — the same instances the gRPC services use. A set of plain request/response DTOs (`record`s) models the JSON bodies; a `RestMap` static class converts DTO ⇄ contract record once, mirroring `m3/01`'s `ProtoMap`. Heterogeneous attribute/parameter values (`object?`) are carried as `System.Text.Json` `JsonElement`/`Dictionary<string, object?>` so the JSON body round-trips naturally. Schema travels as the canonical JSON the `SchemaJson` serializer (`m3/01`) produces. Endpoints are grouped under a `/v1` route group; decision and management groups are tagged separately so `m3/03` can attach distinct authorization policies per group.
+**Architecture:** REST is a second thin front door beside gRPC. The endpoints depend only on the public `Custodex.Abstractions` interfaces (`IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`) resolved from DI — the same instances the gRPC services use. A set of plain request/response DTOs (`record`s) models the JSON bodies; a `RestMap` static class converts DTO ⇄ contract record once, mirroring `m3/01`'s `ProtoMap`. Heterogeneous attribute/parameter values (`object?`) are carried as `System.Text.Json` `JsonElement`/`Dictionary<string, object?>` so the JSON body round-trips naturally. Schema travels as the canonical JSON the `SchemaJson` serializer (`m3/01`) produces. Endpoints are grouped under a `/v1` route group; decision and management groups are tagged separately so `m3/03` can attach distinct authorization policies per group.
 
 **Tech Stack:** .NET 10 (`net10.0`), C# 14, ASP.NET Core minimal APIs, `Microsoft.AspNetCore.OpenApi`, `Swashbuckle.AspNetCore` (Swagger UI), the engine packages, xUnit, Shouldly, `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory`), `Testcontainers.PostgreSql`.
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. **No EF Core.** Depends on `m0/01` (the `Relkit.Abstractions` contract — type names verbatim), `m1/09` (`AddRelkit().UsePostgres().UseSchema()`, the managers), and `m3/01` (the `Relkit.Service` host project, `SchemaJson`). The REST surface adds **zero** new evaluation semantics; it composes the same `Relkit.Core` + Postgres engine.
+See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. **No EF Core.** Depends on `m0/01` (the `Custodex.Abstractions` contract — type names verbatim), `m1/09` (`AddCustodex().UsePostgres().UseSchema()`, the managers), and `m3/01` (the `Custodex.Service` host project, `SchemaJson`). The REST surface adds **zero** new evaluation semantics; it composes the same `Custodex.Core` + Postgres engine.
 
-> **Aspire alignment** (see `../README.md` → Aspire integration): the REST endpoints are added to the same Aspire `Relkit.Service` host (`AddServiceDefaults()` / `MapDefaultEndpoints()`). Reuse ServiceDefaults' `/health` and `/alive`; do not add bespoke health endpoints.
+> **Aspire alignment** (see `../README.md` → Aspire integration): the REST endpoints are added to the same Aspire `Custodex.Service` host (`AddServiceDefaults()` / `MapDefaultEndpoints()`). Reuse ServiceDefaults' `/health` and `/alive`; do not add bespoke health endpoints.
 
 ## Shared decisions (locked)
 
@@ -28,21 +28,21 @@ See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`Im
 ### Task 1: Add OpenAPI/Swagger and the `/v1` route groups
 
 **Files:**
-- Modify: `src/Relkit.Service/Relkit.Service.csproj`
-- Modify: `src/Relkit.Service/Program.cs`
-- Create: `src/Relkit.Service/Rest/RestEndpoints.cs`
-- Test: `tests/Relkit.Service.Tests/OpenApiTests.cs`
+- Modify: `src/Custodex.Service/Custodex.Service.csproj`
+- Modify: `src/Custodex.Service/Program.cs`
+- Create: `src/Custodex.Service/Rest/RestEndpoints.cs`
+- Test: `tests/Custodex.Service.Tests/OpenApiTests.cs`
 
 **Interfaces:**
-- Produces: `RestEndpoints.MapRelkitRest(this WebApplication app)` mapping a `/v1` group with `decision` and `management` subgroups (endpoints added in later tasks); Swagger UI at `/swagger` and the OpenAPI document at `/swagger/v1/swagger.json`.
-- Consumes: the `Relkit.Service` host (`m3/01`), `Swashbuckle.AspNetCore`.
+- Produces: `RestEndpoints.MapCustodexRest(this WebApplication app)` mapping a `/v1` group with `decision` and `management` subgroups (endpoints added in later tasks); Swagger UI at `/swagger` and the OpenAPI document at `/swagger/v1/swagger.json`.
+- Consumes: the `Custodex.Service` host (`m3/01`), `Swashbuckle.AspNetCore`.
 
 - [ ] **Step 1: Add the OpenAPI packages**
 
 Run:
 ```bash
-dotnet add src/Relkit.Service package Microsoft.AspNetCore.OpenApi
-dotnet add src/Relkit.Service package Swashbuckle.AspNetCore
+dotnet add src/Custodex.Service package Microsoft.AspNetCore.OpenApi
+dotnet add src/Custodex.Service package Swashbuckle.AspNetCore
 ```
 
 - [ ] **Step 2: Register Swagger and map the route groups in `Program.cs`**
@@ -50,13 +50,13 @@ dotnet add src/Relkit.Service package Swashbuckle.AspNetCore
 Add the service registrations (after `builder.Services.AddGrpc();`):
 
 ```csharp
-// src/Relkit.Service/Program.cs — add with the other service registrations
+// src/Custodex.Service/Program.cs — add with the other service registrations
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
     {
-        Title = "Relkit Authorization API",
+        Title = "Custodex Authorization API",
         Version = "v1",
         Description = "ReBAC + ABAC authorization: Check, BatchCheck, ListObjects, ListSubjects, and management.",
     });
@@ -66,19 +66,19 @@ builder.Services.AddSwaggerGen(c =>
 Add the middleware + endpoint mapping (after `var app = builder.Build();` and the startup migration block, before `app.Run();`):
 
 ```csharp
-// src/Relkit.Service/Program.cs — add after the gRPC service mappings, before app.Run();
-using Relkit.Service.Rest;   // add to the using block at the top
+// src/Custodex.Service/Program.cs — add after the gRPC service mappings, before app.Run();
+using Custodex.Service.Rest;   // add to the using block at the top
 
 app.UseSwagger();
 app.UseSwaggerUI();
-app.MapRelkitRest();
+app.MapCustodexRest();
 ```
 
 - [ ] **Step 3: Create the route-group skeleton**
 
 ```csharp
-// src/Relkit.Service/Rest/RestEndpoints.cs
-namespace Relkit.Service.Rest;
+// src/Custodex.Service/Rest/RestEndpoints.cs
+namespace Custodex.Service.Rest;
 
 /// <summary>
 /// Minimal-API REST surface over the same engine the gRPC services use (m3/01). Decision and
@@ -86,7 +86,7 @@ namespace Relkit.Service.Rest;
 /// </summary>
 public static partial class RestEndpoints
 {
-    public static WebApplication MapRelkitRest(this WebApplication app)
+    public static WebApplication MapCustodexRest(this WebApplication app)
     {
         var v1 = app.MapGroup("/v1");
 
@@ -110,20 +110,20 @@ public static partial class RestEndpoints
 - [ ] **Step 4: Write the failing OpenAPI test**
 
 ```csharp
-// tests/Relkit.Service.Tests/OpenApiTests.cs
+// tests/Custodex.Service.Tests/OpenApiTests.cs
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 [Collection("service")]
 public class OpenApiTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("Relkit:ConnectionString", fx.ConnectionString));
+            b.UseSetting("Custodex:ConnectionString", fx.ConnectionString));
 
     [Fact]
     public async Task OpenApi_document_is_served()
@@ -135,20 +135,20 @@ public class OpenApiTests(PostgresFixture fx)
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadAsStringAsync();
-        body.ShouldContain("Relkit Authorization API");
+        body.ShouldContain("Custodex Authorization API");
     }
 }
 ```
 
 - [ ] **Step 5: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter OpenApiTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter OpenApiTests`
 Expected: PASS. The OpenAPI document is generated and names the API. (At this point it has no `/v1` paths yet; later tasks add them and the document grows.)
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add OpenAPI/Swagger and REST route groups to the service"
 ```
 
@@ -157,21 +157,21 @@ git commit -m "feat: add OpenAPI/Swagger and REST route groups to the service"
 ### Task 2: Decision DTOs and `RestMap`
 
 **Files:**
-- Create: `src/Relkit.Service/Rest/DecisionDtos.cs`
-- Create: `src/Relkit.Service/Rest/RestMap.cs`
-- Test: `tests/Relkit.Service.Tests/RestMapTests.cs`
+- Create: `src/Custodex.Service/Rest/DecisionDtos.cs`
+- Create: `src/Custodex.Service/Rest/RestMap.cs`
+- Test: `tests/Custodex.Service.Tests/RestMapTests.cs`
 
 **Interfaces:**
 - Produces: decision DTOs (`EntityRefDto`, `SubjectRefDto`, `RequestContextDto`, `CheckRequestDto`, `CheckResponseDto`, `ExplainNodeDto`, `BatchCheckRequestDto`, `CheckItemDto`, `ListObjectsRequestDto`/`ListObjectsResponseDto`, `ListSubjectsRequestDto`/`ListSubjectsResponseDto`) and `RestMap` with the DTO ⇄ contract-record converters.
-- Consumes: `EntityRef`, `SubjectRef`, `RequestContext`, `ExplainNode`, the request/result records (`Relkit.Abstractions`).
+- Consumes: `EntityRef`, `SubjectRef`, `RequestContext`, `ExplainNode`, the request/result records (`Custodex.Abstractions`).
 
 > **Same null-`Relation` rule as gRPC.** `SubjectRefDto.Relation` is `string?`; `null`/absent ⇒ plain subject, non-null ⇒ subject-set. `RequestContextDto.Attributes` is `Dictionary<string, object?>?` (JSON object) carrying ad-hoc context values; `null` ⇒ empty. `RestMap` centralises the mapping so it is tested in isolation like `ProtoMap`.
 
 - [ ] **Step 1: Write the decision DTOs**
 
 ```csharp
-// src/Relkit.Service/Rest/DecisionDtos.cs
-namespace Relkit.Service.Rest;
+// src/Custodex.Service/Rest/DecisionDtos.cs
+namespace Custodex.Service.Rest;
 
 public sealed record EntityRefDto(string Type, string Id);
 public sealed record SubjectRefDto(string Type, string Id, string? Relation = null);
@@ -204,13 +204,13 @@ public sealed record ListSubjectsResponseDto(IReadOnlyList<SubjectRefDto> Subjec
 - [ ] **Step 2: Write the failing `RestMap` tests**
 
 ```csharp
-// tests/Relkit.Service.Tests/RestMapTests.cs
-using Relkit.Abstractions;
-using Relkit.Service.Rest;
+// tests/Custodex.Service.Tests/RestMapTests.cs
+using Custodex.Abstractions;
+using Custodex.Service.Rest;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 public class RestMapTests
 {
@@ -263,16 +263,16 @@ public class RestMapTests
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter RestMapTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter RestMapTests`
 Expected: FAIL — `RestMap` does not exist.
 
 - [ ] **Step 4: Implement `RestMap`**
 
 ```csharp
-// src/Relkit.Service/Rest/RestMap.cs
-using Relkit.Abstractions;
+// src/Custodex.Service/Rest/RestMap.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Service.Rest;
+namespace Custodex.Service.Rest;
 
 /// <summary>DTO ⇄ contract-record conversion for the REST surface. The single home for the mapping.</summary>
 public static class RestMap
@@ -301,13 +301,13 @@ public static class RestMap
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter RestMapTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter RestMapTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add decision DTOs and RestMap conversion"
 ```
 
@@ -316,22 +316,22 @@ git commit -m "feat: add decision DTOs and RestMap conversion"
 ### Task 3: Decision REST endpoints
 
 **Files:**
-- Create: `src/Relkit.Service/Rest/DecisionEndpoints.cs`
-- Test: `tests/Relkit.Service.Tests/DecisionRestTests.cs`
+- Create: `src/Custodex.Service/Rest/DecisionEndpoints.cs`
+- Test: `tests/Custodex.Service.Tests/DecisionRestTests.cs`
 
 **Interfaces:**
 - Produces: `RestEndpoints.MapDecisionEndpoints` (the partial method body) mapping `POST /v1/check`, `/v1/batch-check`, `/v1/list-objects`, `/v1/list-subjects`, each delegating to `IAuthorizer` via `RestMap`.
-- Consumes: `IAuthorizer` (`Relkit.Abstractions`), `RestMap` + the decision DTOs (Task 2).
+- Consumes: `IAuthorizer` (`Custodex.Abstractions`), `RestMap` + the decision DTOs (Task 2).
 
 > **Default-deny is `200 OK`.** A denied check returns `200` with `{"allowed":false}` per spec §10.3. The endpoints inject `IAuthorizer` per call. `Explain` is included only when requested.
 
 - [ ] **Step 1: Implement the decision endpoints**
 
 ```csharp
-// src/Relkit.Service/Rest/DecisionEndpoints.cs
-using Relkit.Abstractions;
+// src/Custodex.Service/Rest/DecisionEndpoints.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Service.Rest;
+namespace Custodex.Service.Rest;
 
 public static partial class RestEndpoints
 {
@@ -385,18 +385,18 @@ public static partial class RestEndpoints
 - [ ] **Step 2: Write the failing decision REST tests**
 
 ```csharp
-// tests/Relkit.Service.Tests/DecisionRestTests.cs
+// tests/Custodex.Service.Tests/DecisionRestTests.cs
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Service.Rest;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Service.Rest;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 [Collection("service")]
 public class DecisionRestTests(PostgresFixture fx)
@@ -405,7 +405,7 @@ public class DecisionRestTests(PostgresFixture fx)
 
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("Relkit:ConnectionString", fx.ConnectionString));
+            b.UseSetting("Custodex:ConnectionString", fx.ConnectionString));
 
     private static async Task SeedAsync(WebApplicationFactory<Program> factory, string tenant)
     {
@@ -517,13 +517,13 @@ public class DecisionRestTests(PostgresFixture fx)
 
 - [ ] **Step 3: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter DecisionRestTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter DecisionRestTests`
 Expected: PASS (5 tests). Check/BatchCheck/ListObjects answer correctly over REST; a denial is `200` with `allowed:false`; `Explain` is returned when requested.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add decision REST endpoints over IAuthorizer"
 ```
 
@@ -532,20 +532,20 @@ git commit -m "feat: add decision REST endpoints over IAuthorizer"
 ### Task 4: Management DTOs
 
 **Files:**
-- Create: `src/Relkit.Service/Rest/ManagementDtos.cs`
-- Test: `tests/Relkit.Service.Tests/ManagementDtoTests.cs`
+- Create: `src/Custodex.Service/Rest/ManagementDtos.cs`
+- Test: `tests/Custodex.Service.Tests/ManagementDtoTests.cs`
 
 **Interfaces:**
 - Produces: management DTOs — `RelationTupleDto`, `ConditionRefDto`, `WriteTuplesRequestDto`, `WriteAttributesRequestDto`, `ReadTuplesRequestDto`/`ReadTuplesResponseDto`, `ChangeLogEntryDto`/`ReadChangeLogRequestDto`/`ReadChangeLogResponseDto`, `ValidateSchemaRequestDto`/`ValidateSchemaResponseDto`, `SetActiveSchemaRequestDto`, `GetActiveSchemaResponseDto`, `CreateStoreRequestDto`, `CreateTenantRequestDto` — plus the `RestMap` tuple converters.
-- Consumes: `RelationTuple`, `ConditionRef`, `TupleFilter`, `ChangeLogEntry`, `ChangeLogFilter` (`Relkit.Abstractions`).
+- Consumes: `RelationTuple`, `ConditionRef`, `TupleFilter`, `ChangeLogEntry`, `ChangeLogFilter` (`Custodex.Abstractions`).
 
 > **Tuple ⇄ DTO and condition mapping.** `RelationTupleDto` mirrors `RelationTuple(Object, Relation, Subject, Condition?)`. `ConditionRefDto(Name, Parameters)` carries `Dictionary<string, object?>` parameters. Schema bodies travel as the `SchemaJson` canonical string (`m3/01`).
 
 - [ ] **Step 1: Write the management DTOs**
 
 ```csharp
-// src/Relkit.Service/Rest/ManagementDtos.cs
-namespace Relkit.Service.Rest;
+// src/Custodex.Service/Rest/ManagementDtos.cs
+namespace Custodex.Service.Rest;
 
 public sealed record ConditionRefDto(string Name, Dictionary<string, object?> Parameters);
 public sealed record RelationTupleDto(EntityRefDto Object, string Relation, SubjectRefDto Subject, ConditionRefDto? Condition = null);
@@ -574,13 +574,13 @@ public sealed record CreateTenantRequestDto(string Store, string Tenant);
 - [ ] **Step 2: Write the failing tuple-mapping test**
 
 ```csharp
-// tests/Relkit.Service.Tests/ManagementDtoTests.cs
-using Relkit.Abstractions;
-using Relkit.Service.Rest;
+// tests/Custodex.Service.Tests/ManagementDtoTests.cs
+using Custodex.Abstractions;
+using Custodex.Service.Rest;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 public class ManagementDtoTests
 {
@@ -613,13 +613,13 @@ public class ManagementDtoTests
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter ManagementDtoTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter ManagementDtoTests`
 Expected: FAIL — `RestMap.ToTuple`/`FromTuple` do not exist.
 
 - [ ] **Step 4: Add the tuple converters to `RestMap`**
 
 ```csharp
-// Add to src/Relkit.Service/Rest/RestMap.cs (alongside the existing members)
+// Add to src/Custodex.Service/Rest/RestMap.cs (alongside the existing members)
 
     public static RelationTuple ToTuple(RelationTupleDto t) => new(
         ToEntityRef(t.Object), t.Relation, ToSubjectRef(t.Subject),
@@ -632,17 +632,17 @@ Expected: FAIL — `RestMap.ToTuple`/`FromTuple` do not exist.
             : new ConditionRefDto(t.Condition.Name, new Dictionary<string, object?>(t.Condition.Parameters)));
 ```
 
-> Add `using Relkit.Abstractions;` is already present at the top of `RestMap.cs`.
+> Add `using Custodex.Abstractions;` is already present at the top of `RestMap.cs`.
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter ManagementDtoTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter ManagementDtoTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add management DTOs and tuple converters"
 ```
 
@@ -651,23 +651,23 @@ git commit -m "feat: add management DTOs and tuple converters"
 ### Task 5: Management REST endpoints
 
 **Files:**
-- Create: `src/Relkit.Service/Rest/ManagementEndpoints.cs`
-- Test: `tests/Relkit.Service.Tests/ManagementRestTests.cs`
+- Create: `src/Custodex.Service/Rest/ManagementEndpoints.cs`
+- Test: `tests/Custodex.Service.Tests/ManagementRestTests.cs`
 
 **Interfaces:**
 - Produces: `RestEndpoints.MapManagementEndpoints` (the partial method body) mapping `POST /v1/tuples`, `DELETE /v1/tuples`, `PUT /v1/attributes`, `POST /v1/tuples/query`, `POST /v1/change-log/query`, `POST /v1/schema/validate`, `PUT /v1/schema/{store}`, `GET /v1/schema/{store}`, `POST /v1/stores`, `POST /v1/tenants`. Each delegates to a manager interface.
-- Consumes: `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` (`Relkit.Abstractions`), `RestMap` + management DTOs (Task 4), `SchemaJson` (`m3/01`).
+- Consumes: `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` (`Custodex.Abstractions`), `RestMap` + management DTOs (Task 4), `SchemaJson` (`m3/01`).
 
-> **Invalid schema ⇒ `400`.** `PUT /v1/schema/{store}` catches `SchemaValidationException` from `RelkitSchemaManager` and returns `Results.ValidationProblem` with the errors (spec §10.3: a malformed schema is an error, not a deny). `DELETE /v1/tuples` takes the same body as the write to identify tuples to remove.
+> **Invalid schema ⇒ `400`.** `PUT /v1/schema/{store}` catches `SchemaValidationException` from `CustodexSchemaManager` and returns `Results.ValidationProblem` with the errors (spec §10.3: a malformed schema is an error, not a deny). `DELETE /v1/tuples` takes the same body as the write to identify tuples to remove.
 
 - [ ] **Step 1: Implement the management endpoints**
 
 ```csharp
-// src/Relkit.Service/Rest/ManagementEndpoints.cs
-using Relkit.Abstractions;
-using Relkit.Service.Mapping;
+// src/Custodex.Service/Rest/ManagementEndpoints.cs
+using Custodex.Abstractions;
+using Custodex.Service.Mapping;
 
-namespace Relkit.Service.Rest;
+namespace Custodex.Service.Rest;
 
 public static partial class RestEndpoints
 {
@@ -757,17 +757,17 @@ public static partial class RestEndpoints
 - [ ] **Step 2: Write the failing management REST tests**
 
 ```csharp
-// tests/Relkit.Service.Tests/ManagementRestTests.cs
+// tests/Custodex.Service.Tests/ManagementRestTests.cs
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Relkit.Core;
-using Relkit.Service.Mapping;
-using Relkit.Service.Rest;
+using Custodex.Core;
+using Custodex.Service.Mapping;
+using Custodex.Service.Rest;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 [Collection("service")]
 public class ManagementRestTests(PostgresFixture fx)
@@ -776,7 +776,7 @@ public class ManagementRestTests(PostgresFixture fx)
 
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("Relkit:ConnectionString", fx.ConnectionString));
+            b.UseSetting("Custodex:ConnectionString", fx.ConnectionString));
 
     private static string SchemaJsonText() => SchemaJson.Serialize(new SchemaBuilder("v1")
         .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
@@ -834,9 +834,9 @@ public class ManagementRestTests(PostgresFixture fx)
         await client.PostAsJsonAsync("/v1/tenants", new CreateTenantRequestDto(store, store));
 
         // doc.view references a relation that does not exist => validation fails.
-        var bad = SchemaJson.Serialize(new Relkit.Abstractions.Schema("v1",
-            [new Relkit.Abstractions.EntityTypeDef("doc", [],
-                [new Relkit.Abstractions.PermissionDef("view", new Relkit.Abstractions.RelationRef("ghost"))])], []));
+        var bad = SchemaJson.Serialize(new Custodex.Abstractions.Schema("v1",
+            [new Custodex.Abstractions.EntityTypeDef("doc", [],
+                [new Custodex.Abstractions.PermissionDef("view", new Custodex.Abstractions.RelationRef("ghost"))])], []));
 
         var response = await client.PutAsJsonAsync($"/v1/schema/{store}", new SetActiveSchemaRequestDto(store, bad));
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -872,13 +872,13 @@ public class ManagementRestTests(PostgresFixture fx)
 
 - [ ] **Step 3: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter ManagementRestTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter ManagementRestTests`
 Expected: PASS (3 tests). Provisioning, schema activation, audited tuple write/read/delete round-trip over REST; an invalid schema returns `400`.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add management REST endpoints over the manager interfaces"
 ```
 
@@ -887,12 +887,12 @@ git commit -m "feat: add management REST endpoints over the manager interfaces"
 ### Task 6: Surface the typed engine exceptions as HTTP problems
 
 **Files:**
-- Create: `src/Relkit.Service/Rest/ExceptionHandling.cs`
-- Modify: `src/Relkit.Service/Program.cs`
-- Test: `tests/Relkit.Service.Tests/RestErrorHandlingTests.cs`
+- Create: `src/Custodex.Service/Rest/ExceptionHandling.cs`
+- Modify: `src/Custodex.Service/Program.cs`
+- Test: `tests/Custodex.Service.Tests/RestErrorHandlingTests.cs`
 
 **Interfaces:**
-- Produces: `RestEndpoints.UseRelkitProblemDetails(this WebApplication app)` registering an exception handler that maps the engine's typed exceptions to `ProblemDetails`: `UnknownTypeException`/`UnknownRelationException`/`UnknownPermissionException` → `400`, `SchemaValidationException` → `400`, `EvaluationLimitException` → `422`. Default-deny still returns `200`.
+- Produces: `RestEndpoints.UseCustodexProblemDetails(this WebApplication app)` registering an exception handler that maps the engine's typed exceptions to `ProblemDetails`: `UnknownTypeException`/`UnknownRelationException`/`UnknownPermissionException` → `400`, `SchemaValidationException` → `400`, `EvaluationLimitException` → `422`. Default-deny still returns `200`.
 - Consumes: the engine exceptions (`m0/01`), `Microsoft.AspNetCore.Diagnostics`.
 
 > **Caller-bug exceptions are surfaced loudly (spec §10.3).** A `Check` against a permission the schema does not define throws `UnknownPermissionException`; the handler returns a `400` problem rather than a silent deny, so a misconfigured caller learns immediately. Allow/deny remains a `200` body.
@@ -900,16 +900,16 @@ git commit -m "feat: add management REST endpoints over the manager interfaces"
 - [ ] **Step 1: Implement the exception handler**
 
 ```csharp
-// src/Relkit.Service/Rest/ExceptionHandling.cs
+// src/Custodex.Service/Rest/ExceptionHandling.cs
 using Microsoft.AspNetCore.Diagnostics;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Service.Rest;
+namespace Custodex.Service.Rest;
 
 public static partial class RestEndpoints
 {
     /// <summary>Maps the engine's typed exceptions (spec §10.3) to ProblemDetails responses.</summary>
-    public static WebApplication UseRelkitProblemDetails(this WebApplication app)
+    public static WebApplication UseCustodexProblemDetails(this WebApplication app)
     {
         app.UseExceptionHandler(handler => handler.Run(async ctx =>
         {
@@ -934,28 +934,28 @@ public static partial class RestEndpoints
 
 - [ ] **Step 2: Register the handler in `Program.cs`**
 
-Add immediately after `var app = builder.Build();` and the migration block, **before** `app.MapRelkitRest()`:
+Add immediately after `var app = builder.Build();` and the migration block, **before** `app.MapCustodexRest()`:
 
 ```csharp
-// src/Relkit.Service/Program.cs — add before app.MapRelkitRest();
-app.UseRelkitProblemDetails();
+// src/Custodex.Service/Program.cs — add before app.MapCustodexRest();
+app.UseCustodexProblemDetails();
 ```
 
 - [ ] **Step 3: Write the failing error-handling test**
 
 ```csharp
-// tests/Relkit.Service.Tests/RestErrorHandlingTests.cs
+// tests/Custodex.Service.Tests/RestErrorHandlingTests.cs
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Service.Rest;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Service.Rest;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 [Collection("service")]
 public class RestErrorHandlingTests(PostgresFixture fx)
@@ -964,7 +964,7 @@ public class RestErrorHandlingTests(PostgresFixture fx)
 
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("Relkit:ConnectionString", fx.ConnectionString));
+            b.UseSetting("Custodex:ConnectionString", fx.ConnectionString));
 
     [Fact]
     public async Task Check_against_an_unknown_permission_returns_400()
@@ -996,18 +996,18 @@ public class RestErrorHandlingTests(PostgresFixture fx)
 
 - [ ] **Step 4: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter RestErrorHandlingTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter RestErrorHandlingTests`
 Expected: PASS. A check against an undefined permission surfaces as `400`, not a silent deny.
 
 - [ ] **Step 5: Run the full suite**
 
-Run: `dotnet test tests/Relkit.Service.Tests`
+Run: `dotnet test tests/Custodex.Service.Tests`
 Expected: PASS — gRPC (`m3/01`) and REST surfaces both green over Testcontainers Postgres.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: map engine exceptions to ProblemDetails on the REST surface"
 ```
 
@@ -1021,10 +1021,10 @@ git commit -m "feat: map engine exceptions to ProblemDetails on the REST surface
 - [ ] Management endpoints (tuples write/delete/query, attributes, change-log, schema validate/set/get, stores, tenants) round-trip through the manager interfaces; an invalid schema returns `400`.
 - [ ] `RestMap` round-trips every shared type, including the null-`Relation` rule and the tuple/condition mapping.
 - [ ] OpenAPI/Swagger document is served at `/swagger/v1/swagger.json` and the UI at `/swagger`.
-- [ ] Engine typed exceptions surface as `ProblemDetails`; the full `Relkit.Service.Tests` suite is green.
+- [ ] Engine typed exceptions surface as `ProblemDetails`; the full `Custodex.Service.Tests` suite is green.
 
 ## Contract gaps (reported, not changed)
 
-- **Shared canonical-schema serializer.** Same gap noted in `m3/01`: the REST surface reuses `m3/01`'s `SchemaJson` (`System.Text.Json` over the AST). A `SchemaSerializer` in `Relkit.Core`/`Relkit.Abstractions` would let the gRPC service, REST service, DSL parser (`m3/05`), and tooling share one (de)serializer. Flagged for `m3/05`.
+- **Shared canonical-schema serializer.** Same gap noted in `m3/01`: the REST surface reuses `m3/01`'s `SchemaJson` (`System.Text.Json` over the AST). A `SchemaSerializer` in `Custodex.Core`/`Custodex.Abstractions` would let the gRPC service, REST service, DSL parser (`m3/05`), and tooling share one (de)serializer. Flagged for `m3/05`.
 - **`ChangeLogEntry.Before/After` are `object?` with no wire shape.** The REST surface returns them as raw JSON values (`object?` serialized by `System.Text.Json`); the gRPC surface (`m3/01`) returns them as JSON strings. A contract-defined before/after image type would let both surfaces agree. Flagged, not changed.
 - **No pagination metadata type for ListSubjects in the contract beyond the cursor.** `ListSubjectsResult` carries `Subjects` + `ContinuationToken`, which the REST DTO mirrors directly; no gap in behaviour, noted only for symmetry with the over-fetch/refill contract (§7.5) that the engine already honours.

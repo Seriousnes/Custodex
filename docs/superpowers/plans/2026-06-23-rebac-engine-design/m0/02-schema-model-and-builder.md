@@ -2,83 +2,83 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up `Relkit.Core` and a fluent `SchemaBuilder` that produces the `Schema` AST defined in `Relkit.Abstractions`.
+**Goal:** Stand up `Custodex.Core` and a fluent `SchemaBuilder` that produces the `Schema` AST defined in `Custodex.Abstractions`.
 
-**Architecture:** The AST records live in `Relkit.Abstractions` (built in `m0/01`). The builder is construction logic and lives in `Relkit.Core`. Default chaining of permission terms is **union**; `Exclude`/`Intersect`/`Conditioned` wrap the accumulated expression.
+**Architecture:** The AST records live in `Custodex.Abstractions` (built in `m0/01`). The builder is construction logic and lives in `Custodex.Core`. Default chaining of permission terms is **union**; `Exclude`/`Intersect`/`Conditioned` wrap the accumulated expression.
 
 **Tech Stack:** .NET 10, C# 14, xUnit, Shouldly.
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Depends on `m0/01` (the AST records and `Relkit.Abstractions`).
+See `../README.md` → Global Constraints. Depends on `m0/01` (the AST records and `Custodex.Abstractions`).
 
 ---
 
-### Task 1: Create `Relkit.Core` and reference Abstractions
+### Task 1: Create `Custodex.Core` and reference Abstractions
 
 **Files:**
-- Create: `src/Relkit.Core/Relkit.Core.csproj`
-- Create: `tests/Relkit.Core.Tests/Relkit.Core.Tests.csproj`
-- Test: `tests/Relkit.Core.Tests/CoreWiringTests.cs`
+- Create: `src/Custodex.Core/Custodex.Core.csproj`
+- Create: `tests/Custodex.Core.Tests/Custodex.Core.Tests.csproj`
+- Test: `tests/Custodex.Core.Tests/CoreWiringTests.cs`
 
 **Interfaces:**
-- Produces: the `Relkit.Core` assembly referencing `Relkit.Abstractions`.
+- Produces: the `Custodex.Core` assembly referencing `Custodex.Abstractions`.
 
 - [ ] **Step 1: Create projects and references**
 
 Run:
 ```bash
-dotnet new classlib -n Relkit.Core -o src/Relkit.Core -f net10.0
-dotnet new xunit -n Relkit.Core.Tests -o tests/Relkit.Core.Tests -f net10.0
-rm src/Relkit.Core/Class1.cs tests/Relkit.Core.Tests/UnitTest1.cs
-dotnet sln add src/Relkit.Core tests/Relkit.Core.Tests
-dotnet add src/Relkit.Core reference src/Relkit.Abstractions
-dotnet add tests/Relkit.Core.Tests reference src/Relkit.Core
-dotnet add tests/Relkit.Core.Tests package Shouldly
+dotnet new classlib -n Custodex.Core -o src/Custodex.Core -f net10.0
+dotnet new xunit -n Custodex.Core.Tests -o tests/Custodex.Core.Tests -f net10.0
+rm src/Custodex.Core/Class1.cs tests/Custodex.Core.Tests/UnitTest1.cs
+dotnet sln add src/Custodex.Core tests/Custodex.Core.Tests
+dotnet add src/Custodex.Core reference src/Custodex.Abstractions
+dotnet add tests/Custodex.Core.Tests reference src/Custodex.Core
+dotnet add tests/Custodex.Core.Tests package Shouldly
 ```
 
 - [ ] **Step 2: Write the wiring test**
 
 ```csharp
-// tests/Relkit.Core.Tests/CoreWiringTests.cs
+// tests/Custodex.Core.Tests/CoreWiringTests.cs
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests;
+namespace Custodex.Core.Tests;
 
 public class CoreWiringTests
 {
     [Fact]
     public void Core_references_abstractions()
     {
-        typeof(Relkit.Core.SchemaBuilder).Assembly.GetName().Name.ShouldBe("Relkit.Core");
+        typeof(Custodex.Core.SchemaBuilder).Assembly.GetName().Name.ShouldBe("Custodex.Core");
     }
 }
 ```
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests`
+Run: `dotnet test tests/Custodex.Core.Tests`
 Expected: FAIL — `SchemaBuilder` does not exist.
 
 - [ ] **Step 4: Add a placeholder `SchemaBuilder`** (filled in Task 2–4)
 
 ```csharp
-// src/Relkit.Core/SchemaBuilder.cs
-namespace Relkit.Core;
+// src/Custodex.Core/SchemaBuilder.cs
+namespace Custodex.Core;
 public sealed partial class SchemaBuilder { }
 ```
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests`
+Run: `dotnet test tests/Custodex.Core.Tests`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
-git commit -m "chore: scaffold Relkit.Core project"
+git add src/Custodex.Core tests/Custodex.Core.Tests
+git commit -m "chore: scaffold Custodex.Core project"
 ```
 
 ---
@@ -86,22 +86,22 @@ git commit -m "chore: scaffold Relkit.Core project"
 ### Task 2: Permission expression builder
 
 **Files:**
-- Create: `src/Relkit.Core/PermExprBuilder.cs`
-- Test: `tests/Relkit.Core.Tests/PermExprBuilderTests.cs`
+- Create: `src/Custodex.Core/PermExprBuilder.cs`
+- Test: `tests/Custodex.Core.Tests/PermExprBuilderTests.cs`
 
 **Interfaces:**
 - Produces: `PermExprBuilder` with `Relation(string)`, `Arrow(string,string)`, `Union(Action<PermExprBuilder>)`, `Intersect(Action<PermExprBuilder>)`, `Exclude(Action<PermExprBuilder>)`, `Conditioned(string)`, and `PermExpr Build()`.
-- Consumes: `PermExpr`, `RelationRef`, `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned` from `Relkit.Abstractions`.
+- Consumes: `PermExpr`, `RelationRef`, `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned` from `Custodex.Abstractions`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/PermExprBuilderTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Core.Tests/PermExprBuilderTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests;
+namespace Custodex.Core.Tests;
 
 public class PermExprBuilderTests
 {
@@ -150,16 +150,16 @@ public class PermExprBuilderTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter PermExprBuilderTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter PermExprBuilderTests`
 Expected: FAIL — `PermExprBuilder` not defined.
 
 - [ ] **Step 3: Implement the builder**
 
 ```csharp
-// src/Relkit.Core/PermExprBuilder.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/PermExprBuilder.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core;
+namespace Custodex.Core;
 
 public sealed class PermExprBuilder
 {
@@ -209,13 +209,13 @@ public sealed class PermExprBuilder
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter PermExprBuilderTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter PermExprBuilderTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: add permission expression builder"
 ```
 
@@ -224,9 +224,9 @@ git commit -m "feat: add permission expression builder"
 ### Task 3: Relation-filler and condition-param builders
 
 **Files:**
-- Create: `src/Relkit.Core/SubjectFillerBuilder.cs`
-- Create: `src/Relkit.Core/ConditionParamBuilder.cs`
-- Test: `tests/Relkit.Core.Tests/FillerAndParamBuilderTests.cs`
+- Create: `src/Custodex.Core/SubjectFillerBuilder.cs`
+- Create: `src/Custodex.Core/ConditionParamBuilder.cs`
+- Test: `tests/Custodex.Core.Tests/FillerAndParamBuilderTests.cs`
 
 **Interfaces:**
 - Produces: `SubjectFillerBuilder` with `User()`, `Type(string)`, `SubjectSet(string type, string relation)`, `Wildcard(string type)`, `IReadOnlyList<SubjectTypeRef> Build()`; `ConditionParamBuilder` with `Bool/Int/Long/Double/String/Timestamp(string name)` and `IReadOnlyList<ConditionParam> Build()`.
@@ -234,12 +234,12 @@ git commit -m "feat: add permission expression builder"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/FillerAndParamBuilderTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Core.Tests/FillerAndParamBuilderTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests;
+namespace Custodex.Core.Tests;
 
 public class FillerAndParamBuilderTests
 {
@@ -263,16 +263,16 @@ public class FillerAndParamBuilderTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter FillerAndParamBuilderTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter FillerAndParamBuilderTests`
 Expected: FAIL — builders not defined.
 
 - [ ] **Step 3: Implement the builders**
 
 ```csharp
-// src/Relkit.Core/SubjectFillerBuilder.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/SubjectFillerBuilder.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core;
+namespace Custodex.Core;
 
 public sealed class SubjectFillerBuilder
 {
@@ -286,10 +286,10 @@ public sealed class SubjectFillerBuilder
 ```
 
 ```csharp
-// src/Relkit.Core/ConditionParamBuilder.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/ConditionParamBuilder.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core;
+namespace Custodex.Core;
 
 public sealed class ConditionParamBuilder
 {
@@ -307,13 +307,13 @@ public sealed class ConditionParamBuilder
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter FillerAndParamBuilderTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter FillerAndParamBuilderTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: add subject-filler and condition-param builders"
 ```
 
@@ -322,9 +322,9 @@ git commit -m "feat: add subject-filler and condition-param builders"
 ### Task 4: Type and schema builders
 
 **Files:**
-- Create: `src/Relkit.Core/EntityTypeBuilder.cs`
-- Modify: `src/Relkit.Core/SchemaBuilder.cs`
-- Test: `tests/Relkit.Core.Tests/SchemaBuilderTests.cs`
+- Create: `src/Custodex.Core/EntityTypeBuilder.cs`
+- Modify: `src/Custodex.Core/SchemaBuilder.cs`
+- Test: `tests/Custodex.Core.Tests/SchemaBuilderTests.cs`
 
 **Interfaces:**
 - Produces: `EntityTypeBuilder` with `Relation(string name, Action<SubjectFillerBuilder>)` and `Permission(string name, Action<PermExprBuilder>)`; `SchemaBuilder(string version)` with `Type(string name, Action<EntityTypeBuilder>)`, `Condition(string name, Action<ConditionParamBuilder>)`, and `Schema Build()`. (Condition bodies are attached in `m0/06`; here a condition is declared with params and an empty body marker.)
@@ -333,12 +333,12 @@ git commit -m "feat: add subject-filler and condition-param builders"
 - [ ] **Step 1: Write the failing test** (builds the animal schema from the contract)
 
 ```csharp
-// tests/Relkit.Core.Tests/SchemaBuilderTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Core.Tests/SchemaBuilderTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests;
+namespace Custodex.Core.Tests;
 
 public class SchemaBuilderTests
 {
@@ -368,16 +368,16 @@ public class SchemaBuilderTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter SchemaBuilderTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter SchemaBuilderTests`
 Expected: FAIL — `Type`/`Permission`/`Condition` not defined.
 
 - [ ] **Step 3: Implement the type builder**
 
 ```csharp
-// src/Relkit.Core/EntityTypeBuilder.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/EntityTypeBuilder.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core;
+namespace Custodex.Core;
 
 public sealed class EntityTypeBuilder
 {
@@ -407,10 +407,10 @@ public sealed class EntityTypeBuilder
 - [ ] **Step 4: Implement the schema builder**
 
 ```csharp
-// src/Relkit.Core/SchemaBuilder.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/SchemaBuilder.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core;
+namespace Custodex.Core;
 
 /// <summary>Empty condition body placeholder; m0/06 replaces this with the real body AST.</summary>
 public sealed record EmptyConditionBody : ConditionExpr;
@@ -446,13 +446,13 @@ public sealed partial class SchemaBuilder
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter SchemaBuilderTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter SchemaBuilderTests`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: add entity-type and schema builders"
 ```
 

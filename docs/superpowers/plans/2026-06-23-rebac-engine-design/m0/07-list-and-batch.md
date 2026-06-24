@@ -6,7 +6,7 @@
 
 **Architecture:** `ListObjects` is the **oracle**: reverse-traverse from the subject (tuples where the subject, or a group it transitively belongs to, appears), walk forward to candidate objects of the target type, then **confirm each candidate with the same pointwise `CheckAsync`** that `m0/05` proved — including conditions. It is "always correct, heavier when access is broad," exactly as spec §7.3 Milestone 1 describes. `ListSubjects` forward-expands the permission tree down to leaf `user`s. `BatchCheck` runs many items sharing one per-request memo. Pagination uses a deterministic ordering (by object id, ordinal) so a cursor can encode the last-returned id and resume.
 
-**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly. Uses `Relkit.Storage.InMemory` (from `m0/04`).
+**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly. Uses `Custodex.Storage.InMemory` (from `m0/04`).
 
 ## Global Constraints
 
@@ -19,28 +19,28 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 ### Task 1: Deterministic candidate enumeration — reverse reachability
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Reverse.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/ReverseReachabilityTests.cs`
+- Create: `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Reverse.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/ReverseReachabilityTests.cs`
 
 **Interfaces:**
 - Produces: a private `Task<IReadOnlyList<EntityRef>> CandidateObjectsAsync(SchemaIndex index, TenantContext tenant, SubjectRef subject, string objectType, CancellationToken ct)` returning the **distinct, ordinal-id-sorted** set of objects of `objectType` reachable from `subject` by reverse traversal (subject's direct tuples, plus tuples of every group the subject transitively belongs to, plus objects reachable by following structural-reference edges). This is a *superset* of the answer — `ListObjects` confirms each with a full Check. Cycle-guarded over the group/edge graph.
-- Consumes: `IRelationStore.GetBySubjectAsync` (from `Relkit.Abstractions`), `SchemaIndex`, `EntityRef`, `SubjectRef`.
+- Consumes: `IRelationStore.GetBySubjectAsync` (from `Custodex.Abstractions`), `SchemaIndex`, `EntityRef`, `SubjectRef`.
 
 > **Why a superset, then confirm.** Reverse traversal cheaply gathers "objects this subject is plausibly connected to"; it does not by itself respect intersection/exclusion. Correctness comes from re-checking each candidate with the pointwise Check from `m0/05`. The candidate set must be *complete* (never miss a true positive) — so it follows group membership upward (subject → groups → groups-of-groups) and structural edges. Determinism (sorted, distinct) is what makes pagination cursors stable.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/ReverseReachabilityTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Evaluation/ReverseReachabilityTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class ReverseReachabilityTests
 {
@@ -96,28 +96,28 @@ public class ReverseReachabilityTests
 }
 ```
 
-> The test calls a thin `internal` test seam `CandidateObjectsForTest`. Add it in Step 3 forwarding to the real private method, marked `[InternalsVisibleTo("Relkit.Core.Tests")]` (already configured in `m0/02` or add it here).
+> The test calls a thin `internal` test seam `CandidateObjectsForTest`. Add it in Step 3 forwarding to the real private method, marked `[InternalsVisibleTo("Custodex.Core.Tests")]` (already configured in `m0/02` or add it here).
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ReverseReachabilityTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ReverseReachabilityTests`
 Expected: FAIL — `CandidateObjectsForTest` not defined.
 
 - [ ] **Step 3: Implement reverse reachability**
 
-If not already present (from `m0/02`), expose internals to the test project. Add to `src/Relkit.Core/Relkit.Core.csproj`:
+If not already present (from `m0/02`), expose internals to the test project. Add to `src/Custodex.Core/Custodex.Core.csproj`:
 
 ```xml
 <ItemGroup>
-  <InternalsVisibleTo Include="Relkit.Core.Tests" />
+  <InternalsVisibleTo Include="Custodex.Core.Tests" />
 </ItemGroup>
 ```
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Reverse.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Reverse.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
@@ -200,13 +200,13 @@ public sealed partial class EngineDrivenAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ReverseReachabilityTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ReverseReachabilityTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Reverse.cs src/Relkit.Core/Relkit.Core.csproj tests/Relkit.Core.Tests/Evaluation/ReverseReachabilityTests.cs
+git add src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Reverse.cs src/Custodex.Core/Custodex.Core.csproj tests/Custodex.Core.Tests/Evaluation/ReverseReachabilityTests.cs
 git commit -m "feat: add reverse candidate enumeration for list objects"
 ```
 
@@ -215,8 +215,8 @@ git commit -m "feat: add reverse candidate enumeration for list objects"
 ### Task 2: Pagination cursor + confirm loop
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/ContinuationCursor.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/ContinuationCursorTests.cs`
+- Create: `src/Custodex.Core/Evaluation/ContinuationCursor.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/ContinuationCursorTests.cs`
 
 **Interfaces:**
 - Produces: `ContinuationCursor` with `static string Encode(string lastObjectId)` and `static string? DecodeAfter(string? token)` (returns the id to resume strictly after, or null for "from the start"). Opaque (Base64Url of the id) and deterministic.
@@ -227,12 +227,12 @@ git commit -m "feat: add reverse candidate enumeration for list objects"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/ContinuationCursorTests.cs
-using Relkit.Core.Evaluation;
+// tests/Custodex.Core.Tests/Evaluation/ContinuationCursorTests.cs
+using Custodex.Core.Evaluation;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class ContinuationCursorTests
 {
@@ -255,17 +255,17 @@ public class ContinuationCursorTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ContinuationCursorTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ContinuationCursorTests`
 Expected: FAIL — `ContinuationCursor` not defined.
 
 - [ ] **Step 3: Implement the cursor**
 
 ```csharp
-// src/Relkit.Core/Evaluation/ContinuationCursor.cs
+// src/Custodex.Core/Evaluation/ContinuationCursor.cs
 using System.Buffers.Text;
 using System.Text;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 /// <summary>
 /// Opaque, deterministic pagination cursor over a stable object-id ordering.
@@ -293,13 +293,13 @@ public static class ContinuationCursor
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ContinuationCursorTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ContinuationCursorTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/ContinuationCursor.cs tests/Relkit.Core.Tests/Evaluation/ContinuationCursorTests.cs
+git add src/Custodex.Core/Evaluation/ContinuationCursor.cs tests/Custodex.Core.Tests/Evaluation/ContinuationCursorTests.cs
 git commit -m "feat: add opaque deterministic pagination cursor"
 ```
 
@@ -308,8 +308,8 @@ git commit -m "feat: add opaque deterministic pagination cursor"
 ### Task 3: `ListObjectsAsync` — over-fetch, confirm, refill, paginate
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.ListObjects.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/ListObjectsTests.cs`
+- Create: `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.ListObjects.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/ListObjectsTests.cs`
 
 **Interfaces:**
 - Produces: `ListObjectsAsync` (replaces the `m0/05` stub) confirming each candidate via the pointwise Check and honouring the over-fetch/refill pagination contract. Adds a private `Task<IReadOnlyList<EntityRef>> UniverseOfTypeAsync(...)` gathering all objects of the target type that appear in any tuple (for wildcard grants).
@@ -320,16 +320,16 @@ git commit -m "feat: add opaque deterministic pagination cursor"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/ListObjectsTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Evaluation/ListObjectsTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class ListObjectsTests
 {
@@ -436,7 +436,7 @@ public class ListObjectsTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ListObjectsTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ListObjectsTests`
 Expected: FAIL — `ListObjectsAsync` still throws `NotImplementedException` from the `m0/05` stub.
 
 - [ ] **Step 3: Implement `ListObjectsAsync` (remove the stub)**
@@ -444,10 +444,10 @@ Expected: FAIL — `ListObjectsAsync` still throws `NotImplementedException` fro
 Delete the `ListObjectsAsync` stub from `EngineDrivenAuthorizer.List.cs` (leave `BatchCheckAsync`/`ListSubjectsAsync` stubs in place for now), and add:
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.ListObjects.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.ListObjects.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
@@ -525,7 +525,7 @@ public sealed partial class EngineDrivenAuthorizer
 - [ ] **Step 3b: Add `GetObjectsOfTypeAsync` to the in-memory store**
 
 ```csharp
-// Add to src/Relkit.Storage.InMemory/InMemoryRelationStore.cs
+// Add to src/Custodex.Storage.InMemory/InMemoryRelationStore.cs
 // (alongside the existing GetByObjectAsync/GetBySubjectAsync/WriteAsync members)
 
     /// <summary>Oracle helper: distinct objects of a type that appear in any tuple of this tenant.</summary>
@@ -551,13 +551,13 @@ public sealed partial class EngineDrivenAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ListObjectsTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ListObjectsTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.ListObjects.cs src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.List.cs src/Relkit.Storage.InMemory tests/Relkit.Core.Tests/Evaluation/ListObjectsTests.cs
+git add src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.ListObjects.cs src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.List.cs src/Custodex.Storage.InMemory tests/Custodex.Core.Tests/Evaluation/ListObjectsTests.cs
 git commit -m "feat: implement engine-driven list objects with over-fetch pagination"
 ```
 
@@ -566,8 +566,8 @@ git commit -m "feat: implement engine-driven list objects with over-fetch pagina
 ### Task 4: `ListSubjectsAsync` — forward-expand to leaf users
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.ListSubjects.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/ListSubjectsTests.cs`
+- Create: `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.ListSubjects.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/ListSubjectsTests.cs`
 
 **Interfaces:**
 - Produces: `ListSubjectsAsync` (replaces the `m0/05` stub) forward-expanding the permission tree from the object down to leaf `user` subjects, then confirming each leaf user with the pointwise Check (so exclusions/intersections are honoured), returning them sorted by id with the same cursor contract.
@@ -578,16 +578,16 @@ git commit -m "feat: implement engine-driven list objects with over-fetch pagina
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/ListSubjectsTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Evaluation/ListSubjectsTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class ListSubjectsTests
 {
@@ -676,7 +676,7 @@ public class ListSubjectsTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ListSubjectsTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ListSubjectsTests`
 Expected: FAIL — `ListSubjectsAsync` still throws `NotImplementedException`.
 
 - [ ] **Step 3: Implement `ListSubjectsAsync` (remove the stub)**
@@ -684,10 +684,10 @@ Expected: FAIL — `ListSubjectsAsync` still throws `NotImplementedException`.
 Delete the `ListSubjectsAsync` stub from `EngineDrivenAuthorizer.List.cs`, and add:
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.ListSubjects.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.ListSubjects.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
@@ -834,13 +834,13 @@ public sealed partial class EngineDrivenAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter ListSubjectsTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter ListSubjectsTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.ListSubjects.cs src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.List.cs tests/Relkit.Core.Tests/Evaluation/ListSubjectsTests.cs
+git add src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.ListSubjects.cs src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.List.cs tests/Custodex.Core.Tests/Evaluation/ListSubjectsTests.cs
 git commit -m "feat: implement engine-driven list subjects with leaf-user expansion"
 ```
 
@@ -849,8 +849,8 @@ git commit -m "feat: implement engine-driven list subjects with leaf-user expans
 ### Task 5: `BatchCheckAsync` — shared per-request memo
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Batch.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/BatchCheckTests.cs`
+- Create: `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Batch.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/BatchCheckTests.cs`
 
 **Interfaces:**
 - Produces: `BatchCheckAsync` (replaces the `m0/05` stub) evaluating every `CheckItem` against **one shared `EvalContext`** (so repeated sub-checks across items are memoized once), returning a `CheckResult` per item in request order.
@@ -861,16 +861,16 @@ git commit -m "feat: implement engine-driven list subjects with leaf-user expans
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/BatchCheckTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Evaluation/BatchCheckTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class BatchCheckTests
 {
@@ -933,7 +933,7 @@ public class BatchCheckTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter BatchCheckTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter BatchCheckTests`
 Expected: FAIL — `BatchCheckAsync` still throws `NotImplementedException`.
 
 - [ ] **Step 3: Implement `BatchCheckAsync` (remove the stub)**
@@ -941,10 +941,10 @@ Expected: FAIL — `BatchCheckAsync` still throws `NotImplementedException`.
 Delete the `BatchCheckAsync` stub from `EngineDrivenAuthorizer.List.cs` (which is now empty and may be deleted), and add:
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Batch.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Batch.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
@@ -970,18 +970,18 @@ public sealed partial class EngineDrivenAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter BatchCheckTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter BatchCheckTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Run the full evaluation suite**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Evaluation`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Evaluation`
 Expected: PASS (all Check + List + Batch tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Batch.cs tests/Relkit.Core.Tests/Evaluation/BatchCheckTests.cs
+git add src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Batch.cs tests/Custodex.Core.Tests/Evaluation/BatchCheckTests.cs
 git commit -m "feat: implement batch check with shared per-request memo"
 ```
 

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Validate a `Schema` before it can be made active: every `RelationRef`/`Arrow` resolves to a declared relation or permission, every arrow target permission exists on the related type, permission recursion terminates (no infinite arrow/permission cycle), every `Conditioned` branch and condition-carrying tuple references a declared `ConditionDef`, and condition **parameter values** type-check against the declared `ConditionParam` types. Produce `SchemaValidator` in `Relkit.Core` returning `SchemaValidationResult`; wire `SchemaManager.ValidateSchema` to it; make `SetActiveSchemaAsync` throw `SchemaValidationException` on an invalid schema.
+**Goal:** Validate a `Schema` before it can be made active: every `RelationRef`/`Arrow` resolves to a declared relation or permission, every arrow target permission exists on the related type, permission recursion terminates (no infinite arrow/permission cycle), every `Conditioned` branch and condition-carrying tuple references a declared `ConditionDef`, and condition **parameter values** type-check against the declared `ConditionParam` types. Produce `SchemaValidator` in `Custodex.Core` returning `SchemaValidationResult`; wire `SchemaManager.ValidateSchema` to it; make `SetActiveSchemaAsync` throw `SchemaValidationException` on an invalid schema.
 
-**Architecture:** `SchemaValidator` is a pure function `Schema -> SchemaValidationResult` in `Relkit.Core`. It resolves names against the schema, derives arrow targets from each relation's `AllowedSubjects`, and proves recursion termination with a static cycle check over a permission-dependency graph. `SchemaManager` is the `ISchemaManager` implementation in `Relkit.Core`; it delegates validation to `SchemaValidator` and persists through `ISchemaStore`. This is a **static, schema-time** check; it is distinct from the **runtime data-cycle guard** in `m0/05`, which guards tuple graphs, not the schema.
+**Architecture:** `SchemaValidator` is a pure function `Schema -> SchemaValidationResult` in `Custodex.Core`. It resolves names against the schema, derives arrow targets from each relation's `AllowedSubjects`, and proves recursion termination with a static cycle check over a permission-dependency graph. `SchemaManager` is the `ISchemaManager` implementation in `Custodex.Core`; it delegates validation to `SchemaValidator` and persists through `ISchemaStore`. This is a **static, schema-time** check; it is distinct from the **runtime data-cycle guard** in `m0/05`, which guards tuple graphs, not the schema.
 
 **Condition-body seam (read before starting):** the concrete `ConditionExpr` body AST does not exist yet — `m0/01` left an abstract `ConditionExpr` marker and `m0/02` attaches `EmptyConditionBody`. The condition **body** type-checker is owned by `m0/06`, which adds the concrete nodes and *extends* `SchemaValidator` to type-check bodies. This plan therefore checks only what is possible without the body AST: that a `Conditioned` branch names a declared `ConditionDef`, and that a `ConditionRef`'s **parameter values** match the declared `ConditionParam` types (an `Int` param requires an `int`/`long` value, etc.). Do not define concrete body nodes here.
 
@@ -12,33 +12,33 @@
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (`Relkit.Abstractions`) and `m0/02` (`Relkit.Core`, `SchemaBuilder`). Uses the canonical contract type names verbatim.
+See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (`Custodex.Abstractions`) and `m0/02` (`Custodex.Core`, `SchemaBuilder`). Uses the canonical contract type names verbatim.
 
 ---
 
 ### Task 1: Relation and permission resolution
 
 **Files:**
-- Create: `src/Relkit.Core/Validation/SchemaValidator.cs`
-- Test: `tests/Relkit.Core.Tests/Validation/RelationResolutionTests.cs`
+- Create: `src/Custodex.Core/Validation/SchemaValidator.cs`
+- Test: `tests/Custodex.Core.Tests/Validation/RelationResolutionTests.cs`
 
 **Interfaces:**
 - Produces: `SchemaValidator.Validate(Schema) -> SchemaValidationResult`.
-- Consumes: `Schema`, `EntityTypeDef`, `RelationDef`, `PermissionDef`, `PermExpr` (`RelationRef`, `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned`), `SchemaValidationResult` from `Relkit.Abstractions`.
+- Consumes: `Schema`, `EntityTypeDef`, `RelationDef`, `PermissionDef`, `PermExpr` (`RelationRef`, `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned`), `SchemaValidationResult` from `Custodex.Abstractions`.
 
 A `RelationRef(name)` is valid when `name` is **either** a declared relation **or** a declared permission on the *same* type (permission nesting, e.g. `manage ⊃ edit`). There is no separate `PermissionRef` node, so do not reject a `RelationRef` that names a permission.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Validation/RelationResolutionTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Validation;
+// tests/Custodex.Core.Tests/Validation/RelationResolutionTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Validation;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Validation;
+namespace Custodex.Core.Tests.Validation;
 
 public class RelationResolutionTests
 {
@@ -93,16 +93,16 @@ public class RelationResolutionTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.RelationResolutionTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.RelationResolutionTests`
 Expected: FAIL — `SchemaValidator` does not exist.
 
 - [ ] **Step 3: Implement the resolver core**
 
 ```csharp
-// src/Relkit.Core/Validation/SchemaValidator.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Validation/SchemaValidator.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Validation;
+namespace Custodex.Core.Validation;
 
 public static class SchemaValidator
 {
@@ -220,13 +220,13 @@ public static class SchemaValidator
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.RelationResolutionTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.RelationResolutionTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: validate relation and permission resolution in schemas"
 ```
 
@@ -235,8 +235,8 @@ git commit -m "feat: validate relation and permission resolution in schemas"
 ### Task 2: Arrow target resolution
 
 **Files:**
-- Modify: `src/Relkit.Core/Validation/SchemaValidator.cs`
-- Test: `tests/Relkit.Core.Tests/Validation/ArrowResolutionTests.cs`
+- Modify: `src/Custodex.Core/Validation/SchemaValidator.cs`
+- Test: `tests/Custodex.Core.Tests/Validation/ArrowResolutionTests.cs`
 
 **Interfaces:**
 - Produces: arrow-target checking inside `SchemaValidator.Validate`.
@@ -247,14 +247,14 @@ An `Arrow(relation, permission)` is valid when, for **every** non-wildcard objec
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Validation/ArrowResolutionTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Validation;
+// tests/Custodex.Core.Tests/Validation/ArrowResolutionTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Validation;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Validation;
+namespace Custodex.Core.Tests.Validation;
 
 public class ArrowResolutionTests
 {
@@ -328,13 +328,13 @@ public class ArrowResolutionTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.ArrowResolutionTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.ArrowResolutionTests`
 Expected: FAIL — the placeholder `ValidateArrow` does not yet check targets.
 
 - [ ] **Step 3: Replace the placeholder with full arrow-target resolution**
 
 ```csharp
-// src/Relkit.Core/Validation/SchemaValidator.cs  (replace the ValidateArrow method body)
+// src/Custodex.Core/Validation/SchemaValidator.cs  (replace the ValidateArrow method body)
     private static void ValidateArrow(
         EntityTypeDef type, string permission, Arrow arrow,
         IReadOnlyDictionary<string, EntityTypeDef> types,
@@ -371,13 +371,13 @@ Expected: FAIL — the placeholder `ValidateArrow` does not yet check targets.
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.ArrowResolutionTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.ArrowResolutionTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: validate arrow targets against related-type permissions"
 ```
 
@@ -386,8 +386,8 @@ git commit -m "feat: validate arrow targets against related-type permissions"
 ### Task 3: Permission recursion termination
 
 **Files:**
-- Modify: `src/Relkit.Core/Validation/SchemaValidator.cs`
-- Test: `tests/Relkit.Core.Tests/Validation/RecursionTerminationTests.cs`
+- Modify: `src/Custodex.Core/Validation/SchemaValidator.cs`
+- Test: `tests/Custodex.Core.Tests/Validation/RecursionTerminationTests.cs`
 
 **Interfaces:**
 - Produces: a static permission-cycle check inside `SchemaValidator.Validate`.
@@ -402,14 +402,14 @@ A back-edge during DFS (grey node revisited) is a non-terminating cycle and is i
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Validation/RecursionTerminationTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Validation;
+// tests/Custodex.Core.Tests/Validation/RecursionTerminationTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Validation;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Validation;
+namespace Custodex.Core.Tests.Validation;
 
 public class RecursionTerminationTests
 {
@@ -479,13 +479,13 @@ public class RecursionTerminationTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.RecursionTerminationTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.RecursionTerminationTests`
 Expected: FAIL — no cycle detection yet (the two cyclic schemas report `IsValid = true`).
 
 - [ ] **Step 3: Add the cycle check**
 
 ```csharp
-// src/Relkit.Core/Validation/SchemaValidator.cs  (add to the Validate method, after the per-permission loop)
+// src/Custodex.Core/Validation/SchemaValidator.cs  (add to the Validate method, after the per-permission loop)
         // Only run cycle detection when resolution succeeded; otherwise an unresolved
         // name would be mistaken for a cycle.
         if (errors.Count == 0)
@@ -495,7 +495,7 @@ Expected: FAIL — no cycle detection yet (the two cyclic schemas report `IsVali
 ```
 
 ```csharp
-// src/Relkit.Core/Validation/SchemaValidator.cs  (add these members to the class)
+// src/Custodex.Core/Validation/SchemaValidator.cs  (add these members to the class)
     private enum Mark { White, Grey, Black }
 
     private static void DetectCycles(
@@ -593,13 +593,13 @@ Expected: FAIL — no cycle detection yet (the two cyclic schemas report `IsVali
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.RecursionTerminationTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.RecursionTerminationTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: detect non-terminating permission cycles in schemas"
 ```
 
@@ -608,8 +608,8 @@ git commit -m "feat: detect non-terminating permission cycles in schemas"
 ### Task 4: Condition reference and parameter-value type-checking
 
 **Files:**
-- Create: `src/Relkit.Core/Validation/ConditionParamChecker.cs`
-- Test: `tests/Relkit.Core.Tests/Validation/ConditionParamCheckTests.cs`
+- Create: `src/Custodex.Core/Validation/ConditionParamChecker.cs`
+- Test: `tests/Custodex.Core.Tests/Validation/ConditionParamCheckTests.cs`
 
 **Interfaces:**
 - Produces: `ConditionParamChecker.Check(ConditionDef, IReadOnlyDictionary<string, object?> parameters) -> IReadOnlyList<string>` (the per-parameter errors; empty when the supplied values satisfy the declared `ConditionParam` types).
@@ -622,13 +622,13 @@ This helper is invoked by the relation write-path (`IRelationManager.WriteTuples
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Validation/ConditionParamCheckTests.cs
-using Relkit.Abstractions;
-using Relkit.Core.Validation;
+// tests/Custodex.Core.Tests/Validation/ConditionParamCheckTests.cs
+using Custodex.Abstractions;
+using Custodex.Core.Validation;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Validation;
+namespace Custodex.Core.Tests.Validation;
 
 public class ConditionParamCheckTests
 {
@@ -686,16 +686,16 @@ public class ConditionParamCheckTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.ConditionParamCheckTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.ConditionParamCheckTests`
 Expected: FAIL — `ConditionParamChecker` does not exist.
 
 - [ ] **Step 3: Implement the parameter checker**
 
 ```csharp
-// src/Relkit.Core/Validation/ConditionParamChecker.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Validation/ConditionParamChecker.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Validation;
+namespace Custodex.Core.Validation;
 
 public static class ConditionParamChecker
 {
@@ -743,13 +743,13 @@ public static class ConditionParamChecker
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Validation.ConditionParamCheckTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Validation.ConditionParamCheckTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: type-check condition parameter values against declared types"
 ```
 
@@ -758,8 +758,8 @@ git commit -m "feat: type-check condition parameter values against declared type
 ### Task 5: `SchemaManager` delegating to the validator
 
 **Files:**
-- Create: `src/Relkit.Core/SchemaManager.cs`
-- Test: `tests/Relkit.Core.Tests/SchemaManagerTests.cs`
+- Create: `src/Custodex.Core/SchemaManager.cs`
+- Test: `tests/Custodex.Core.Tests/SchemaManagerTests.cs`
 
 **Interfaces:**
 - Produces: `SchemaManager : ISchemaManager` with `ValidateSchema` delegating to `SchemaValidator`, `SetActiveSchemaAsync` throwing `SchemaValidationException` on an invalid schema and otherwise persisting through `ISchemaStore`, and `GetActiveSchemaAsync` reading it back.
@@ -770,13 +770,13 @@ git commit -m "feat: type-check condition parameter values against declared type
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/SchemaManagerTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
+// tests/Custodex.Core.Tests/SchemaManagerTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests;
+namespace Custodex.Core.Tests;
 
 public class SchemaManagerTests
 {
@@ -854,17 +854,17 @@ public class SchemaManagerTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter SchemaManagerTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter SchemaManagerTests`
 Expected: FAIL — `SchemaManager` does not exist.
 
 - [ ] **Step 3: Implement `SchemaManager`**
 
 ```csharp
-// src/Relkit.Core/SchemaManager.cs
-using Relkit.Abstractions;
-using Relkit.Core.Validation;
+// src/Custodex.Core/SchemaManager.cs
+using Custodex.Abstractions;
+using Custodex.Core.Validation;
 
-namespace Relkit.Core;
+namespace Custodex.Core;
 
 public sealed class SchemaManager(ISchemaStore store, IUnitOfWorkFactory uowFactory) : ISchemaManager
 {
@@ -891,13 +891,13 @@ public sealed class SchemaManager(ISchemaStore store, IUnitOfWorkFactory uowFact
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter SchemaManagerTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter SchemaManagerTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core tests/Relkit.Core.Tests
+git add src/Custodex.Core tests/Custodex.Core.Tests
 git commit -m "feat: add SchemaManager delegating validation and persisting active schema"
 ```
 

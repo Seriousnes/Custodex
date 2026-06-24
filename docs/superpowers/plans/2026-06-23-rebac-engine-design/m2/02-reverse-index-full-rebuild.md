@@ -8,7 +8,7 @@
 
 The rebuild runs through the **oracle authorizer** (`EngineDrivenAuthorizer`), not the CTE path: the rebuild's job is to be obviously, durably correct (it is the safety net), and the oracle is the project's ground truth (spec §7.4). It is heavier than incremental maintenance, which is the point — correctness over speed; the incremental path (`m2/03`) is the fast path that must agree with this.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Relkit.Core` (`EngineDrivenAuthorizer`, `SchemaIndex`, `EvalContext`, `EvaluationOptions`, `NullConditionEvaluator`).
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Custodex.Core` (`EngineDrivenAuthorizer`, `SchemaIndex`, `EvalContext`, `EvaluationOptions`, `NullConditionEvaluator`).
 
 ## Global Constraints
 
@@ -21,11 +21,11 @@ See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`Im
 ### Task 1: Expose the structural-grant probe on the oracle (`ConditionTouched` per check)
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Structural.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/StructuralProbeTests.cs`
+- Create: `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Structural.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/StructuralProbeTests.cs`
 
 **Interfaces:**
-- Produces: a **public** probe on `EngineDrivenAuthorizer` (public because `Relkit.Storage.Postgres`, a separate assembly, calls it from the rebuilder — the same reason `SchemaIndex`/`EvalContext` are public in `Relkit.Core.Evaluation`):
+- Produces: a **public** probe on `EngineDrivenAuthorizer` (public because `Custodex.Storage.Postgres`, a separate assembly, calls it from the rebuilder — the same reason `SchemaIndex`/`EvalContext` are public in `Custodex.Core.Evaluation`):
   `Task<StructuralGrant> CheckStructuralAsync(SchemaIndex index, TenantContext tenant, EntityRef obj, string permission, SubjectRef subject, RequestContext context, CancellationToken ct)` returning `public sealed record StructuralGrant(bool Granted, bool Conditioned)`. It runs the pointwise Check under a fresh `EvalContext`, **always with conditions treated as satisfied** (the authorizer is constructed with `NullConditionEvaluator` for rebuild), and reports `Granted` plus whether `EvalContext.ConditionTouched` latched (`Conditioned`).
 - Consumes: `CheckPermissionAsync` (private, `m0/05`), `EvalContext`, `SchemaIndex` (`m0/05`).
 
@@ -34,16 +34,16 @@ See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`Im
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/StructuralProbeTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Evaluation/StructuralProbeTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class StructuralProbeTests
 {
@@ -110,20 +110,20 @@ public class StructuralProbeTests
 }
 ```
 
-> The tests call an `internal` test seam `CheckStructuralForTest` forwarding to the real method (the `[InternalsVisibleTo("Relkit.Core.Tests")]` from `m0/07` Task 1 makes internals visible).
+> The tests call an `internal` test seam `CheckStructuralForTest` forwarding to the real method (the `[InternalsVisibleTo("Custodex.Core.Tests")]` from `m0/07` Task 1 makes internals visible).
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter StructuralProbeTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter StructuralProbeTests`
 Expected: FAIL — `CheckStructuralForTest`/`CheckStructuralAsync`/`StructuralGrant` not defined.
 
 - [ ] **Step 3: Implement the probe**
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Structural.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Structural.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 /// <summary>One probed grant: whether it holds structurally, and whether any condition was reached.</summary>
 public sealed record StructuralGrant(bool Granted, bool Conditioned);
@@ -141,7 +141,7 @@ public sealed partial class EngineDrivenAuthorizer
     /// Intended to be called on an authorizer constructed with <c>NullConditionEvaluator</c> (rebuild),
     /// so conditions are treated as satisfied and the result is the structural grant; the latched
     /// <see cref="EvalContext.ConditionTouched"/> becomes the row's <c>conditioned</c> flag.
-    /// Public because the reverse-index rebuild (Relkit.Storage.Postgres, m2/02) calls it across assembly.
+    /// Public because the reverse-index rebuild (Custodex.Storage.Postgres, m2/02) calls it across assembly.
     /// </summary>
     public async Task<StructuralGrant> CheckStructuralAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string permission, SubjectRef subject,
@@ -158,13 +158,13 @@ public sealed partial class EngineDrivenAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter StructuralProbeTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter StructuralProbeTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Structural.cs tests/Relkit.Core.Tests/Evaluation/StructuralProbeTests.cs
+git add src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Structural.cs tests/Custodex.Core.Tests/Evaluation/StructuralProbeTests.cs
 git commit -m "feat: add structural-grant probe with conditioned flag to oracle"
 ```
 
@@ -173,8 +173,8 @@ git commit -m "feat: add structural-grant probe with conditioned flag to oracle"
 ### Task 2: Enumerate the rebuild work — subjects, objects, permissions
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Index/RebuildEnumeration.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/RebuildEnumerationTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Index/RebuildEnumeration.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/RebuildEnumerationTests.cs`
 
 **Interfaces:**
 - Produces: `RebuildEnumeration` static helpers reading the tenant's tuples once and projecting the rebuild domain:
@@ -187,15 +187,15 @@ git commit -m "feat: add structural-grant probe with conditioned flag to oracle"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/RebuildEnumerationTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/RebuildEnumerationTests.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Index;
+using Custodex.Abstractions;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Index;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class RebuildEnumerationTests(PostgresFixture fx) : IAsyncLifetime
@@ -244,18 +244,18 @@ public class RebuildEnumerationTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter RebuildEnumerationTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter RebuildEnumerationTests`
 Expected: FAIL — `RebuildEnumeration` does not exist.
 
 - [ ] **Step 3: Implement the enumeration**
 
 ```csharp
-// src/Relkit.Storage.Postgres/Index/RebuildEnumeration.cs
+// src/Custodex.Storage.Postgres/Index/RebuildEnumeration.cs
 using Dapper;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres.Index;
+namespace Custodex.Storage.Postgres.Index;
 
 /// <summary>
 /// Projects the rebuild domain from a tenant's tuples: the concrete user subjects and the objects
@@ -292,13 +292,13 @@ public static class RebuildEnumeration
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter RebuildEnumerationTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter RebuildEnumerationTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Index/RebuildEnumeration.cs tests/Relkit.Storage.Postgres.Tests/Index/RebuildEnumerationTests.cs
+git add src/Custodex.Storage.Postgres/Index/RebuildEnumeration.cs tests/Custodex.Storage.Postgres.Tests/Index/RebuildEnumerationTests.cs
 git commit -m "feat: add rebuild domain enumeration over tenant tuples"
 ```
 
@@ -307,8 +307,8 @@ git commit -m "feat: add rebuild domain enumeration over tenant tuples"
 ### Task 3: `ReverseIndexRebuilder` — probe, materialize, stamp, mark built
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Index/ReverseIndexRebuilder.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexRebuildTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Index/ReverseIndexRebuilder.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexRebuildTests.cs`
 
 **Interfaces:**
 - Produces: `ReverseIndexRebuilder(string connectionString, ISchemaStore schemas, IRelationStore relations, IAttributeStore attributes, IIndexStore index)` with
@@ -327,16 +327,16 @@ git commit -m "feat: add rebuild domain enumeration over tenant tuples"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexRebuildTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexRebuildTests.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Index;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Index;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class ReverseIndexRebuildTests(PostgresFixture fx) : IAsyncLifetime
@@ -456,19 +456,19 @@ public class ReverseIndexRebuildTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ReverseIndexRebuildTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ReverseIndexRebuildTests`
 Expected: FAIL — `ReverseIndexRebuilder` does not exist.
 
 - [ ] **Step 3: Implement the rebuilder**
 
 ```csharp
-// src/Relkit.Storage.Postgres/Index/ReverseIndexRebuilder.cs
+// src/Custodex.Storage.Postgres/Index/ReverseIndexRebuilder.cs
 using Npgsql;
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres.Index;
+namespace Custodex.Storage.Postgres.Index;
 
 /// <summary>
 /// Full rebuild of reverse_index for a (store, tenant): the always-correct safety net and the
@@ -542,13 +542,13 @@ public sealed class ReverseIndexRebuilder(
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ReverseIndexRebuildTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ReverseIndexRebuildTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Index/ReverseIndexRebuilder.cs tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexRebuildTests.cs
+git add src/Custodex.Storage.Postgres/Index/ReverseIndexRebuilder.cs tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexRebuildTests.cs
 git commit -m "feat: implement full reverse-index rebuild as the maintenance oracle"
 ```
 
@@ -557,7 +557,7 @@ git commit -m "feat: implement full reverse-index rebuild as the maintenance ora
 ### Task 4: Rebuild equals the oracle's ListObjects (the safety-net invariant)
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/RebuildEqualsOracleTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/RebuildEqualsOracleTests.cs`
 
 **Interfaces:**
 - Produces: a test pinning the core invariant — for the §12.5-style structural gate and a multi-path object, the rebuilt index's unconditioned rows, read per subject, equal the `EngineDrivenAuthorizer.ListObjects` answer. This is the concrete-case anchor the `m2/06` property harness generalizes.
@@ -568,18 +568,18 @@ git commit -m "feat: implement full reverse-index rebuild as the maintenance ora
 - [ ] **Step 1: Write the test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/RebuildEqualsOracleTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/RebuildEqualsOracleTests.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Index;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Index;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class RebuildEqualsOracleTests(PostgresFixture fx) : IAsyncLifetime
@@ -660,13 +660,13 @@ public class RebuildEqualsOracleTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter RebuildEqualsOracleTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter RebuildEqualsOracleTests`
 Expected: PASS. (alice: kangaroo only — multi-path collapses to one row, wallaby blocked; bob: kangaroo + wallaby.)
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Index/RebuildEqualsOracleTests.cs
+git add tests/Custodex.Storage.Postgres.Tests/Index/RebuildEqualsOracleTests.cs
 git commit -m "test: assert rebuilt index equals oracle list objects per subject"
 ```
 
@@ -685,4 +685,4 @@ git commit -m "test: assert rebuilt index equals oracle list objects per subject
 
 ## Contract gaps / additions (reported, not changed)
 
-- **`EngineDrivenAuthorizer.CheckStructuralAsync` + `StructuralGrant` (new public engine surface).** Task 1 adds a public structural-grant probe on the oracle authorizer so the cross-assembly rebuilder (`Relkit.Storage.Postgres`) can call it, matching the existing precedent that `SchemaIndex`/`EvalContext`/`EvaluationOptions` are public in `Relkit.Core.Evaluation`. This is an addition to `Relkit.Core`, not to the `Relkit.Abstractions` canonical contract, so `../README.md` is unchanged; reported here for visibility. Otherwise reuses `IIndexStore`/`ReverseIndexRow` (`m2/01`) and the existing Npgsql stores.
+- **`EngineDrivenAuthorizer.CheckStructuralAsync` + `StructuralGrant` (new public engine surface).** Task 1 adds a public structural-grant probe on the oracle authorizer so the cross-assembly rebuilder (`Custodex.Storage.Postgres`) can call it, matching the existing precedent that `SchemaIndex`/`EvalContext`/`EvaluationOptions` are public in `Custodex.Core.Evaluation`. This is an addition to `Custodex.Core`, not to the `Custodex.Abstractions` canonical contract, so `../README.md` is unchanged; reported here for visibility. Otherwise reuses `IIndexStore`/`ReverseIndexRow` (`m2/01`) and the existing Npgsql stores.

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-23
 - **Status:** Approved design, pending implementation plan
-- **Working name:** `Relkit` (placeholder; rename freely before implementation)
+- **Working name:** `Custodex` (placeholder; rename freely before implementation)
 
 ## 1. Overview
 
@@ -58,9 +58,9 @@ The engine answers four questions: point **Check**, **ListObjects** (which resou
                 │ in-process (NuGet ref)       │ over network (gRPC/REST)
                 ▼                              ▼
 ┌──────────────────────────────┐   ┌──────────────────────────────┐
-│  Relkit.Core (engine)        │◄──│  Relkit.Service (host)       │
+│  Custodex.Core (engine)        │◄──│  Custodex.Service (host)       │
 │  • Schema model & validation │   │  thin gRPC + REST wrapper    │
-│  • Tuple model               │   │  over the SAME Relkit.Core   │
+│  • Tuple model               │   │  over the SAME Custodex.Core   │
 │  • Evaluation (4 ops)        │   │  + authn, tenancy, OpenAPI   │
 │  • Condition (ABAC) eval     │   └──────────────────────────────┘
 │  • Caching + invalidation    │
@@ -69,7 +69,7 @@ The engine answers four questions: point **Check**, **ListObjects** (which resou
                 │ IIndexStore / ICacheStore
                 ▼
 ┌──────────────────────────────┐
-│  Relkit.Storage.Postgres     │   first provider; the interface
+│  Custodex.Storage.Postgres     │   first provider; the interface
 │  tuples, schema, attrs,      │   seam keeps the engine DB-agnostic
 │  reverse index, cache        │
 └──────────────────────────────┘
@@ -77,13 +77,13 @@ The engine answers four questions: point **Check**, **ListObjects** (which resou
 
 | Package | Contents |
 |---|---|
-| `Relkit.Abstractions` | Public contracts: `IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`, and the storage/cache provider interfaces. No implementation. This is the dependency for consumers and third-party providers. |
-| `Relkit.Core` | The engine: schema model, evaluation, condition evaluation, caching orchestration. Depends only on `Relkit.Abstractions`. Contains zero domain concepts and zero database code. |
-| `Relkit.Storage.Postgres` | Implements the storage and cache provider interfaces against Postgres using lightweight data access (Dapper / raw ADO.NET, required for the recursive CTEs). Enlists in an externally-supplied connection and transaction so its writes can commit atomically inside the consuming application's unit of work. Depends on Npgsql, not on EF Core. The first and only provider built initially. |
-| `Relkit.Service` | ASP.NET host exposing gRPC + REST over `Relkit.Core`. Built in milestone M3. The library does not depend on it. |
-| `Relkit.Client` | A .NET client for the service that implements the same `IAuthorizer` interface over gRPC, so a consumer switches between in-process and remote by changing one DI registration. Built in M3. |
+| `Custodex.Abstractions` | Public contracts: `IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`, and the storage/cache provider interfaces. No implementation. This is the dependency for consumers and third-party providers. |
+| `Custodex.Core` | The engine: schema model, evaluation, condition evaluation, caching orchestration. Depends only on `Custodex.Abstractions`. Contains zero domain concepts and zero database code. |
+| `Custodex.Storage.Postgres` | Implements the storage and cache provider interfaces against Postgres using lightweight data access (Dapper / raw ADO.NET, required for the recursive CTEs). Enlists in an externally-supplied connection and transaction so its writes can commit atomically inside the consuming application's unit of work. Depends on Npgsql, not on EF Core. The first and only provider built initially. |
+| `Custodex.Service` | ASP.NET host exposing gRPC + REST over `Custodex.Core`. Built in milestone M3. The library does not depend on it. |
+| `Custodex.Client` | A .NET client for the service that implements the same `IAuthorizer` interface over gRPC, so a consumer switches between in-process and remote by changing one DI registration. Built in M3. |
 
-The zoo application references `Relkit.Core` and `Relkit.Storage.Postgres` directly and gets in-process checks. A separate AaaS deployment runs `Relkit.Service` as a container. Both share one engine, one set of semantics, and one test suite.
+The zoo application references `Custodex.Core` and `Custodex.Storage.Postgres` directly and gets in-process checks. A separate AaaS deployment runs `Custodex.Service` as a container. Both share one engine, one set of semantics, and one test suite.
 
 ## 5. Schema model
 
@@ -210,7 +210,7 @@ The Postgres provider uses lightweight data access (Dapper / raw ADO.NET over Np
 
 ## 7. Evaluation engine
 
-The algebra — union, intersection, exclusion, arrow traversal, group nesting, and conditions — is implemented in `Relkit.Core`. Two execution paths produce identical results.
+The algebra — union, intersection, exclusion, arrow traversal, group nesting, and conditions — is implemented in `Custodex.Core`. Two execution paths produce identical results.
 
 ### 7.1 Execution paths
 
@@ -253,7 +253,7 @@ Conditions are evaluated by a purpose-built, sandboxed, typed predicate evaluato
 
 ### 9.1 Caching
 
-Caching is a pluggable seam: `ICacheStore` lives in `Relkit.Abstractions`. Two implementations ship:
+Caching is a pluggable seam: `ICacheStore` lives in `Custodex.Abstractions`. Two implementations ship:
 
 - **In-process `MemoryCache`** — the default for a single instance.
 - **Postgres-native `UNLOGGED`-table cache** — shared across instances with no additional infrastructure. `UNLOGGED` skips the WAL for fast writes and is rebuilt on miss after a restart. TTL is an `expires_at` column with lazy expiry on read and a periodic sweep.
@@ -289,7 +289,7 @@ ISchemaManager         // application-developer layer
 IStoreManager / ITenantManager                     // provisioning
 ```
 
-DI wiring: `services.AddRelkit().UsePostgres(conn).UseSchema(builder)`. Switching to the remote service is one registration change to `Relkit.Client`'s `IAuthorizer`; callers are unchanged.
+DI wiring: `services.AddCustodex().UsePostgres(conn).UseSchema(builder)`. Switching to the remote service is one registration change to `Custodex.Client`'s `IAuthorizer`; callers are unchanged.
 
 ### 10.2 Explain
 
@@ -324,7 +324,7 @@ The governing distinction is *deny* versus *error*: allow/deny is always a retur
 | **M0 — Engine core** | `Abstractions`, schema model, fluent builder, validation, in-memory provider, engine-driven traversal (oracle), all four operations, conformance and differential harness. |
 | **M1 — Postgres + usable library** | The CTE nested-algebra spike (Section 7.1) first, then: Postgres provider, CTE primary path, transactional writes with config-change audit, epoch cache, on-the-fly ListObjects with the pagination contract, ABAC conditions, wildcard grants, `Explain`. The Blazor application adopts the engine here. |
 | **M2 — Performance** | Maintained reverse index and Postgres-native `UNLOGGED` cache, diffed against the oracle. |
-| **M3 — Service / AaaS** | `Relkit.Service` (gRPC + REST + OpenAPI), `Relkit.Client`, authn, multi-store, DSL parser, container image. |
+| **M3 — Service / AaaS** | `Custodex.Service` (gRPC + REST + OpenAPI), `Custodex.Client`, authn, multi-store, DSL parser, container image. |
 
 ### 11.3 Licensing
 

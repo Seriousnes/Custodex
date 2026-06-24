@@ -2,69 +2,69 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up `Relkit.Service` — an ASP.NET host (`net10.0`) exposing the engine over gRPC. Define `.proto` contracts that mirror `IAuthorizer` (Check/BatchCheck/ListObjects/ListSubjects) and the management surface (`IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager`), and implement gRPC services that delegate to the **same** in-process `Relkit.Core` + Postgres engine wired by `AddRelkit().UsePostgres().UseSchema()` (spec §4, §10.1). The proto messages map faithfully to the canonical contract records (`EntityRef`/`SubjectRef`/`RequestContext`/`ExplainNode`/`ConditionRef.Parameters`).
+**Goal:** Stand up `Custodex.Service` — an ASP.NET host (`net10.0`) exposing the engine over gRPC. Define `.proto` contracts that mirror `IAuthorizer` (Check/BatchCheck/ListObjects/ListSubjects) and the management surface (`IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager`), and implement gRPC services that delegate to the **same** in-process `Custodex.Core` + Postgres engine wired by `AddCustodex().UsePostgres().UseSchema()` (spec §4, §10.1). The proto messages map faithfully to the canonical contract records (`EntityRef`/`SubjectRef`/`RequestContext`/`ExplainNode`/`ConditionRef.Parameters`).
 
-**Architecture:** `Relkit.Service` references `Relkit.Extensions.DependencyInjection` and `Relkit.Storage.Postgres` and composes the engine exactly as the in-process Blazor consumer does (`m1/09`). The gRPC layer is a thin translation boundary: each gRPC service depends only on the public `Relkit.Abstractions` interfaces (`IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`) resolved from DI, converts proto messages to contract records, calls the interface, and converts the result back. A shared `ProtoMap` static class owns every record ⇄ message conversion so the mapping is defined once and tested in isolation. `RequestContext.Attributes` and `ConditionRef.Parameters` (both `IReadOnlyDictionary<string, object?>`) map to `google.protobuf.Struct` so heterogeneous attribute/parameter values round-trip without a bespoke variant type.
+**Architecture:** `Custodex.Service` references `Custodex.Extensions.DependencyInjection` and `Custodex.Storage.Postgres` and composes the engine exactly as the in-process Blazor consumer does (`m1/09`). The gRPC layer is a thin translation boundary: each gRPC service depends only on the public `Custodex.Abstractions` interfaces (`IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`) resolved from DI, converts proto messages to contract records, calls the interface, and converts the result back. A shared `ProtoMap` static class owns every record ⇄ message conversion so the mapping is defined once and tested in isolation. `RequestContext.Attributes` and `ConditionRef.Parameters` (both `IReadOnlyDictionary<string, object?>`) map to `google.protobuf.Struct` so heterogeneous attribute/parameter values round-trip without a bespoke variant type.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, ASP.NET Core, `Grpc.AspNetCore`, `Google.Protobuf`, `Grpc.Tools`, the engine packages (`Relkit.Abstractions`/`Relkit.Core`/`Relkit.Storage.Postgres`/`Relkit.Extensions.DependencyInjection`), xUnit, Shouldly, `Grpc.Net.Client`, `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory`), `Testcontainers.PostgreSql`.
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, ASP.NET Core, `Grpc.AspNetCore`, `Google.Protobuf`, `Grpc.Tools`, the engine packages (`Custodex.Abstractions`/`Custodex.Core`/`Custodex.Storage.Postgres`/`Custodex.Extensions.DependencyInjection`), xUnit, Shouldly, `Grpc.Net.Client`, `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory`), `Testcontainers.PostgreSql`.
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. **No EF Core.** Depends on `m0/01` (the `Relkit.Abstractions` contract — every type name below is verbatim from there), `m1/09` (`AddRelkit().UsePostgres(conn).UseSchema(builder)`, the concrete managers, `AddRelkitInstrumentation()`). The service composes the same `Relkit.Core` + Postgres engine behind a network front door; it adds **zero** new evaluation semantics.
+See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. **No EF Core.** Depends on `m0/01` (the `Custodex.Abstractions` contract — every type name below is verbatim from there), `m1/09` (`AddCustodex().UsePostgres(conn).UseSchema(builder)`, the concrete managers, `AddCustodexInstrumentation()`). The service composes the same `Custodex.Core` + Postgres engine behind a network front door; it adds **zero** new evaluation semantics.
 
-> **Aspire alignment** (see `../README.md` → Aspire integration): `Relkit.Service` already exists and uses Aspire ServiceDefaults. Do not `dotnet new` the project. The host calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()`; build the gRPC services on that existing host, and enable `AddGrpcClientInstrumentation()` in the ServiceDefaults tracing config.
+> **Aspire alignment** (see `../README.md` → Aspire integration): `Custodex.Service` already exists and uses Aspire ServiceDefaults. Do not `dotnet new` the project. The host calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()`; build the gRPC services on that existing host, and enable `AddGrpcClientInstrumentation()` in the ServiceDefaults tracing config.
 
 ## Shared decisions (locked)
 
-- **The service is a thin front door.** gRPC services hold only the `Relkit.Abstractions` interfaces; all engine behaviour comes from `AddRelkit().UsePostgres().UseSchema()` (`m1/09`). No evaluation, validation, or persistence logic lives in `Relkit.Service`.
-- **One `.proto` package, four service definitions.** `relkit.v1` declares `Decision` (the four read ops), `Relations`, `Schema`, and `Provisioning` (the management surface). Splitting management from decisions lets `m3/03` apply distinct authorization policies per service.
+- **The service is a thin front door.** gRPC services hold only the `Custodex.Abstractions` interfaces; all engine behaviour comes from `AddCustodex().UsePostgres().UseSchema()` (`m1/09`). No evaluation, validation, or persistence logic lives in `Custodex.Service`.
+- **One `.proto` package, four service definitions.** `Custodex.v1` declares `Decision` (the four read ops), `Relations`, `Schema`, and `Provisioning` (the management surface). Splitting management from decisions lets `m3/03` apply distinct authorization policies per service.
 - **Heterogeneous values use `google.protobuf.Struct`.** `RequestContext.Attributes` and `ConditionRef.Parameters` carry `object?` values (int/long/double/bool/string). `Struct`/`Value` round-trips them; `ProtoMap` centralises the `object? ⇄ Value` conversion (int/long → number, bool → bool, string → string, null → null value).
 - **Tenancy is explicit in the proto for M3/01.** Every request message carries `store` + `tenant` fields that build a `TenantContext`. `m3/03` moves resolution to headers/claims; here the messages model `TenantContext` directly so the contract is complete and testable before auth lands.
 - **Auth is deferred to `m3/03`.** This plan maps the host with `WebApplicationFactory` over a Testcontainers Postgres and leaves the endpoints open; `m3/03` adds the API-key/OIDC schemes and the management-vs-decision authorization policies.
 
 ---
 
-### Task 1: Create the `Relkit.Service` host project and prove it boots
+### Task 1: Create the `Custodex.Service` host project and prove it boots
 
 **Files:**
-- Create: `src/Relkit.Service/Relkit.Service.csproj`
-- Create: `src/Relkit.Service/Program.cs`
-- Create: `src/Relkit.Service/appsettings.json`
-- Create: `tests/Relkit.Service.Tests/Relkit.Service.Tests.csproj`
-- Create: `tests/Relkit.Service.Tests/PostgresFixture.cs`
-- Test: `tests/Relkit.Service.Tests/HostBootTests.cs`
+- Create: `src/Custodex.Service/Custodex.Service.csproj`
+- Create: `src/Custodex.Service/Program.cs`
+- Create: `src/Custodex.Service/appsettings.json`
+- Create: `tests/Custodex.Service.Tests/Custodex.Service.Tests.csproj`
+- Create: `tests/Custodex.Service.Tests/PostgresFixture.cs`
+- Test: `tests/Custodex.Service.Tests/HostBootTests.cs`
 
 **Interfaces:**
-- Produces: a runnable ASP.NET host that calls `AddRelkit().UsePostgres(conn).UseSchema(builder)` and maps a health endpoint; a `WebApplicationFactory`-friendly `Program` (partial class exposed for tests).
-- Consumes: `AddRelkit`/`UsePostgres`/`UseSchema`/`AddRelkitInstrumentation` (`m1/09`), `SchemaBuilder` (`m0/02`).
+- Produces: a runnable ASP.NET host that calls `AddCustodex().UsePostgres(conn).UseSchema(builder)` and maps a health endpoint; a `WebApplicationFactory`-friendly `Program` (partial class exposed for tests).
+- Consumes: `AddCustodex`/`UsePostgres`/`UseSchema`/`AddCustodexInstrumentation` (`m1/09`), `SchemaBuilder` (`m0/02`).
 
 - [ ] **Step 1: Create the projects and references**
 
 Run:
 ```bash
-dotnet new web -n Relkit.Service -o src/Relkit.Service -f net10.0
-dotnet new xunit -n Relkit.Service.Tests -o tests/Relkit.Service.Tests -f net10.0
-rm tests/Relkit.Service.Tests/UnitTest1.cs
-dotnet sln add src/Relkit.Service tests/Relkit.Service.Tests
-dotnet add src/Relkit.Service reference src/Relkit.Abstractions
-dotnet add src/Relkit.Service reference src/Relkit.Core
-dotnet add src/Relkit.Service reference src/Relkit.Storage.Postgres
-dotnet add src/Relkit.Service reference src/Relkit.Extensions.DependencyInjection
-dotnet add src/Relkit.Service package Grpc.AspNetCore
-dotnet add src/Relkit.Service package OpenTelemetry.Extensions.Hosting
-dotnet add tests/Relkit.Service.Tests reference src/Relkit.Service
-dotnet add tests/Relkit.Service.Tests reference src/Relkit.Abstractions
-dotnet add tests/Relkit.Service.Tests reference src/Relkit.Core
-dotnet add tests/Relkit.Service.Tests package Shouldly
-dotnet add tests/Relkit.Service.Tests package Microsoft.AspNetCore.Mvc.Testing
-dotnet add tests/Relkit.Service.Tests package Grpc.Net.Client
-dotnet add tests/Relkit.Service.Tests package Testcontainers.PostgreSql
+dotnet new web -n Custodex.Service -o src/Custodex.Service -f net10.0
+dotnet new xunit -n Custodex.Service.Tests -o tests/Custodex.Service.Tests -f net10.0
+rm tests/Custodex.Service.Tests/UnitTest1.cs
+dotnet sln add src/Custodex.Service tests/Custodex.Service.Tests
+dotnet add src/Custodex.Service reference src/Custodex.Abstractions
+dotnet add src/Custodex.Service reference src/Custodex.Core
+dotnet add src/Custodex.Service reference src/Custodex.Storage.Postgres
+dotnet add src/Custodex.Service reference src/Custodex.Extensions.DependencyInjection
+dotnet add src/Custodex.Service package Grpc.AspNetCore
+dotnet add src/Custodex.Service package OpenTelemetry.Extensions.Hosting
+dotnet add tests/Custodex.Service.Tests reference src/Custodex.Service
+dotnet add tests/Custodex.Service.Tests reference src/Custodex.Abstractions
+dotnet add tests/Custodex.Service.Tests reference src/Custodex.Core
+dotnet add tests/Custodex.Service.Tests package Shouldly
+dotnet add tests/Custodex.Service.Tests package Microsoft.AspNetCore.Mvc.Testing
+dotnet add tests/Custodex.Service.Tests package Grpc.Net.Client
+dotnet add tests/Custodex.Service.Tests package Testcontainers.PostgreSql
 ```
 
 - [ ] **Step 2: Write `appsettings.json`**
 
 ```json
-// src/Relkit.Service/appsettings.json
+// src/Custodex.Service/appsettings.json
 {
   "Logging": {
     "LogLevel": {
@@ -73,8 +73,8 @@ dotnet add tests/Relkit.Service.Tests package Testcontainers.PostgreSql
     }
   },
   "AllowedHosts": "*",
-  "Relkit": {
-    "ConnectionString": "Host=localhost;Port=5432;Database=relkit;Username=relkit;Password=relkit"
+  "Custodex": {
+    "ConnectionString": "Host=localhost;Port=5432;Database=Custodex;Username=Custodex;Password=Custodex"
   }
 }
 ```
@@ -82,25 +82,25 @@ dotnet add tests/Relkit.Service.Tests package Testcontainers.PostgreSql
 - [ ] **Step 3: Write `Program.cs`** (health endpoint + engine wiring; gRPC services are mapped in later tasks)
 
 ```csharp
-// src/Relkit.Service/Program.cs
-using Relkit.Core;
-using Relkit.Extensions.DependencyInjection;
-using Relkit.Storage.Postgres;
+// src/Custodex.Service/Program.cs
+using Custodex.Core;
+using Custodex.Extensions.DependencyInjection;
+using Custodex.Storage.Postgres;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGrpc();
 
-var connectionString = builder.Configuration.GetValue<string>("Relkit:ConnectionString")
-    ?? throw new InvalidOperationException("Relkit:ConnectionString is not configured.");
+var connectionString = builder.Configuration.GetValue<string>("Custodex:ConnectionString")
+    ?? throw new InvalidOperationException("Custodex:ConnectionString is not configured.");
 
-// The service composes the SAME Relkit.Core + Postgres engine the in-process consumer uses (spec §4).
+// The service composes the SAME Custodex.Core + Postgres engine the in-process consumer uses (spec §4).
 // A startup schema can be supplied; absent one, schemas are managed at runtime via ISchemaManager.
-builder.Services.AddRelkit().UsePostgres(connectionString);
+builder.Services.AddCustodex().UsePostgres(connectionString);
 
 builder.Services.AddOpenTelemetry()
-    .WithTracing(t => t.AddRelkitInstrumentation())
-    .WithMetrics(m => m.AddRelkitInstrumentation());
+    .WithTracing(t => t.AddCustodexInstrumentation())
+    .WithMetrics(m => m.AddCustodexInstrumentation());
 
 var app = builder.Build();
 
@@ -115,12 +115,12 @@ public partial class Program;
 - [ ] **Step 4: Write the Postgres fixture** (one container shared by the test collection)
 
 ```csharp
-// tests/Relkit.Service.Tests/PostgresFixture.cs
+// tests/Custodex.Service.Tests/PostgresFixture.cs
 using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 public sealed class PostgresFixture : IAsyncLifetime
 {
@@ -146,26 +146,26 @@ public sealed class PostgresFixture : IAsyncLifetime
 public sealed class ServiceCollectionFixture : ICollectionFixture<PostgresFixture>;
 ```
 
-> `MigrationRunner.ApplyAsync` is the idempotent migration entry point from `m1/01`. `Relkit.Service` runs it at startup (Task 7); the fixture also runs it so a `WebApplicationFactory` pointed at a freshly started container has the tables ready.
+> `MigrationRunner.ApplyAsync` is the idempotent migration entry point from `m1/01`. `Custodex.Service` runs it at startup (Task 7); the fixture also runs it so a `WebApplicationFactory` pointed at a freshly started container has the tables ready.
 
 - [ ] **Step 5: Write the failing host-boot test**
 
 ```csharp
-// tests/Relkit.Service.Tests/HostBootTests.cs
+// tests/Custodex.Service.Tests/HostBootTests.cs
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 [Collection("service")]
 public class HostBootTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("Relkit:ConnectionString", fx.ConnectionString));
+            b.UseSetting("Custodex:ConnectionString", fx.ConnectionString));
 
     [Fact]
     public async Task Health_endpoint_returns_ok()
@@ -184,21 +184,21 @@ public class HostBootTests(PostgresFixture fx)
     {
         using var factory = CreateFactory();
         using var scope = factory.Services.CreateScope();
-        scope.ServiceProvider.GetService<Relkit.Abstractions.IAuthorizer>().ShouldNotBeNull();
+        scope.ServiceProvider.GetService<Custodex.Abstractions.IAuthorizer>().ShouldNotBeNull();
     }
 }
 ```
 
 - [ ] **Step 6: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter HostBootTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter HostBootTests`
 Expected: PASS (2 tests). The host boots, wires the engine over Testcontainers Postgres, and resolves `IAuthorizer`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
-git commit -m "feat: scaffold Relkit.Service host wired to the Postgres engine"
+git add src/Custodex.Service tests/Custodex.Service.Tests
+git commit -m "feat: scaffold Custodex.Service host wired to the Postgres engine"
 ```
 
 ---
@@ -206,13 +206,13 @@ git commit -m "feat: scaffold Relkit.Service host wired to the Postgres engine"
 ### Task 2: The decision `.proto` and generated stubs
 
 **Files:**
-- Create: `src/Relkit.Service/Protos/relkit_common.proto`
-- Create: `src/Relkit.Service/Protos/relkit_decision.proto`
-- Modify: `src/Relkit.Service/Relkit.Service.csproj`
-- Test: `tests/Relkit.Service.Tests/ProtoCompileTests.cs`
+- Create: `src/Custodex.Service/Protos/Custodex_common.proto`
+- Create: `src/Custodex.Service/Protos/Custodex_decision.proto`
+- Modify: `src/Custodex.Service/Custodex.Service.csproj`
+- Test: `tests/Custodex.Service.Tests/ProtoCompileTests.cs`
 
 **Interfaces:**
-- Produces: `relkit.v1` proto package with the shared messages (`EntityRef`, `SubjectRef`, `ConditionRef`, `RequestContext`, `ExplainNode`) and the `Decision` service (`Check`, `BatchCheck`, `ListObjects`, `ListSubjects`) with their request/response messages. `Grpc.Tools` generates the C# server stubs at build.
+- Produces: `Custodex.v1` proto package with the shared messages (`EntityRef`, `SubjectRef`, `ConditionRef`, `RequestContext`, `ExplainNode`) and the `Decision` service (`Check`, `BatchCheck`, `ListObjects`, `ListSubjects`) with their request/response messages. `Grpc.Tools` generates the C# server stubs at build.
 - Consumes: `google/protobuf/struct.proto`, `google/protobuf/timestamp.proto` (well-known types ship with `Google.Protobuf`).
 
 > **Faithful mapping.** Each proto message mirrors a contract record field-for-field: `EntityRef{type,id}` ⇄ `EntityRef(Type,Id)`; `SubjectRef{type,id,relation}` ⇄ `SubjectRef(Type,Id,Relation?)` (empty `relation` ⇒ `null`, i.e. not a subject-set); `ConditionRef{name,parameters}` ⇄ `ConditionRef(Name, Parameters)` with `parameters` a `Struct`; `RequestContext{now,subject,attributes}` ⇄ `RequestContext(Now,Subject,Attributes)`; `ExplainNode{description,allowed,children}` ⇄ `ExplainNode(Description,Allowed,Children)` (recursive).
@@ -220,43 +220,43 @@ git commit -m "feat: scaffold Relkit.Service host wired to the Postgres engine"
 - [ ] **Step 1: Write the common proto**
 
 ```proto
-// src/Relkit.Service/Protos/relkit_common.proto
+// src/Custodex.Service/Protos/Custodex_common.proto
 syntax = "proto3";
 
-package relkit.v1;
+package Custodex.v1;
 
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
-option csharp_namespace = "Relkit.Service.Grpc";
+option csharp_namespace = "Custodex.Service.Grpc";
 
-// Mirrors Relkit.Abstractions.EntityRef. id "*" denotes a wildcard.
+// Mirrors Custodex.Abstractions.EntityRef. id "*" denotes a wildcard.
 message EntityRef {
   string type = 1;
   string id = 2;
 }
 
-// Mirrors Relkit.Abstractions.SubjectRef. An empty relation means "not a subject-set".
+// Mirrors Custodex.Abstractions.SubjectRef. An empty relation means "not a subject-set".
 message SubjectRef {
   string type = 1;
   string id = 2;
   string relation = 3; // empty => null Relation (e.g. user:alice); non-empty => subject-set (group:vets#member)
 }
 
-// Mirrors Relkit.Abstractions.ConditionRef. parameters carry heterogeneous values.
+// Mirrors Custodex.Abstractions.ConditionRef. parameters carry heterogeneous values.
 message ConditionRef {
   string name = 1;
   google.protobuf.Struct parameters = 2;
 }
 
-// Mirrors Relkit.Abstractions.RequestContext. attributes are ad-hoc request-context values.
+// Mirrors Custodex.Abstractions.RequestContext. attributes are ad-hoc request-context values.
 message RequestContext {
   google.protobuf.Timestamp now = 1;
   SubjectRef subject = 2;
   google.protobuf.Struct attributes = 3;
 }
 
-// Mirrors Relkit.Abstractions.ExplainNode (recursive decision trace).
+// Mirrors Custodex.Abstractions.ExplainNode (recursive decision trace).
 message ExplainNode {
   string description = 1;
   bool allowed = 2;
@@ -273,14 +273,14 @@ message TenantContext {
 - [ ] **Step 2: Write the decision proto**
 
 ```proto
-// src/Relkit.Service/Protos/relkit_decision.proto
+// src/Custodex.Service/Protos/Custodex_decision.proto
 syntax = "proto3";
 
-package relkit.v1;
+package Custodex.v1;
 
-import "relkit_common.proto";
+import "Custodex_common.proto";
 
-option csharp_namespace = "Relkit.Service.Grpc";
+option csharp_namespace = "Custodex.Service.Grpc";
 
 service Decision {
   rpc Check (CheckRequest) returns (CheckResponse);
@@ -351,26 +351,26 @@ message ListSubjectsResponse {
 
 - [ ] **Step 2b: Register the protos in the csproj**
 
-Add to `src/Relkit.Service/Relkit.Service.csproj` (inside the `<Project>` element):
+Add to `src/Custodex.Service/Custodex.Service.csproj` (inside the `<Project>` element):
 
 ```xml
   <ItemGroup>
-    <Protobuf Include="Protos\relkit_common.proto" GrpcServices="None" />
-    <Protobuf Include="Protos\relkit_decision.proto" GrpcServices="Server" />
+    <Protobuf Include="Protos\Custodex_common.proto" GrpcServices="None" />
+    <Protobuf Include="Protos\Custodex_decision.proto" GrpcServices="Server" />
   </ItemGroup>
 ```
 
-> `relkit_common.proto` generates message types only (`GrpcServices="None"`); the service protos that import it generate the server base classes. `Grpc.AspNetCore` brings `Grpc.Tools` transitively, so no extra package is needed for generation.
+> `Custodex_common.proto` generates message types only (`GrpcServices="None"`); the service protos that import it generate the server base classes. `Grpc.AspNetCore` brings `Grpc.Tools` transitively, so no extra package is needed for generation.
 
 - [ ] **Step 3: Write the failing proto-compile test**
 
 ```csharp
-// tests/Relkit.Service.Tests/ProtoCompileTests.cs
-using Relkit.Service.Grpc;
+// tests/Custodex.Service.Tests/ProtoCompileTests.cs
+using Custodex.Service.Grpc;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 public class ProtoCompileTests
 {
@@ -399,13 +399,13 @@ public class ProtoCompileTests
 
 - [ ] **Step 4: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter ProtoCompileTests`
-Expected: PASS (2 tests). The protos compile and `Decision.DecisionBase` is generated. If generation fails, confirm the `<Protobuf>` items and that `relkit_common.proto` uses `GrpcServices="None"`.
+Run: `dotnet test tests/Custodex.Service.Tests --filter ProtoCompileTests`
+Expected: PASS (2 tests). The protos compile and `Decision.DecisionBase` is generated. If generation fails, confirm the `<Protobuf>` items and that `Custodex_common.proto` uses `GrpcServices="None"`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add decision gRPC contracts and generated stubs"
 ```
 
@@ -414,26 +414,26 @@ git commit -m "feat: add decision gRPC contracts and generated stubs"
 ### Task 3: `ProtoMap` — record ⇄ message conversion
 
 **Files:**
-- Create: `src/Relkit.Service/Mapping/ProtoMap.cs`
-- Test: `tests/Relkit.Service.Tests/ProtoMapTests.cs`
+- Create: `src/Custodex.Service/Mapping/ProtoMap.cs`
+- Test: `tests/Custodex.Service.Tests/ProtoMapTests.cs`
 
 **Interfaces:**
 - Produces: `ProtoMap` static class with bidirectional converters for every shared type: `ToEntityRef`/`FromEntityRef`, `ToSubjectRef`/`FromSubjectRef`, `ToConditionRef`/`FromConditionRef`, `ToRequestContext`/`FromRequestContext`, `ToTenantContext`, `ToExplainNode` (record → message), and the `Struct ⇄ IReadOnlyDictionary<string, object?>` helpers `ToStruct`/`FromStruct`.
-- Consumes: `EntityRef`, `SubjectRef`, `ConditionRef`, `RequestContext`, `TenantContext`, `ExplainNode` (`Relkit.Abstractions`); `Google.Protobuf.WellKnownTypes` (`Struct`, `Value`, `Timestamp`).
+- Consumes: `EntityRef`, `SubjectRef`, `ConditionRef`, `RequestContext`, `TenantContext`, `ExplainNode` (`Custodex.Abstractions`); `Google.Protobuf.WellKnownTypes` (`Struct`, `Value`, `Timestamp`).
 
 > **The `null` Relation rule is the subtle one.** `SubjectRef.Relation` is `null` for a plain subject and a non-null string for a subject-set; proto3 strings cannot be null, so an **empty** `relation` field maps to `null` and any non-empty value maps through. `IsSubjectSet` therefore stays correct across the wire.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Service.Tests/ProtoMapTests.cs
+// tests/Custodex.Service.Tests/ProtoMapTests.cs
 using Google.Protobuf.WellKnownTypes;
-using Relkit.Abstractions;
-using Relkit.Service.Mapping;
+using Custodex.Abstractions;
+using Custodex.Service.Mapping;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 public class ProtoMapTests
 {
@@ -528,21 +528,21 @@ public class ProtoMapTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter ProtoMapTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter ProtoMapTests`
 Expected: FAIL — `ProtoMap` does not exist.
 
 - [ ] **Step 3: Implement `ProtoMap`**
 
 ```csharp
-// src/Relkit.Service/Mapping/ProtoMap.cs
+// src/Custodex.Service/Mapping/ProtoMap.cs
 using Google.Protobuf.WellKnownTypes;
-using Relkit.Abstractions;
-using Grpc = Relkit.Service.Grpc;
+using Custodex.Abstractions;
+using Grpc = Custodex.Service.Grpc;
 
-namespace Relkit.Service.Mapping;
+namespace Custodex.Service.Mapping;
 
 /// <summary>
-/// Bidirectional conversion between the canonical Relkit.Abstractions records and the relkit.v1
+/// Bidirectional conversion between the canonical Custodex.Abstractions records and the Custodex.v1
 /// proto messages. The single home for the record ⇄ message mapping so the boundary is tested once.
 /// </summary>
 public static class ProtoMap
@@ -625,13 +625,13 @@ public static class ProtoMap
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter ProtoMapTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter ProtoMapTests`
 Expected: PASS (6 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add ProtoMap record-message conversion"
 ```
 
@@ -640,33 +640,33 @@ git commit -m "feat: add ProtoMap record-message conversion"
 ### Task 4: `DecisionService` — the four read ops over gRPC
 
 **Files:**
-- Create: `src/Relkit.Service/Services/DecisionGrpcService.cs`
-- Modify: `src/Relkit.Service/Program.cs`
-- Test: `tests/Relkit.Service.Tests/DecisionServiceTests.cs`
+- Create: `src/Custodex.Service/Services/DecisionGrpcService.cs`
+- Modify: `src/Custodex.Service/Program.cs`
+- Test: `tests/Custodex.Service.Tests/DecisionServiceTests.cs`
 
 **Interfaces:**
-- Produces: `DecisionGrpcService : Decision.DecisionBase` delegating each RPC to `IAuthorizer`, translating via `ProtoMap`. Mapped at `/relkit.v1.Decision` by `app.MapGrpcService<DecisionGrpcService>()`.
-- Consumes: `IAuthorizer` (`Relkit.Abstractions`), `ProtoMap` (Task 3), the generated `Decision.DecisionBase` (Task 2).
+- Produces: `DecisionGrpcService : Decision.DecisionBase` delegating each RPC to `IAuthorizer`, translating via `ProtoMap`. Mapped at `/Custodex.v1.Decision` by `app.MapGrpcService<DecisionGrpcService>()`.
+- Consumes: `IAuthorizer` (`Custodex.Abstractions`), `ProtoMap` (Task 3), the generated `Decision.DecisionBase` (Task 2).
 
 > **Delegation only.** The service builds a `CheckRequest`/`ListObjectsRequest`/etc. from the proto message, calls the resolved `IAuthorizer`, and maps the result back. The same `IAuthorizer` (`NpgsqlCteAuthorizer`, registered by `m1/09`'s `UsePostgres`) serves both this front door and the in-process consumer.
 
 - [ ] **Step 1: Implement the decision service**
 
 ```csharp
-// src/Relkit.Service/Services/DecisionGrpcService.cs
+// src/Custodex.Service/Services/DecisionGrpcService.cs
 using Grpc.Core;
-using Relkit.Abstractions;
-using Relkit.Service.Grpc;
-using Relkit.Service.Mapping;
+using Custodex.Abstractions;
+using Custodex.Service.Grpc;
+using Custodex.Service.Mapping;
 
-namespace Relkit.Service.Services;
+namespace Custodex.Service.Services;
 
 /// <summary>gRPC front door for the four read operations. Delegates to the in-process IAuthorizer.</summary>
 public sealed class DecisionGrpcService(IAuthorizer authorizer) : Decision.DecisionBase
 {
     public override async Task<CheckResponse> Check(CheckRequest request, ServerCallContext context)
     {
-        var result = await authorizer.CheckAsync(new Relkit.Abstractions.CheckRequest(
+        var result = await authorizer.CheckAsync(new Custodex.Abstractions.CheckRequest(
             ProtoMap.ToTenantContext(request.Tenant),
             ProtoMap.ToEntityRef(request.Object),
             request.Permission,
@@ -686,7 +686,7 @@ public sealed class DecisionGrpcService(IAuthorizer authorizer) : Decision.Decis
             .Select(i => new CheckItem(ProtoMap.ToEntityRef(i.Object), i.Permission, ProtoMap.ToSubjectRef(i.Subject)))
             .ToList();
 
-        var results = await authorizer.BatchCheckAsync(new Relkit.Abstractions.BatchCheckRequest(
+        var results = await authorizer.BatchCheckAsync(new Custodex.Abstractions.BatchCheckRequest(
             ProtoMap.ToTenantContext(request.Tenant), items,
             ProtoMap.ToRequestContext(request.Context)), context.CancellationToken);
 
@@ -698,7 +698,7 @@ public sealed class DecisionGrpcService(IAuthorizer authorizer) : Decision.Decis
 
     public override async Task<ListObjectsResponse> ListObjects(ListObjectsRequest request, ServerCallContext context)
     {
-        var result = await authorizer.ListObjectsAsync(new Relkit.Abstractions.ListObjectsRequest(
+        var result = await authorizer.ListObjectsAsync(new Custodex.Abstractions.ListObjectsRequest(
             ProtoMap.ToTenantContext(request.Tenant),
             ProtoMap.ToSubjectRef(request.Subject),
             request.ObjectType,
@@ -715,7 +715,7 @@ public sealed class DecisionGrpcService(IAuthorizer authorizer) : Decision.Decis
 
     public override async Task<ListSubjectsResponse> ListSubjects(ListSubjectsRequest request, ServerCallContext context)
     {
-        var result = await authorizer.ListSubjectsAsync(new Relkit.Abstractions.ListSubjectsRequest(
+        var result = await authorizer.ListSubjectsAsync(new Custodex.Abstractions.ListSubjectsRequest(
             ProtoMap.ToTenantContext(request.Tenant),
             ProtoMap.ToEntityRef(request.Object),
             request.Permission,
@@ -737,29 +737,29 @@ public sealed class DecisionGrpcService(IAuthorizer authorizer) : Decision.Decis
 Add `app.MapGrpcService<DecisionGrpcService>();` before `app.Run();` and add the using:
 
 ```csharp
-// src/Relkit.Service/Program.cs — add near the top
-using Relkit.Service.Services;
+// src/Custodex.Service/Program.cs — add near the top
+using Custodex.Service.Services;
 ```
 
 ```csharp
-// src/Relkit.Service/Program.cs — add before app.Run();
+// src/Custodex.Service/Program.cs — add before app.Run();
 app.MapGrpcService<DecisionGrpcService>();
 ```
 
 - [ ] **Step 3: Write the failing end-to-end gRPC test**
 
 ```csharp
-// tests/Relkit.Service.Tests/DecisionServiceTests.cs
+// tests/Custodex.Service.Tests/DecisionServiceTests.cs
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Service.Grpc;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Service.Grpc;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 [Collection("service")]
 public class DecisionServiceTests(PostgresFixture fx)
@@ -768,7 +768,7 @@ public class DecisionServiceTests(PostgresFixture fx)
 
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("Relkit:ConnectionString", fx.ConnectionString));
+            b.UseSetting("Custodex:ConnectionString", fx.ConnectionString));
 
     private static Decision.DecisionClient ClientFor(WebApplicationFactory<Program> factory)
     {
@@ -893,13 +893,13 @@ public class DecisionServiceTests(PostgresFixture fx)
 
 - [ ] **Step 4: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter DecisionServiceTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter DecisionServiceTests`
 Expected: FAIL first (service unmapped), then PASS (4 tests) once Steps 1–2 are in place. The seeded macropods grant lets `alice` edit `kangaroo`/`wallaby` and denies `bob`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add DecisionService gRPC implementation over IAuthorizer"
 ```
 
@@ -908,31 +908,31 @@ git commit -m "feat: add DecisionService gRPC implementation over IAuthorizer"
 ### Task 5: The management `.proto` and generated stubs
 
 **Files:**
-- Create: `src/Relkit.Service/Protos/relkit_management.proto`
-- Modify: `src/Relkit.Service/Relkit.Service.csproj`
-- Test: `tests/Relkit.Service.Tests/ManagementProtoCompileTests.cs`
+- Create: `src/Custodex.Service/Protos/Custodex_management.proto`
+- Modify: `src/Custodex.Service/Custodex.Service.csproj`
+- Test: `tests/Custodex.Service.Tests/ManagementProtoCompileTests.cs`
 
 **Interfaces:**
-- Produces: the `Relations`, `Schema`, and `Provisioning` services in `relkit.v1`, plus their messages: `RelationTuple`, tuple write/delete/read, attribute write, change-log read; schema validate/set/get (schema carried as a JSON string for M3/01, with the DSL parser deferred to `m3/05`); store/tenant create.
-- Consumes: `relkit_common.proto`.
+- Produces: the `Relations`, `Schema`, and `Provisioning` services in `Custodex.v1`, plus their messages: `RelationTuple`, tuple write/delete/read, attribute write, change-log read; schema validate/set/get (schema carried as a JSON string for M3/01, with the DSL parser deferred to `m3/05`); store/tenant create.
+- Consumes: `Custodex_common.proto`.
 
 > **Schema over the wire as JSON.** `ISchemaManager` takes the canonical `Schema` AST. For the gRPC surface the schema travels as a `schema_json` string (the canonical-model serialization); `m3/05`'s DSL parser adds a text form. M3/01 maps `schema_json ⇄ Schema` with `System.Text.Json` so the management API is complete now. `RelationTuple` mirrors the record: object + relation + subject + optional condition.
 
 - [ ] **Step 1: Write the management proto**
 
 ```proto
-// src/Relkit.Service/Protos/relkit_management.proto
+// src/Custodex.Service/Protos/Custodex_management.proto
 syntax = "proto3";
 
-package relkit.v1;
+package Custodex.v1;
 
-import "relkit_common.proto";
+import "Custodex_common.proto";
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
-option csharp_namespace = "Relkit.Service.Grpc";
+option csharp_namespace = "Custodex.Service.Grpc";
 
-// Mirrors Relkit.Abstractions.RelationTuple.
+// Mirrors Custodex.Abstractions.RelationTuple.
 message RelationTuple {
   EntityRef object = 1;
   string relation = 2;
@@ -963,7 +963,7 @@ message WriteAttributesRequest {
 }
 message WriteAttributesResponse {}
 
-// Mirrors Relkit.Abstractions.TupleFilter (all fields optional; empty => no filter on that column).
+// Mirrors Custodex.Abstractions.TupleFilter (all fields optional; empty => no filter on that column).
 message ReadTuplesRequest {
   TenantContext tenant = 1;
   string object_type = 2;
@@ -974,7 +974,7 @@ message ReadTuplesRequest {
 }
 message ReadTuplesResponse { repeated RelationTuple tuples = 1; }
 
-// Mirrors Relkit.Abstractions.ChangeLogFilter.
+// Mirrors Custodex.Abstractions.ChangeLogFilter.
 message ReadChangeLogRequest {
   TenantContext tenant = 1;
   google.protobuf.Timestamp since = 2; // optional
@@ -1026,21 +1026,21 @@ message CreateTenantResponse {}
 
 - [ ] **Step 2: Register the management proto in the csproj**
 
-Add to the existing `<ItemGroup>` of protos in `src/Relkit.Service/Relkit.Service.csproj`:
+Add to the existing `<ItemGroup>` of protos in `src/Custodex.Service/Custodex.Service.csproj`:
 
 ```xml
-    <Protobuf Include="Protos\relkit_management.proto" GrpcServices="Server" />
+    <Protobuf Include="Protos\Custodex_management.proto" GrpcServices="Server" />
 ```
 
 - [ ] **Step 3: Write the failing compile test**
 
 ```csharp
-// tests/Relkit.Service.Tests/ManagementProtoCompileTests.cs
-using Relkit.Service.Grpc;
+// tests/Custodex.Service.Tests/ManagementProtoCompileTests.cs
+using Custodex.Service.Grpc;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 public class ManagementProtoCompileTests
 {
@@ -1069,13 +1069,13 @@ public class ManagementProtoCompileTests
 
 - [ ] **Step 4: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter ManagementProtoCompileTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter ManagementProtoCompileTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add management gRPC contracts and generated stubs"
 ```
 
@@ -1084,31 +1084,31 @@ git commit -m "feat: add management gRPC contracts and generated stubs"
 ### Task 6: Management service implementations + schema JSON mapping
 
 **Files:**
-- Create: `src/Relkit.Service/Mapping/SchemaJson.cs`
-- Create: `src/Relkit.Service/Services/RelationsGrpcService.cs`
-- Create: `src/Relkit.Service/Services/SchemaGrpcService.cs`
-- Create: `src/Relkit.Service/Services/ProvisioningGrpcService.cs`
-- Modify: `src/Relkit.Service/Program.cs`
-- Test: `tests/Relkit.Service.Tests/ManagementServiceTests.cs`
+- Create: `src/Custodex.Service/Mapping/SchemaJson.cs`
+- Create: `src/Custodex.Service/Services/RelationsGrpcService.cs`
+- Create: `src/Custodex.Service/Services/SchemaGrpcService.cs`
+- Create: `src/Custodex.Service/Services/ProvisioningGrpcService.cs`
+- Modify: `src/Custodex.Service/Program.cs`
+- Test: `tests/Custodex.Service.Tests/ManagementServiceTests.cs`
 
 **Interfaces:**
 - Produces:
   - `SchemaJson` with `string Serialize(Schema)` and `Schema Deserialize(string)` using `System.Text.Json` with a polymorphic `PermExpr` converter (the AST has an abstract base with sealed subtypes).
   - `RelationsGrpcService : Relations.RelationsBase` over `IRelationManager`; `SchemaGrpcService : Schema.SchemaBase` over `ISchemaManager`; `ProvisioningGrpcService : Provisioning.ProvisioningBase` over `IStoreManager`/`ITenantManager`.
-- Consumes: `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` (`Relkit.Abstractions`), `ProtoMap` (Task 3), the generated management stubs (Task 5).
+- Consumes: `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` (`Custodex.Abstractions`), `ProtoMap` (Task 3), the generated management stubs (Task 5).
 
-> **`PermExpr` polymorphism.** The schema AST's `PermExpr` is an abstract record with sealed subtypes (`RelationRef`/`Union`/`Intersect`/`Exclude`/`Arrow`/`Conditioned`). `System.Text.Json` needs a discriminator to round-trip it. `SchemaJson` registers a `JsonDerivedType` set on `PermExpr` (and on `ConditionExpr` similarly, though M3/01 schemas carry the empty body placeholder from `m0/02`). The validate/set paths exercise `RelkitSchemaManager` (`m1/09`), which throws `SchemaValidationException` on an invalid schema — mapped to a gRPC `InvalidArgument` status.
+> **`PermExpr` polymorphism.** The schema AST's `PermExpr` is an abstract record with sealed subtypes (`RelationRef`/`Union`/`Intersect`/`Exclude`/`Arrow`/`Conditioned`). `System.Text.Json` needs a discriminator to round-trip it. `SchemaJson` registers a `JsonDerivedType` set on `PermExpr` (and on `ConditionExpr` similarly, though M3/01 schemas carry the empty body placeholder from `m0/02`). The validate/set paths exercise `CustodexSchemaManager` (`m1/09`), which throws `SchemaValidationException` on an invalid schema — mapped to a gRPC `InvalidArgument` status.
 
 - [ ] **Step 1: Implement `SchemaJson`**
 
 ```csharp
-// src/Relkit.Service/Mapping/SchemaJson.cs
+// src/Custodex.Service/Mapping/SchemaJson.cs
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Service.Mapping;
+namespace Custodex.Service.Mapping;
 
 /// <summary>
 /// Canonical-model JSON serialization for the Schema AST, used by the gRPC/REST management surface
@@ -1170,14 +1170,14 @@ public static class SchemaJson
 - [ ] **Step 2: Implement the management services**
 
 ```csharp
-// src/Relkit.Service/Services/RelationsGrpcService.cs
+// src/Custodex.Service/Services/RelationsGrpcService.cs
 using Grpc.Core;
-using Relkit.Abstractions;
-using Relkit.Service.Grpc;
-using Relkit.Service.Mapping;
+using Custodex.Abstractions;
+using Custodex.Service.Grpc;
+using Custodex.Service.Mapping;
 using Google.Protobuf.WellKnownTypes;
 
-namespace Relkit.Service.Services;
+namespace Custodex.Service.Services;
 
 public sealed class RelationsGrpcService(IRelationManager relations) : Relations.RelationsBase
 {
@@ -1257,13 +1257,13 @@ public sealed class RelationsGrpcService(IRelationManager relations) : Relations
 ```
 
 ```csharp
-// src/Relkit.Service/Services/SchemaGrpcService.cs
+// src/Custodex.Service/Services/SchemaGrpcService.cs
 using Grpc.Core;
-using Relkit.Abstractions;
-using Relkit.Service.Grpc;
-using Relkit.Service.Mapping;
+using Custodex.Abstractions;
+using Custodex.Service.Grpc;
+using Custodex.Service.Mapping;
 
-namespace Relkit.Service.Services;
+namespace Custodex.Service.Services;
 
 public sealed class SchemaGrpcService(ISchemaManager schemas) : Schema.SchemaBase
 {
@@ -1301,13 +1301,13 @@ public sealed class SchemaGrpcService(ISchemaManager schemas) : Schema.SchemaBas
 ```
 
 ```csharp
-// src/Relkit.Service/Services/ProvisioningGrpcService.cs
+// src/Custodex.Service/Services/ProvisioningGrpcService.cs
 using Grpc.Core;
-using Relkit.Abstractions;
-using Relkit.Service.Grpc;
-using Relkit.Service.Mapping;
+using Custodex.Abstractions;
+using Custodex.Service.Grpc;
+using Custodex.Service.Mapping;
 
-namespace Relkit.Service.Services;
+namespace Custodex.Service.Services;
 
 public sealed class ProvisioningGrpcService(IStoreManager stores, ITenantManager tenants) : Provisioning.ProvisioningBase
 {
@@ -1330,7 +1330,7 @@ public sealed class ProvisioningGrpcService(IStoreManager stores, ITenantManager
 Add before `app.Run();`:
 
 ```csharp
-// src/Relkit.Service/Program.cs — add before app.Run();
+// src/Custodex.Service/Program.cs — add before app.Run();
 app.MapGrpcService<RelationsGrpcService>();
 app.MapGrpcService<SchemaGrpcService>();
 app.MapGrpcService<ProvisioningGrpcService>();
@@ -1339,18 +1339,18 @@ app.MapGrpcService<ProvisioningGrpcService>();
 - [ ] **Step 4: Write the failing management end-to-end test**
 
 ```csharp
-// tests/Relkit.Service.Tests/ManagementServiceTests.cs
+// tests/Custodex.Service.Tests/ManagementServiceTests.cs
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Service.Grpc;
-using Relkit.Service.Mapping;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Service.Grpc;
+using Custodex.Service.Mapping;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 [Collection("service")]
 public class ManagementServiceTests(PostgresFixture fx)
@@ -1359,7 +1359,7 @@ public class ManagementServiceTests(PostgresFixture fx)
 
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("Relkit:ConnectionString", fx.ConnectionString));
+            b.UseSetting("Custodex:ConnectionString", fx.ConnectionString));
 
     private static GrpcChannel Channel(WebApplicationFactory<Program> factory) =>
         GrpcChannel.ForAddress(factory.Server.BaseAddress, new GrpcChannelOptions
@@ -1447,13 +1447,13 @@ public class ManagementServiceTests(PostgresFixture fx)
 
 - [ ] **Step 5: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter ManagementServiceTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter ManagementServiceTests`
 Expected: PASS (2 tests). Provisioning → schema activation → audited tuple write → read-back round-trips over gRPC; an invalid schema surfaces as `InvalidArgument`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: add management gRPC services with schema JSON mapping"
 ```
 
@@ -1462,28 +1462,28 @@ git commit -m "feat: add management gRPC services with schema JSON mapping"
 ### Task 7: Startup migrations and final host wiring
 
 **Files:**
-- Modify: `src/Relkit.Service/Program.cs`
-- Test: `tests/Relkit.Service.Tests/StartupMigrationTests.cs`
+- Modify: `src/Custodex.Service/Program.cs`
+- Test: `tests/Custodex.Service.Tests/StartupMigrationTests.cs`
 
 **Interfaces:**
 - Produces: a host that applies the Postgres migrations at startup (idempotent `MigrationRunner.ApplyAsync` from `m1/01`) so a fresh database is usable on first boot, and maps all four gRPC services.
 - Consumes: `MigrationRunner` (`m1/01`).
 
-> **Idempotent and safe to re-run.** `m1/01`'s migrations are idempotent; running them at startup means a freshly provisioned container is ready without a separate migration step. A consumer who manages migrations externally can disable this via configuration (`Relkit:ApplyMigrationsOnStartup`).
+> **Idempotent and safe to re-run.** `m1/01`'s migrations are idempotent; running them at startup means a freshly provisioned container is ready without a separate migration step. A consumer who manages migrations externally can disable this via configuration (`Custodex:ApplyMigrationsOnStartup`).
 
 - [ ] **Step 1: Add startup migration to `Program.cs`**
 
 Replace the build/run tail of `Program.cs` so migrations run before serving:
 
 ```csharp
-// src/Relkit.Service/Program.cs — replace from "var app = builder.Build();" downward
+// src/Custodex.Service/Program.cs — replace from "var app = builder.Build();" downward
 var app = builder.Build();
 
-if (builder.Configuration.GetValue("Relkit:ApplyMigrationsOnStartup", true))
+if (builder.Configuration.GetValue("Custodex:ApplyMigrationsOnStartup", true))
 {
     await using var conn = new Npgsql.NpgsqlConnection(connectionString);
     await conn.OpenAsync();
-    await Relkit.Storage.Postgres.MigrationRunner.ApplyAsync(conn);
+    await Custodex.Storage.Postgres.MigrationRunner.ApplyAsync(conn);
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
@@ -1502,15 +1502,15 @@ public partial class Program;
 - [ ] **Step 2: Write the startup-migration test** (a clean container, no fixture pre-migration)
 
 ```csharp
-// tests/Relkit.Service.Tests/StartupMigrationTests.cs
+// tests/Custodex.Service.Tests/StartupMigrationTests.cs
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 using Testcontainers.PostgreSql;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Service.Tests;
+namespace Custodex.Service.Tests;
 
 public class StartupMigrationTests : IAsyncLifetime
 {
@@ -1525,7 +1525,7 @@ public class StartupMigrationTests : IAsyncLifetime
     public async Task Host_applies_migrations_on_startup_and_serves_check()
     {
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("Relkit:ConnectionString", _container.GetConnectionString()));
+            b.UseSetting("Custodex:ConnectionString", _container.GetConnectionString()));
 
         // Building the client forces host startup, which runs migrations on the clean container.
         using var client = factory.CreateClient();
@@ -1541,18 +1541,18 @@ public class StartupMigrationTests : IAsyncLifetime
 
 - [ ] **Step 3: Run to verify**
 
-Run: `dotnet test tests/Relkit.Service.Tests --filter StartupMigrationTests`
+Run: `dotnet test tests/Custodex.Service.Tests --filter StartupMigrationTests`
 Expected: PASS. A clean container becomes usable purely from host startup.
 
 - [ ] **Step 4: Run the full service test suite**
 
-Run: `dotnet test tests/Relkit.Service.Tests`
+Run: `dotnet test tests/Custodex.Service.Tests`
 Expected: PASS — host boot, proto compile, ProtoMap, decision, management, and startup migration all green.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Service tests/Relkit.Service.Tests
+git add src/Custodex.Service tests/Custodex.Service.Tests
 git commit -m "feat: apply migrations on startup and map all gRPC services"
 ```
 
@@ -1561,15 +1561,15 @@ git commit -m "feat: apply migrations on startup and map all gRPC services"
 ## Self-review checklist (run after all tasks)
 
 - [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`.
-- [ ] `Relkit.Service` references the engine packages and composes it via `AddRelkit().UsePostgres()` exactly as the in-process consumer (`m1/09`); no evaluation/persistence logic lives in the service.
-- [ ] The `relkit.v1` proto declares `Decision`, `Relations`, `Schema`, `Provisioning`, with messages mirroring `EntityRef`/`SubjectRef`/`ConditionRef`/`RequestContext`/`ExplainNode` and `RelationTuple`/filters.
+- [ ] `Custodex.Service` references the engine packages and composes it via `AddCustodex().UsePostgres()` exactly as the in-process consumer (`m1/09`); no evaluation/persistence logic lives in the service.
+- [ ] The `Custodex.v1` proto declares `Decision`, `Relations`, `Schema`, `Provisioning`, with messages mirroring `EntityRef`/`SubjectRef`/`ConditionRef`/`RequestContext`/`ExplainNode` and `RelationTuple`/filters.
 - [ ] `ProtoMap` round-trips every shared type, including the empty-`relation` ⇒ `null` `SubjectRef` rule and the `Struct ⇄ object?` attribute/parameter mapping.
 - [ ] `DecisionGrpcService` answers Check/BatchCheck/ListObjects/ListSubjects through `IAuthorizer` over `WebApplicationFactory` + Testcontainers Postgres.
 - [ ] The management services provision stores/tenants, validate + activate schema (invalid ⇒ `InvalidArgument`), and write/read audited tuples through the manager interfaces.
-- [ ] Migrations apply on startup; the full `Relkit.Service.Tests` suite is green.
+- [ ] Migrations apply on startup; the full `Custodex.Service.Tests` suite is green.
 
 ## Contract gaps (reported, not changed)
 
-- **No serialized canonical-schema format in the contract.** `ISchemaManager` operates on the `Schema` AST in-process, but the gRPC/REST surface must carry a schema over the wire. This plan introduces `SchemaJson` (a `System.Text.Json` polymorphic serialization of the AST) as the M3 transport until `m3/05`'s DSL parser provides the text form. If the contract owner wants the canonical serialization centralized (so the DSL parser, the service, and any tooling share one (de)serializer), a `SchemaSerializer` in `Relkit.Core` (or `Relkit.Abstractions`) is the clean home — flagged for `m3/05`, which owns the DSL ⇄ `Schema` conversion.
-- **`Struct` collapses integer and floating-point attributes to `double`.** `RequestContext.Attributes` and `ConditionRef.Parameters` are `object?`; `google.protobuf.Struct` has a single numeric kind, so integers arrive as `double` after a round-trip. The condition evaluator (`m0/06`) coerces numerics, so checks are unaffected, but a consumer reading attributes back verbatim sees `double`. If exact numeric typing over the wire is required, a richer `RelkitValue` oneof (int64/double/bool/string/null) would replace `Struct` — flagged, not changed, since the engine's behaviour is correct with the coercion.
+- **No serialized canonical-schema format in the contract.** `ISchemaManager` operates on the `Schema` AST in-process, but the gRPC/REST surface must carry a schema over the wire. This plan introduces `SchemaJson` (a `System.Text.Json` polymorphic serialization of the AST) as the M3 transport until `m3/05`'s DSL parser provides the text form. If the contract owner wants the canonical serialization centralized (so the DSL parser, the service, and any tooling share one (de)serializer), a `SchemaSerializer` in `Custodex.Core` (or `Custodex.Abstractions`) is the clean home — flagged for `m3/05`, which owns the DSL ⇄ `Schema` conversion.
+- **`Struct` collapses integer and floating-point attributes to `double`.** `RequestContext.Attributes` and `ConditionRef.Parameters` are `object?`; `google.protobuf.Struct` has a single numeric kind, so integers arrive as `double` after a round-trip. The condition evaluator (`m0/06`) coerces numerics, so checks are unaffected, but a consumer reading attributes back verbatim sees `double`. If exact numeric typing over the wire is required, a richer `CustodexValue` oneof (int64/double/bool/string/null) would replace `Struct` — flagged, not changed, since the engine's behaviour is correct with the coercion.
 - **`ChangeLogEntry.Before/After` are `object?` with no defined wire shape.** The contract types them as `object?`; this plan serializes them as JSON strings (`before_json`/`after_json`) for transport. If a structured representation is needed, the contract should define the before/after image type. Flagged, not changed.

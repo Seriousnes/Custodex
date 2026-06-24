@@ -8,7 +8,7 @@
 
 The affected closure is computed by reverse traversal from the changed tuples: the directly-touched object, plus every object that can reach it through structural-reference edges (arrows) or group membership, transitively. The closure must be a **complete superset** — recomputing an object that did not actually change is harmless (it re-derives the same rows); missing one is the bug the harness guards against.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Relkit.Core` (`EngineDrivenAuthorizer.CheckStructuralAsync`, `SchemaIndex`, `NullConditionEvaluator`) and `m2/02` (`RebuildEnumeration`, the rebuild semantics this scopes).
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Custodex.Core` (`EngineDrivenAuthorizer.CheckStructuralAsync`, `SchemaIndex`, `NullConditionEvaluator`) and `m2/02` (`RebuildEnumeration`, the rebuild semantics this scopes).
 
 ## Global Constraints
 
@@ -21,8 +21,8 @@ See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`Im
 ### Task 1: Compute the affected closure from changed tuples
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Index/AffectedClosure.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/AffectedClosureTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Index/AffectedClosure.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/AffectedClosureTests.cs`
 
 **Interfaces:**
 - Produces: `AffectedClosure` with
@@ -34,15 +34,15 @@ See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`Im
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/AffectedClosureTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/AffectedClosureTests.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Index;
+using Custodex.Abstractions;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Index;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class AffectedClosureTests(PostgresFixture fx) : IAsyncLifetime
@@ -121,7 +121,7 @@ public class AffectedClosureTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter AffectedClosureTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter AffectedClosureTests`
 Expected: FAIL — `AffectedClosure` does not exist.
 
 - [ ] **Step 3: Implement the closure**
@@ -129,12 +129,12 @@ Expected: FAIL — `AffectedClosure` does not exist.
 > **Calibration:** this reverse-reachability closure is the candidate validated by the `m2/06` harness. It seeds from changed objects and climbs inbound edges (structural arrows + group membership), transitively. If `m2/06` ever finds an affected object this misses, widen the climb — the harness is the spec. It runs on the write transaction so it sees the post-write tuples.
 
 ```csharp
-// src/Relkit.Storage.Postgres/Index/AffectedClosure.cs
+// src/Custodex.Storage.Postgres/Index/AffectedClosure.cs
 using Dapper;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres.Index;
+namespace Custodex.Storage.Postgres.Index;
 
 /// <summary>
 /// The set of objects whose reverse-index rows could change as a consequence of a write
@@ -187,13 +187,13 @@ public static class AffectedClosure
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter AffectedClosureTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter AffectedClosureTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Index/AffectedClosure.cs tests/Relkit.Storage.Postgres.Tests/Index/AffectedClosureTests.cs
+git add src/Custodex.Storage.Postgres/Index/AffectedClosure.cs tests/Custodex.Storage.Postgres.Tests/Index/AffectedClosureTests.cs
 git commit -m "feat: compute affected closure for incremental index maintenance"
 ```
 
@@ -202,8 +202,8 @@ git commit -m "feat: compute affected closure for incremental index maintenance"
 ### Task 2: Recompute one object's rows (scoped rebuild)
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Index/ObjectRowRecomputer.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/ObjectRowRecomputerTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Index/ObjectRowRecomputer.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/ObjectRowRecomputerTests.cs`
 
 **Interfaces:**
 - Produces: `ObjectRowRecomputer(string connectionString, IRelationStore relations, IAttributeStore attributes)` with
@@ -215,17 +215,17 @@ git commit -m "feat: compute affected closure for incremental index maintenance"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/ObjectRowRecomputerTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/ObjectRowRecomputerTests.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Index;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Index;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class ObjectRowRecomputerTests(PostgresFixture fx) : IAsyncLifetime
@@ -292,18 +292,18 @@ public class ObjectRowRecomputerTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ObjectRowRecomputerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ObjectRowRecomputerTests`
 Expected: FAIL — `ObjectRowRecomputer` does not exist.
 
 - [ ] **Step 3: Implement the recomputer**
 
 ```csharp
-// src/Relkit.Storage.Postgres/Index/ObjectRowRecomputer.cs
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
+// src/Custodex.Storage.Postgres/Index/ObjectRowRecomputer.cs
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres.Index;
+namespace Custodex.Storage.Postgres.Index;
 
 /// <summary>
 /// Recomputes one object's reverse-index rows exactly as the full rebuild would (m2/02), scoped to a
@@ -349,13 +349,13 @@ public sealed class ObjectRowRecomputer(
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ObjectRowRecomputerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ObjectRowRecomputerTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Index/ObjectRowRecomputer.cs tests/Relkit.Storage.Postgres.Tests/Index/ObjectRowRecomputerTests.cs
+git add src/Custodex.Storage.Postgres/Index/ObjectRowRecomputer.cs tests/Custodex.Storage.Postgres.Tests/Index/ObjectRowRecomputerTests.cs
 git commit -m "feat: add scoped per-object row recomputation"
 ```
 
@@ -364,8 +364,8 @@ git commit -m "feat: add scoped per-object row recomputation"
 ### Task 3: `ReverseIndexMaintainer` — closure, recompute, replace, in-transaction
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Index/ReverseIndexMaintainer.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexMaintainerTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Index/ReverseIndexMaintainer.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexMaintainerTests.cs`
 
 **Interfaces:**
 - Produces: `ReverseIndexMaintainer(string connectionString, ISchemaStore schemas, IRelationStore relations, IAttributeStore attributes, IIndexStore index)` with
@@ -382,16 +382,16 @@ git commit -m "feat: add scoped per-object row recomputation"
 - [ ] **Step 1: Write the failing tests** (the exclusion landmine and multi-path cases)
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexMaintainerTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexMaintainerTests.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Index;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Index;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class ReverseIndexMaintainerTests(PostgresFixture fx) : IAsyncLifetime
@@ -572,18 +572,18 @@ public class ReverseIndexMaintainerTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ReverseIndexMaintainerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ReverseIndexMaintainerTests`
 Expected: FAIL — `ReverseIndexMaintainer` does not exist.
 
 - [ ] **Step 3: Implement the maintainer**
 
 ```csharp
-// src/Relkit.Storage.Postgres/Index/ReverseIndexMaintainer.cs
+// src/Custodex.Storage.Postgres/Index/ReverseIndexMaintainer.cs
 using Npgsql;
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres.Index;
+namespace Custodex.Storage.Postgres.Index;
 
 /// <summary>
 /// In-transaction incremental maintenance of reverse_index (spec §7.3). On a tuple/attribute write it
@@ -641,24 +641,24 @@ public sealed class ReverseIndexMaintainer(
 }
 ```
 
-> **`SchemaIndex.TryType` note.** `SchemaIndex` (`m0/05`) exposes `Type(name)` (throwing) but not a `bool TryType(name, out def)`. Add the non-throwing companion to `SchemaIndex` in `Relkit.Core` (a one-line addition mirroring `TryPermission`/`TryRelation` already present):
+> **`SchemaIndex.TryType` note.** `SchemaIndex` (`m0/05`) exposes `Type(name)` (throwing) but not a `bool TryType(name, out def)`. Add the non-throwing companion to `SchemaIndex` in `Custodex.Core` (a one-line addition mirroring `TryPermission`/`TryRelation` already present):
 > ```csharp
-> // add to src/Relkit.Core/Evaluation/SchemaIndex.cs
+> // add to src/Custodex.Core/Evaluation/SchemaIndex.cs
 > public bool TryType(string name, out EntityTypeDef def) => _types.TryGetValue(name, out def!);
 > ```
-> Reported as a small `Relkit.Core` addition in this plan's return.
+> Reported as a small `Custodex.Core` addition in this plan's return.
 
 > **Transaction-visibility note (load-bearing).** `AffectedClosure` reads tuples on the **write transaction** (`w.Connection`/`w.Transaction`), so it sees the just-written tuples. `ObjectRowRecomputer`, however, reads through the injected `IRelationStore`, which opens its own connection — it will **not** see uncommitted tuples from the write transaction unless that store is constructed to share the uow's connection. Per `m1/04`, `NpgsqlRelationStore.GetByObjectAsync`/`GetBySubjectAsync` open their own short-lived connections. Therefore maintenance must run **after** the tuple write is visible to those reads. Two supported wirings, validated by `m2/06`: (a) the simplest, used by the tests here — maintenance runs on the same logical uow but the recomputer's reads are made to share the write connection by passing the uow into a uow-bound relation store; or (b) the write path uses `READ COMMITTED` with the index maintenance issued as a deferred step within the same transaction using a relation store bound to `w.Connection`. **The `m1/04` relation store must expose a uow-bound read path for the recomputer; see Contract gaps. Until it does, the maintainer constructs the recomputer's `EngineDrivenAuthorizer` over a relation store bound to `w.Connection`/`w.Transaction`.** The `m2/06` harness asserts the post-maintenance index equals the rebuild, which fails loudly if reads miss the in-flight write — so this wiring is pinned by that harness.
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ReverseIndexMaintainerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ReverseIndexMaintainerTests`
 Expected: PASS (6 tests). The exclusion-add/remove and multi-path cases are the landmine; the arrow case is the structural ripple; the unbuilt case is the staleness guard.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Index/ReverseIndexMaintainer.cs src/Relkit.Core/Evaluation/SchemaIndex.cs tests/Relkit.Storage.Postgres.Tests/Index/ReverseIndexMaintainerTests.cs
+git add src/Custodex.Storage.Postgres/Index/ReverseIndexMaintainer.cs src/Custodex.Core/Evaluation/SchemaIndex.cs tests/Custodex.Storage.Postgres.Tests/Index/ReverseIndexMaintainerTests.cs
 git commit -m "feat: incremental reverse-index maintenance via affected-closure recompute"
 ```
 
@@ -667,8 +667,8 @@ git commit -m "feat: incremental reverse-index maintenance via affected-closure 
 ### Task 4: Hook maintenance into the write path; schema change invalidates
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Index/IndexedWritePath.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/IndexedWritePathTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Index/IndexedWritePath.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/IndexedWritePathTests.cs`
 
 **Interfaces:**
 - Produces: `IndexedWritePath(AuditedWritePath inner, ReverseIndexMaintainer maintainer, IIndexStore index)` wrapping `m1/07`'s `AuditedWritePath` so every tuple write also maintains the index on the same unit of work:
@@ -681,16 +681,16 @@ git commit -m "feat: incremental reverse-index maintenance via affected-closure 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/IndexedWritePathTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Index/IndexedWritePathTests.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Index;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Index;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class IndexedWritePathTests(PostgresFixture fx) : IAsyncLifetime
@@ -821,16 +821,16 @@ public class IndexedWritePathTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexedWritePathTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexedWritePathTests`
 Expected: FAIL — `IndexedWritePath` does not exist.
 
 - [ ] **Step 3: Implement the indexed write path**
 
 ```csharp
-// src/Relkit.Storage.Postgres/Index/IndexedWritePath.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.Postgres/Index/IndexedWritePath.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres.Index;
+namespace Custodex.Storage.Postgres.Index;
 
 /// <summary>
 /// Wraps m1/07's <see cref="AuditedWritePath"/> so every tuple write also maintains the reverse index
@@ -880,13 +880,13 @@ public sealed class IndexedWritePath(
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexedWritePathTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexedWritePathTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Index/IndexedWritePath.cs tests/Relkit.Storage.Postgres.Tests/Index/IndexedWritePathTests.cs
+git add src/Custodex.Storage.Postgres/Index/IndexedWritePath.cs tests/Custodex.Storage.Postgres.Tests/Index/IndexedWritePathTests.cs
 git commit -m "feat: hook reverse-index maintenance into the write path"
 ```
 
@@ -905,6 +905,6 @@ git commit -m "feat: hook reverse-index maintenance into the write path"
 
 ## Contract gaps / additions (reported, not changed)
 
-- **`SchemaIndex.TryType(string, out EntityTypeDef)` (small `Relkit.Core` addition).** The non-throwing type lookup mirrors the existing `TryPermission`/`TryRelation` on `SchemaIndex` (`m0/05`); added in Task 3 so the maintainer can clear rows for an object whose type a schema change dropped. A `Relkit.Core` addition, not a `Relkit.Abstractions` contract change.
+- **`SchemaIndex.TryType(string, out EntityTypeDef)` (small `Custodex.Core` addition).** The non-throwing type lookup mirrors the existing `TryPermission`/`TryRelation` on `SchemaIndex` (`m0/05`); added in Task 3 so the maintainer can clear rows for an object whose type a schema change dropped. A `Custodex.Core` addition, not a `Custodex.Abstractions` contract change.
 - **Uow-bound relation reads for the recomputer (transaction visibility).** Incremental maintenance must read the just-written tuples. `AffectedClosure` already reads on the write transaction. `ObjectRowRecomputer` reads through `IRelationStore`, whose `m1/04` implementation opens its own connection and so cannot see uncommitted writes; the maintainer therefore needs a relation/attribute store **bound to the write uow's connection** when constructing the recomputer's `EngineDrivenAuthorizer`. This requires `m1/04`'s `NpgsqlRelationStore`/`NpgsqlAttributeStore` to offer a uow-bound construction (e.g. `NpgsqlRelationStore.OnUnitOfWork(IUnitOfWork)` returning a store that reads on `w.Connection`/`w.Transaction`), or `m1/03` to expose the connection for a per-uow store. Reported for the maintainer to add to `m1/04`; the `m2/06` harness pins the requirement by asserting the post-write index equals the rebuild (it fails if reads miss the in-flight write).
 - **`index_build_markers`** is reused from `m2/01` (already reported there as a non-§6.3 table).

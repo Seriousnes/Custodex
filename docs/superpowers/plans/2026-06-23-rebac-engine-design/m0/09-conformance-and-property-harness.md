@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A declarative conformance case format (`schema + tuples + attributes + (subject,object,permission,context) → expected`), an xUnit runner in a new `Relkit.Conformance` project encoding the six worked examples from spec §12 as named cases, and CsCheck property tests asserting algebra invariants against the engine-driven authorizer over the in-memory store.
+**Goal:** A declarative conformance case format (`schema + tuples + attributes + (subject,object,permission,context) → expected`), an xUnit runner in a new `Custodex.Conformance` project encoding the six worked examples from spec §12 as named cases, and CsCheck property tests asserting algebra invariants against the engine-driven authorizer over the in-memory store.
 
-**Architecture:** A `ConformanceCase` record carries everything needed to run one decision deterministically: a `Schema`, the tuples and attributes to load, and one `(subject, object, permission, context)` query with its expected `Allowed`. A `ConformanceRunner` materializes the case against `Relkit.Storage.InMemory` and the `EngineDrivenAuthorizer`, runs `CheckAsync`, and asserts. The six worked examples are authored as named cases (their schemas are concrete and must pass `m0/03` validation). CsCheck generators build random unconditioned schemas + tuple sets and assert algebra laws (`a - a = deny`, wildcard grants everyone, union monotonicity over exclusion-free expressions, nesting reachability) — using the engine-driven authorizer as the executable specification.
+**Architecture:** A `ConformanceCase` record carries everything needed to run one decision deterministically: a `Schema`, the tuples and attributes to load, and one `(subject, object, permission, context)` query with its expected `Allowed`. A `ConformanceRunner` materializes the case against `Custodex.Storage.InMemory` and the `EngineDrivenAuthorizer`, runs `CheckAsync`, and asserts. The six worked examples are authored as named cases (their schemas are concrete and must pass `m0/03` validation). CsCheck generators build random unconditioned schemas + tuple sets and assert algebra laws (`a - a = deny`, wildcard grants everyone, union monotonicity over exclusion-free expressions, nesting reachability) — using the engine-driven authorizer as the executable specification.
 
-**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly, **CsCheck** (MIT). Uses `Relkit.Storage.InMemory` (from `m0/04`) and `EngineDrivenAuthorizer` + `NullConditionEvaluator` (from `m0/05`–`m0/07`).
+**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly, **CsCheck** (MIT). Uses `Custodex.Storage.InMemory` (from `m0/04`) and `EngineDrivenAuthorizer` + `NullConditionEvaluator` (from `m0/05`–`m0/07`).
 
 ## Global Constraints
 
@@ -16,47 +16,47 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 
 ---
 
-### Task 1: Create `Relkit.Conformance` and the case format
+### Task 1: Create `Custodex.Conformance` and the case format
 
 **Files:**
-- Create: `tests/Relkit.Conformance/Relkit.Conformance.csproj`
-- Create: `tests/Relkit.Conformance/ConformanceCase.cs`
-- Test: `tests/Relkit.Conformance/CaseFormatTests.cs`
+- Create: `tests/Custodex.Conformance/Custodex.Conformance.csproj`
+- Create: `tests/Custodex.Conformance/ConformanceCase.cs`
+- Test: `tests/Custodex.Conformance/CaseFormatTests.cs`
 
 **Interfaces:**
-- Produces: the `Relkit.Conformance` project (referencing `Relkit.Core`, `Relkit.Storage.InMemory`, `Relkit.Abstractions`); the `ConformanceCase` and `AttributeSeed` records.
-- Consumes: `Schema`, `RelationTuple`, `EntityRef`, `SubjectRef`, `RequestContext` from `Relkit.Abstractions`.
+- Produces: the `Custodex.Conformance` project (referencing `Custodex.Core`, `Custodex.Storage.InMemory`, `Custodex.Abstractions`); the `ConformanceCase` and `AttributeSeed` records.
+- Consumes: `Schema`, `RelationTuple`, `EntityRef`, `SubjectRef`, `RequestContext` from `Custodex.Abstractions`.
 
 - [ ] **Step 1: Create the project and references**
 
 Run:
 ```bash
-dotnet new xunit -n Relkit.Conformance -o tests/Relkit.Conformance -f net10.0
-rm tests/Relkit.Conformance/UnitTest1.cs
-dotnet sln add tests/Relkit.Conformance
-dotnet add tests/Relkit.Conformance reference src/Relkit.Abstractions
-dotnet add tests/Relkit.Conformance reference src/Relkit.Core
-dotnet add tests/Relkit.Conformance reference src/Relkit.Storage.InMemory
-dotnet add tests/Relkit.Conformance package Shouldly
-dotnet add tests/Relkit.Conformance package CsCheck
+dotnet new xunit -n Custodex.Conformance -o tests/Custodex.Conformance -f net10.0
+rm tests/Custodex.Conformance/UnitTest1.cs
+dotnet sln add tests/Custodex.Conformance
+dotnet add tests/Custodex.Conformance reference src/Custodex.Abstractions
+dotnet add tests/Custodex.Conformance reference src/Custodex.Core
+dotnet add tests/Custodex.Conformance reference src/Custodex.Storage.InMemory
+dotnet add tests/Custodex.Conformance package Shouldly
+dotnet add tests/Custodex.Conformance package CsCheck
 ```
 
 - [ ] **Step 2: Write the failing test**
 
 ```csharp
-// tests/Relkit.Conformance/CaseFormatTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Conformance/CaseFormatTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 public class CaseFormatTests
 {
     [Fact]
     public void Case_carries_schema_tuples_query_and_expectation()
     {
-        var schema = new Relkit.Core.SchemaBuilder("v1")
+        var schema = new Custodex.Core.SchemaBuilder("v1")
             .Type("doc", t => t.Relation("viewer", s => s.User()).Permission("view", p => p.Relation("viewer")))
             .Build();
         var c = new ConformanceCase(
@@ -80,16 +80,16 @@ public class CaseFormatTests
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Conformance --filter CaseFormatTests`
+Run: `dotnet test tests/Custodex.Conformance --filter CaseFormatTests`
 Expected: FAIL — `ConformanceCase` not defined.
 
 - [ ] **Step 4: Define the case records**
 
 ```csharp
-// tests/Relkit.Conformance/ConformanceCase.cs
-using Relkit.Abstractions;
+// tests/Custodex.Conformance/ConformanceCase.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 /// <summary>Synced resource attributes to seed for one object before the query runs.</summary>
 public sealed record AttributeSeed(EntityRef Object, IReadOnlyDictionary<string, object?> Attributes);
@@ -115,13 +115,13 @@ public sealed record ConformanceCase(
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Conformance --filter CaseFormatTests`
+Run: `dotnet test tests/Custodex.Conformance --filter CaseFormatTests`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/Relkit.Conformance
+git add tests/Custodex.Conformance
 git commit -m "feat: add conformance project and declarative case format"
 ```
 
@@ -130,11 +130,11 @@ git commit -m "feat: add conformance project and declarative case format"
 ### Task 2: The conformance runner
 
 **Files:**
-- Create: `tests/Relkit.Conformance/ConformanceRunner.cs`
-- Test: `tests/Relkit.Conformance/RunnerTests.cs`
+- Create: `tests/Custodex.Conformance/ConformanceRunner.cs`
+- Test: `tests/Custodex.Conformance/RunnerTests.cs`
 
 **Interfaces:**
-- Produces: `static Task<CheckResult> ConformanceRunner.RunAsync(ConformanceCase c, CancellationToken ct = default)` — materializes the case against `Relkit.Storage.InMemory`, validates the schema (so a malformed worked example fails loudly), seeds tuples + attributes, builds the `EngineDrivenAuthorizer`, and runs `CheckAsync`. Also `static Task AssertAsync(ConformanceCase c)` asserting `Allowed == Expected` with the case name in the message.
+- Produces: `static Task<CheckResult> ConformanceRunner.RunAsync(ConformanceCase c, CancellationToken ct = default)` — materializes the case against `Custodex.Storage.InMemory`, validates the schema (so a malformed worked example fails loudly), seeds tuples + attributes, builds the `EngineDrivenAuthorizer`, and runs `CheckAsync`. Also `static Task AssertAsync(ConformanceCase c)` asserting `Allowed == Expected` with the case name in the message.
 - Consumes: `EngineDrivenAuthorizer`, `NullConditionEvaluator`, the in-memory stores, and the `m0/03` schema validator.
 
 > The runner uses the real validation path (`SchemaValidator` from `m0/03`) so that an incorrectly authored worked-example schema (dangling relation, non-terminating recursion) fails as a `SchemaValidationException` rather than silently producing a wrong decision. The fixed tenant is `("conformance","t")`. The `NullConditionEvaluator` is used for cases without conditions; cases that use conditions supply a real evaluator via an overload once `m0/06` lands (noted in the task).
@@ -142,13 +142,13 @@ git commit -m "feat: add conformance project and declarative case format"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Conformance/RunnerTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
+// tests/Custodex.Conformance/RunnerTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 public class RunnerTests
 {
@@ -187,21 +187,21 @@ public class RunnerTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Conformance --filter RunnerTests`
+Run: `dotnet test tests/Custodex.Conformance --filter RunnerTests`
 Expected: FAIL — `ConformanceRunner` not defined.
 
 - [ ] **Step 3: Implement the runner**
 
 ```csharp
-// tests/Relkit.Conformance/ConformanceRunner.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Conformance/ConformanceRunner.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 public static class ConformanceRunner
 {
@@ -250,13 +250,13 @@ public static class ConformanceRunner
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Conformance --filter RunnerTests`
+Run: `dotnet test tests/Custodex.Conformance --filter RunnerTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Conformance/ConformanceRunner.cs tests/Relkit.Conformance/RunnerTests.cs
+git add tests/Custodex.Conformance/ConformanceRunner.cs tests/Custodex.Conformance/RunnerTests.cs
 git commit -m "feat: add conformance runner over in-memory provider"
 ```
 
@@ -265,8 +265,8 @@ git commit -m "feat: add conformance runner over in-memory provider"
 ### Task 3: Worked examples 12.1–12.4 as named cases
 
 **Files:**
-- Create: `tests/Relkit.Conformance/WorkedExamples.cs`
-- Create: `tests/Relkit.Conformance/WorkedExamplesTests.cs`
+- Create: `tests/Custodex.Conformance/WorkedExamples.cs`
+- Create: `tests/Custodex.Conformance/WorkedExamplesTests.cs`
 
 **Interfaces:**
 - Produces: `WorkedExamples.RoleGrantOverCategory()`, `.TeamGrantOverCuratedSet()`, `.SiteScopedAccess()`, `.DirectGrantOnInstance()` — each returns one or more `ConformanceCase` covering the spec §12 example, with a complete, validation-passing schema. A `[Theory]` runs each.
@@ -277,11 +277,11 @@ git commit -m "feat: add conformance runner over in-memory provider"
 - [ ] **Step 1: Write the cases and the theory test (failing until the cases compile and run)**
 
 ```csharp
-// tests/Relkit.Conformance/WorkedExamples.cs
-using Relkit.Abstractions;
-using Relkit.Core;
+// tests/Custodex.Conformance/WorkedExamples.cs
+using Custodex.Abstractions;
+using Custodex.Core;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 public static partial class WorkedExamples
 {
@@ -410,10 +410,10 @@ public static partial class WorkedExamples
 ```
 
 ```csharp
-// tests/Relkit.Conformance/WorkedExamplesTests.cs
+// tests/Custodex.Conformance/WorkedExamplesTests.cs
 using Xunit;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 public class WorkedExamplesTests
 {
@@ -434,13 +434,13 @@ public class WorkedExamplesTests
 
 - [ ] **Step 2: Run to verify (expect PASS if engine + validator are correct)**
 
-Run: `dotnet test tests/Relkit.Conformance --filter WorkedExamplesTests`
+Run: `dotnet test tests/Custodex.Conformance --filter WorkedExamplesTests`
 Expected: PASS (5 cases). A failure here means either the engine (`m0/05`) is wrong for this shape, or the schema/tuples misread the spec — diagnose before changing anything.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Conformance/WorkedExamples.cs tests/Relkit.Conformance/WorkedExamplesTests.cs
+git add tests/Custodex.Conformance/WorkedExamples.cs tests/Custodex.Conformance/WorkedExamplesTests.cs
 git commit -m "test: encode worked examples 12.1-12.4 as conformance cases"
 ```
 
@@ -449,8 +449,8 @@ git commit -m "test: encode worked examples 12.1-12.4 as conformance cases"
 ### Task 4: Worked example 12.5 (structural gate) and 12.6 (condition) as cases
 
 **Files:**
-- Create: `tests/Relkit.Conformance/WorkedExamples.Gate.cs`
-- Create: `tests/Relkit.Conformance/WorkedExamplesGateTests.cs`
+- Create: `tests/Custodex.Conformance/WorkedExamples.Gate.cs`
+- Create: `tests/Custodex.Conformance/WorkedExamplesGateTests.cs`
 
 **Interfaces:**
 - Produces: `WorkedExamples.QuarantineTrainedVetAllowed()`, `.QuarantineUntrainedVetDenied()`, `.OutsideQuarantineBaseAccess()` (12.5), and `WorkedExamples.TimeBoundedDispenseWithinHours()` / `.TimeBoundedDispenseOutsideHours()` (12.6) as `ConformanceCase`s.
@@ -461,11 +461,11 @@ git commit -m "test: encode worked examples 12.1-12.4 as conformance cases"
 - [ ] **Step 1: Write the gate + condition cases**
 
 ```csharp
-// tests/Relkit.Conformance/WorkedExamples.Gate.cs
-using Relkit.Abstractions;
-using Relkit.Core;
+// tests/Custodex.Conformance/WorkedExamples.Gate.cs
+using Custodex.Abstractions;
+using Custodex.Core;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 public static partial class WorkedExamples
 {
@@ -571,10 +571,10 @@ public static partial class WorkedExamples
 ```
 
 ```csharp
-// tests/Relkit.Conformance/WorkedExamplesGateTests.cs
+// tests/Custodex.Conformance/WorkedExamplesGateTests.cs
 using Xunit;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 public class WorkedExamplesGateTests
 {
@@ -596,13 +596,13 @@ public class WorkedExamplesGateTests
 
 - [ ] **Step 2: Run to verify (expect PASS)**
 
-Run: `dotnet test tests/Relkit.Conformance --filter WorkedExamplesGateTests`
+Run: `dotnet test tests/Custodex.Conformance --filter WorkedExamplesGateTests`
 Expected: PASS (4 cases). The three 12.5 cases are the discriminating structural-gate proof; if any fails, the algebra in `m0/05` is wrong — fix the engine, not the case.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Conformance/WorkedExamples.Gate.cs tests/Relkit.Conformance/WorkedExamplesGateTests.cs
+git add tests/Custodex.Conformance/WorkedExamples.Gate.cs tests/Custodex.Conformance/WorkedExamplesGateTests.cs
 git commit -m "test: encode quarantine gate (12.5) and time-bounded dispense (12.6) as cases"
 ```
 
@@ -611,8 +611,8 @@ git commit -m "test: encode quarantine gate (12.5) and time-bounded dispense (12
 ### Task 5: CsCheck property tests — algebra invariants
 
 **Files:**
-- Create: `tests/Relkit.Conformance/Properties/AlgebraGenerators.cs`
-- Create: `tests/Relkit.Conformance/Properties/AlgebraInvariantTests.cs`
+- Create: `tests/Custodex.Conformance/Properties/AlgebraGenerators.cs`
+- Create: `tests/Custodex.Conformance/Properties/AlgebraInvariantTests.cs`
 
 **Interfaces:**
 - Produces: CsCheck generators building random tuple sets over a small fixed schema, and property tests asserting: `a - a = deny`, wildcard grants everyone, union monotonicity (over exclusion/condition-free expressions), and nesting reachability.
@@ -626,12 +626,12 @@ git commit -m "test: encode quarantine gate (12.5) and time-bounded dispense (12
 - [ ] **Step 1: Write the generators**
 
 ```csharp
-// tests/Relkit.Conformance/Properties/AlgebraGenerators.cs
+// tests/Custodex.Conformance/Properties/AlgebraGenerators.cs
 using CsCheck;
-using Relkit.Abstractions;
-using Relkit.Core;
+using Custodex.Abstractions;
+using Custodex.Core;
 
-namespace Relkit.Conformance.Properties;
+namespace Custodex.Conformance.Properties;
 
 public static class AlgebraGenerators
 {
@@ -678,16 +678,16 @@ public static class AlgebraGenerators
 ```
 
 ```csharp
-// tests/Relkit.Conformance/Properties/AlgebraInvariantTests.cs
+// tests/Custodex.Conformance/Properties/AlgebraInvariantTests.cs
 using CsCheck;
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Conformance.Properties;
+namespace Custodex.Conformance.Properties;
 
 public class AlgebraInvariantTests
 {
@@ -770,13 +770,13 @@ public class AlgebraInvariantTests
 
 - [ ] **Step 2: Run to verify (expect PASS)**
 
-Run: `dotnet test tests/Relkit.Conformance --filter AlgebraInvariantTests`
+Run: `dotnet test tests/Custodex.Conformance --filter AlgebraInvariantTests`
 Expected: PASS (4 properties). A CsCheck counterexample here is a genuine engine bug — minimize it and fix `m0/05`.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Conformance/Properties
+git add tests/Custodex.Conformance/Properties
 git commit -m "test: add CsCheck algebra invariant properties over engine-driven authorizer"
 ```
 
@@ -785,8 +785,8 @@ git commit -m "test: add CsCheck algebra invariant properties over engine-driven
 ### Task 6: Suite aggregation and CI entry
 
 **Files:**
-- Create: `tests/Relkit.Conformance/ConformanceSuite.cs`
-- Test: `tests/Relkit.Conformance/SuiteCoverageTests.cs`
+- Create: `tests/Custodex.Conformance/ConformanceSuite.cs`
+- Test: `tests/Custodex.Conformance/SuiteCoverageTests.cs`
 
 **Interfaces:**
 - Produces: `static IReadOnlyList<ConformanceCase> ConformanceSuite.All()` aggregating every named worked-example case, and a coverage test asserting all six §12 examples are represented (by name prefix `12.1`–`12.6`).
@@ -797,11 +797,11 @@ git commit -m "test: add CsCheck algebra invariant properties over engine-driven
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Conformance/SuiteCoverageTests.cs
+// tests/Custodex.Conformance/SuiteCoverageTests.cs
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Conformance;
+namespace Custodex.Conformance;
 
 public class SuiteCoverageTests
 {
@@ -824,14 +824,14 @@ public class SuiteCoverageTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Conformance --filter SuiteCoverageTests`
+Run: `dotnet test tests/Custodex.Conformance --filter SuiteCoverageTests`
 Expected: FAIL — `ConformanceSuite` not defined.
 
 - [ ] **Step 3: Implement the aggregator**
 
 ```csharp
-// tests/Relkit.Conformance/ConformanceSuite.cs
-namespace Relkit.Conformance;
+// tests/Custodex.Conformance/ConformanceSuite.cs
+namespace Custodex.Conformance;
 
 public static class ConformanceSuite
 {
@@ -852,18 +852,18 @@ public static class ConformanceSuite
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Conformance --filter SuiteCoverageTests`
+Run: `dotnet test tests/Custodex.Conformance --filter SuiteCoverageTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Run the whole conformance project**
 
-Run: `dotnet test tests/Relkit.Conformance`
+Run: `dotnet test tests/Custodex.Conformance`
 Expected: PASS (all case-format, runner, worked-example, gate, property, and coverage tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/Relkit.Conformance/ConformanceSuite.cs tests/Relkit.Conformance/SuiteCoverageTests.cs
+git add tests/Custodex.Conformance/ConformanceSuite.cs tests/Custodex.Conformance/SuiteCoverageTests.cs
 git commit -m "test: aggregate conformance suite and assert six-example coverage"
 ```
 
@@ -871,7 +871,7 @@ git commit -m "test: aggregate conformance suite and assert six-example coverage
 
 ## Self-review checklist (run after all tasks)
 
-- [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`; `dotnet test tests/Relkit.Conformance` green.
+- [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`; `dotnet test tests/Custodex.Conformance` green.
 - [ ] The case format carries schema + tuples + attributes + (subject,object,permission,context) → expected (Task 1).
 - [ ] The runner routes through `m0/03` validation so malformed worked-example schemas fail loudly (Task 2).
 - [ ] All six §12 worked examples are encoded as named cases, each with a complete, validation-passing schema where every arrow target exists as a permission/relation (Tasks 3–4).

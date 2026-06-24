@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up the `Relkit.Benchmarks` BenchmarkDotNet project measuring **Check** and **ListObjects** latency at representative zoo scale — a Testcontainers Postgres seeded with ~50 users, ~2k objects, and ~20k tuples — comparing the three execution paths (engine-driven **oracle**, Postgres **CTE**, and index-backed **IndexedAuthorizer**) **with and without** the cross-request cache. Document how to run it and read the output (spec §11.1 / §11.4).
+**Goal:** Stand up the `Custodex.Benchmarks` BenchmarkDotNet project measuring **Check** and **ListObjects** latency at representative zoo scale — a Testcontainers Postgres seeded with ~50 users, ~2k objects, and ~20k tuples — comparing the three execution paths (engine-driven **oracle**, Postgres **CTE**, and index-backed **IndexedAuthorizer**) **with and without** the cross-request cache. Document how to run it and read the output (spec §11.1 / §11.4).
 
-**Architecture:** One `Relkit.Benchmarks` console project under `tests/` (per `README.md` layout). A shared `ZooScaleFixture` starts a single Postgres container, applies migrations, seeds the representative dataset once (the seed is deterministic — fixed RNG seed — so runs are comparable), and builds every authorizer variant over it: the in-memory `EngineDrivenAuthorizer` oracle (seeded from the same model), the `NpgsqlCteAuthorizer`, and the `IndexedAuthorizer` (over a populated `reverse_index` rebuilt via `m2/02`). Cache variants wrap the CTE and Indexed paths in `CachingAuthorizer` (`m0/08`) over a `PostgresCacheStore`. BenchmarkDotNet's `[GlobalSetup]` builds the fixture once per process; `[Benchmark]` methods run the hot operation. Two benchmark classes — `CheckBenchmarks` and `ListObjectsBenchmarks` — each parameterised by path (oracle / cte / index) and cache (on / off), measuring a fixed, representative probe so every variant does equivalent work.
+**Architecture:** One `Custodex.Benchmarks` console project under `tests/` (per `README.md` layout). A shared `ZooScaleFixture` starts a single Postgres container, applies migrations, seeds the representative dataset once (the seed is deterministic — fixed RNG seed — so runs are comparable), and builds every authorizer variant over it: the in-memory `EngineDrivenAuthorizer` oracle (seeded from the same model), the `NpgsqlCteAuthorizer`, and the `IndexedAuthorizer` (over a populated `reverse_index` rebuilt via `m2/02`). Cache variants wrap the CTE and Indexed paths in `CachingAuthorizer` (`m0/08`) over a `PostgresCacheStore`. BenchmarkDotNet's `[GlobalSetup]` builds the fixture once per process; `[Benchmark]` methods run the hot operation. Two benchmark classes — `CheckBenchmarks` and `ListObjectsBenchmarks` — each parameterised by path (oracle / cte / index) and cache (on / off), measuring a fixed, representative probe so every variant does equivalent work.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, BenchmarkDotNet, Npgsql, Dapper, `Testcontainers.PostgreSql`. References `Relkit.Core`, `Relkit.Storage.Postgres`, `Relkit.Storage.InMemory`.
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, BenchmarkDotNet, Npgsql, Dapper, `Testcontainers.PostgreSql`. References `Custodex.Core`, `Custodex.Storage.Postgres`, `Custodex.Storage.InMemory`.
 
 ## Global Constraints
 
@@ -26,11 +26,11 @@ A single tenant under one store; the seed is deterministic so latency numbers ar
 
 ---
 
-### Task 1: Create the `Relkit.Benchmarks` project
+### Task 1: Create the `Custodex.Benchmarks` project
 
 **Files:**
-- Create: `tests/Relkit.Benchmarks/Relkit.Benchmarks.csproj`
-- Create: `tests/Relkit.Benchmarks/Program.cs`
+- Create: `tests/Custodex.Benchmarks/Custodex.Benchmarks.csproj`
+- Create: `tests/Custodex.Benchmarks/Program.cs`
 
 **Interfaces:**
 - Produces: a runnable BenchmarkDotNet console app referencing the engine, the Postgres provider, and the in-memory provider, with a `Program` entry point that dispatches to the benchmark classes via `BenchmarkSwitcher`.
@@ -39,21 +39,21 @@ A single tenant under one store; the seed is deterministic so latency numbers ar
 
 Run:
 ```bash
-dotnet new console -n Relkit.Benchmarks -o tests/Relkit.Benchmarks -f net10.0
-rm tests/Relkit.Benchmarks/Class1.cs 2>/dev/null || true
-dotnet sln add tests/Relkit.Benchmarks
-dotnet add tests/Relkit.Benchmarks reference src/Relkit.Core
-dotnet add tests/Relkit.Benchmarks reference src/Relkit.Storage.Postgres
-dotnet add tests/Relkit.Benchmarks reference src/Relkit.Storage.InMemory
-dotnet add tests/Relkit.Benchmarks package BenchmarkDotNet
-dotnet add tests/Relkit.Benchmarks package Testcontainers.PostgreSql
-dotnet add tests/Relkit.Benchmarks package Npgsql
-dotnet add tests/Relkit.Benchmarks package Dapper
+dotnet new console -n Custodex.Benchmarks -o tests/Custodex.Benchmarks -f net10.0
+rm tests/Custodex.Benchmarks/Class1.cs 2>/dev/null || true
+dotnet sln add tests/Custodex.Benchmarks
+dotnet add tests/Custodex.Benchmarks reference src/Custodex.Core
+dotnet add tests/Custodex.Benchmarks reference src/Custodex.Storage.Postgres
+dotnet add tests/Custodex.Benchmarks reference src/Custodex.Storage.InMemory
+dotnet add tests/Custodex.Benchmarks package BenchmarkDotNet
+dotnet add tests/Custodex.Benchmarks package Testcontainers.PostgreSql
+dotnet add tests/Custodex.Benchmarks package Npgsql
+dotnet add tests/Custodex.Benchmarks package Dapper
 ```
 
 - [ ] **Step 2: Force a Release-only, optimized build for the benchmark project**
 
-Add to `tests/Relkit.Benchmarks/Relkit.Benchmarks.csproj` inside `<Project>` (BenchmarkDotNet refuses to run a non-optimized build; `TreatWarningsAsErrors` from `Directory.Build.props` still applies):
+Add to `tests/Custodex.Benchmarks/Custodex.Benchmarks.csproj` inside `<Project>` (BenchmarkDotNet refuses to run a non-optimized build; `TreatWarningsAsErrors` from `Directory.Build.props` still applies):
 
 ```xml
   <PropertyGroup>
@@ -66,15 +66,15 @@ Add to `tests/Relkit.Benchmarks/Relkit.Benchmarks.csproj` inside `<Project>` (Be
 - [ ] **Step 3: Write the entry point**
 
 ```csharp
-// tests/Relkit.Benchmarks/Program.cs
+// tests/Custodex.Benchmarks/Program.cs
 using BenchmarkDotNet.Running;
 
-namespace Relkit.Benchmarks;
+namespace Custodex.Benchmarks;
 
 public static class Program
 {
     // Dispatches to a benchmark class by name, e.g.:
-    //   dotnet run -c Release --project tests/Relkit.Benchmarks -- --filter *CheckBenchmarks*
+    //   dotnet run -c Release --project tests/Custodex.Benchmarks -- --filter *CheckBenchmarks*
     public static void Main(string[] args) =>
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
 }
@@ -82,14 +82,14 @@ public static class Program
 
 - [ ] **Step 4: Verify the project builds and lists benchmarks**
 
-Run: `dotnet run -c Release --project tests/Relkit.Benchmarks -- --list flat`
+Run: `dotnet run -c Release --project tests/Custodex.Benchmarks -- --list flat`
 Expected: builds clean; prints an empty (or, after later tasks, populated) benchmark list without error.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Benchmarks Relkit.sln
-git commit -m "chore: scaffold Relkit.Benchmarks project"
+git add tests/Custodex.Benchmarks Custodex.sln
+git commit -m "chore: scaffold Custodex.Benchmarks project"
 ```
 
 ---
@@ -97,7 +97,7 @@ git commit -m "chore: scaffold Relkit.Benchmarks project"
 ### Task 2: `ZooScaleFixture` — seed the representative dataset and build every authorizer
 
 **Files:**
-- Create: `tests/Relkit.Benchmarks/ZooScaleFixture.cs`
+- Create: `tests/Custodex.Benchmarks/ZooScaleFixture.cs`
 
 **Interfaces:**
 - Produces: `ZooScaleFixture` with `Task InitializeAsync()` (start container, migrate, seed ~50/2k/20k, rebuild the reverse index, build all authorizers), `Task DisposeAsync()`, and properties exposing each authorizer variant and the canonical probe inputs (`TenantContext`, a probe `SubjectRef`, a probe `EntityRef`, `Permission`, a fresh `RequestContext`). The seed uses a fixed-seed `Random` so the dataset is identical across runs.
@@ -110,17 +110,17 @@ git commit -m "chore: scaffold Relkit.Benchmarks project"
 - [ ] **Step 1: Write the fixture**
 
 ```csharp
-// tests/Relkit.Benchmarks/ZooScaleFixture.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Caching;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Benchmarks/ZooScaleFixture.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Caching;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
+using Custodex.Storage.Postgres;
 using Testcontainers.PostgreSql;
 
-namespace Relkit.Benchmarks;
+namespace Custodex.Benchmarks;
 
 /// <summary>
 /// Seeds one Postgres container with the representative zoo dataset (~50 users, ~2k objects,
@@ -314,13 +314,13 @@ public sealed class ZooScaleFixture
 
 - [ ] **Step 2: Build to verify it compiles**
 
-Run: `dotnet build -c Release tests/Relkit.Benchmarks`
+Run: `dotnet build -c Release tests/Custodex.Benchmarks`
 Expected: clean build (the fixture is not yet referenced by a benchmark class — that is Tasks 3–4).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Benchmarks/ZooScaleFixture.cs
+git add tests/Custodex.Benchmarks/ZooScaleFixture.cs
 git commit -m "feat: add zoo-scale benchmark fixture seeding all authorizer variants"
 ```
 
@@ -329,7 +329,7 @@ git commit -m "feat: add zoo-scale benchmark fixture seeding all authorizer vari
 ### Task 3: `CheckBenchmarks` — Check latency across paths and cache
 
 **Files:**
-- Create: `tests/Relkit.Benchmarks/CheckBenchmarks.cs`
+- Create: `tests/Custodex.Benchmarks/CheckBenchmarks.cs`
 
 **Interfaces:**
 - Produces: `CheckBenchmarks` with a `[Params]`-driven matrix over `Path` (Oracle / Cte / Index) and `Cached` (false / true), a `[GlobalSetup]` building the `ZooScaleFixture` once, a `[GlobalCleanup]` disposing it, and a `[Benchmark] Task<bool> Check()` running one `CheckAsync` on the canonical probe. The chosen authorizer is selected from the param matrix in `[GlobalSetup]`.
@@ -340,11 +340,11 @@ git commit -m "feat: add zoo-scale benchmark fixture seeding all authorizer vari
 - [ ] **Step 1: Write the benchmark class**
 
 ```csharp
-// tests/Relkit.Benchmarks/CheckBenchmarks.cs
+// tests/Custodex.Benchmarks/CheckBenchmarks.cs
 using BenchmarkDotNet.Attributes;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Benchmarks;
+namespace Custodex.Benchmarks;
 
 [MemoryDiagnoser]
 public class CheckBenchmarks
@@ -392,13 +392,13 @@ public class CheckBenchmarks
 
 - [ ] **Step 2: Build and verify the benchmark is discoverable**
 
-Run: `dotnet run -c Release --project tests/Relkit.Benchmarks -- --list flat --filter *CheckBenchmarks*`
-Expected: lists `Relkit.Benchmarks.CheckBenchmarks.Check`.
+Run: `dotnet run -c Release --project tests/Custodex.Benchmarks -- --list flat --filter *CheckBenchmarks*`
+Expected: lists `Custodex.Benchmarks.CheckBenchmarks.Check`.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Benchmarks/CheckBenchmarks.cs
+git add tests/Custodex.Benchmarks/CheckBenchmarks.cs
 git commit -m "feat: add Check latency benchmark across paths and cache"
 ```
 
@@ -407,7 +407,7 @@ git commit -m "feat: add Check latency benchmark across paths and cache"
 ### Task 4: `ListObjectsBenchmarks` — ListObjects latency across paths and cache
 
 **Files:**
-- Create: `tests/Relkit.Benchmarks/ListObjectsBenchmarks.cs`
+- Create: `tests/Custodex.Benchmarks/ListObjectsBenchmarks.cs`
 
 **Interfaces:**
 - Produces: `ListObjectsBenchmarks` mirroring `CheckBenchmarks`: a `[Params]` matrix over `Path` and `Cached`, one `ZooScaleFixture` per `[GlobalSetup]`, and a `[Benchmark] Task<int> ListObjects()` returning the count of objects the probe subject may `edit` (a full first page at the default page size). This is the operation the reverse index most accelerates (spec §7.3), so the index vs CTE vs oracle spread is the headline result.
@@ -418,11 +418,11 @@ git commit -m "feat: add Check latency benchmark across paths and cache"
 - [ ] **Step 1: Write the benchmark class**
 
 ```csharp
-// tests/Relkit.Benchmarks/ListObjectsBenchmarks.cs
+// tests/Custodex.Benchmarks/ListObjectsBenchmarks.cs
 using BenchmarkDotNet.Attributes;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Benchmarks;
+namespace Custodex.Benchmarks;
 
 [MemoryDiagnoser]
 public class ListObjectsBenchmarks
@@ -469,18 +469,18 @@ public class ListObjectsBenchmarks
 
 - [ ] **Step 2: Build and verify the benchmark is discoverable**
 
-Run: `dotnet run -c Release --project tests/Relkit.Benchmarks -- --list flat --filter *ListObjectsBenchmarks*`
-Expected: lists `Relkit.Benchmarks.ListObjectsBenchmarks.ListObjects`.
+Run: `dotnet run -c Release --project tests/Custodex.Benchmarks -- --list flat --filter *ListObjectsBenchmarks*`
+Expected: lists `Custodex.Benchmarks.ListObjectsBenchmarks.ListObjects`.
 
 - [ ] **Step 3: Run the full ListObjects benchmark end to end** (requires Docker for Testcontainers)
 
-Run: `dotnet run -c Release --project tests/Relkit.Benchmarks -- --filter *ListObjectsBenchmarks*`
+Run: `dotnet run -c Release --project tests/Custodex.Benchmarks -- --filter *ListObjectsBenchmarks*`
 Expected: BenchmarkDotNet completes and prints a summary table with a row per `(ExecPath, Cached)`; the Index rows should be materially faster than the Cte rows for ListObjects at this scale. (Absolute numbers are environment-specific; the relative ordering is the result.)
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add tests/Relkit.Benchmarks/ListObjectsBenchmarks.cs
+git add tests/Custodex.Benchmarks/ListObjectsBenchmarks.cs
 git commit -m "feat: add ListObjects latency benchmark across paths and cache"
 ```
 
@@ -489,7 +489,7 @@ git commit -m "feat: add ListObjects latency benchmark across paths and cache"
 ### Task 5: Document how to run and read the benchmarks
 
 **Files:**
-- Create: `tests/Relkit.Benchmarks/README.md`
+- Create: `tests/Custodex.Benchmarks/README.md`
 
 **Interfaces:**
 - Produces: a short README documenting prerequisites (Docker for Testcontainers, Release build), the run commands, the parameter matrix, and how to interpret the output. This satisfies the "document how to run it" requirement.
@@ -497,8 +497,8 @@ git commit -m "feat: add ListObjects latency benchmark across paths and cache"
 - [ ] **Step 1: Write the README**
 
 ```markdown
-<!-- tests/Relkit.Benchmarks/README.md -->
-# Relkit Benchmarks
+<!-- tests/Custodex.Benchmarks/README.md -->
+# Custodex Benchmarks
 
 BenchmarkDotNet latency benchmarks for **Check** and **ListObjects** at representative zoo scale
 (~50 users, ~2,000 objects, ~20,000 tuples), comparing the three execution paths — engine-driven
@@ -516,20 +516,20 @@ cross-request cache.
 All benchmarks:
 
 ```bash
-dotnet run -c Release --project tests/Relkit.Benchmarks -- --filter *
+dotnet run -c Release --project tests/Custodex.Benchmarks -- --filter *
 ```
 
 Just Check, or just ListObjects:
 
 ```bash
-dotnet run -c Release --project tests/Relkit.Benchmarks -- --filter *CheckBenchmarks*
-dotnet run -c Release --project tests/Relkit.Benchmarks -- --filter *ListObjectsBenchmarks*
+dotnet run -c Release --project tests/Custodex.Benchmarks -- --filter *CheckBenchmarks*
+dotnet run -c Release --project tests/Custodex.Benchmarks -- --filter *ListObjectsBenchmarks*
 ```
 
 List the available benchmarks without running:
 
 ```bash
-dotnet run -c Release --project tests/Relkit.Benchmarks -- --list flat
+dotnet run -c Release --project tests/Custodex.Benchmarks -- --list flat
 ```
 
 ## Parameter matrix
@@ -560,15 +560,15 @@ mean latency, allocation (`[MemoryDiagnoser]`), and statistical spread.
 - [ ] **Step 2: Commit**
 
 ```bash
-git add tests/Relkit.Benchmarks/README.md
-git commit -m "docs: document how to run and read the Relkit benchmarks"
+git add tests/Custodex.Benchmarks/README.md
+git commit -m "docs: document how to run and read the Custodex benchmarks"
 ```
 
 ---
 
 ## Self-review checklist (run after all tasks)
 
-- [ ] `dotnet build -c Release tests/Relkit.Benchmarks` clean with `TreatWarningsAsErrors=true`.
+- [ ] `dotnet build -c Release tests/Custodex.Benchmarks` clean with `TreatWarningsAsErrors=true`.
 - [ ] The fixture seeds ~50 users, ~2k objects, ~20k tuples deterministically and rebuilds the reverse index (Task 2).
 - [ ] The fixture builds oracle / CTE / indexed authorizers plus cache-wrapped variants, and a sanity check asserts the three paths agree on the probe (Task 2).
 - [ ] `CheckBenchmarks` and `ListObjectsBenchmarks` each run the `(ExecPath, Cached)` matrix over one canonical probe (Tasks 3–4).

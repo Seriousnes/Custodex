@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement engine-driven `CheckAsync` in `Relkit.Core` (`EngineDrivenAuthorizer : IAuthorizer`) that walks the `PermExpr` of an object's permission as a **pointwise recursive membership test** for the query subject, with cycle/depth guards, per-request memoization, `Explain` trees, and `Relkit.Diagnostics` telemetry.
+**Goal:** Implement engine-driven `CheckAsync` in `Custodex.Core` (`EngineDrivenAuthorizer : IAuthorizer`) that walks the `PermExpr` of an object's permission as a **pointwise recursive membership test** for the query subject, with cycle/depth guards, per-request memoization, `Explain` trees, and `Custodex.Diagnostics` telemetry.
 
 **Architecture:** Check is **not** set materialization. It asks "is *this* subject a member of the permission's resolved set?" and recurses: `RelationRef` matches a tuple's subject directly, by wildcard `type:*`, or by expanding a subject-set `group:G#rel` (recurse into `G`'s relation); `Union`/`Intersect`/`Exclude` short-circuit boolean composition over sub-results; `Arrow(rel,perm)` resolves related objects via `rel` and recurses into *their* full permission expression. Because Arrow recurses into the related object's whole expression, an inner `- blocked` is always seen — there is no top-level post-filter, which is exactly why this path is the correctness oracle. This plan implements Check only; `ListObjects`/`ListSubjects`/`BatchCheck` extend `EngineDrivenAuthorizer` in `m0/07`. Conditioned branches are wired in `m0/06`; here a hook is left and conditions are treated as transparently true until that plan lands.
 
-**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly. Uses the `Relkit.Storage.InMemory` provider (built in `m0/04`) in tests.
+**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly. Uses the `Custodex.Storage.InMemory` provider (built in `m0/04`) in tests.
 
 ## Global Constraints
 
@@ -18,9 +18,9 @@ See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`Im
 
 These reconcile the spec's prose ("depth/cycle guard tripped → deny") with the contract's `EvaluationLimitException`: cycles prune to deny silently; the depth ceiling is the hard limit that throws.
 
-> **Condition-evaluator seam (`IConditionEvaluator`).** This plan defines a small `Relkit.Core` seam the authorizer depends on (Task 2):
+> **Condition-evaluator seam (`IConditionEvaluator`).** This plan defines a small `Custodex.Core` seam the authorizer depends on (Task 2):
 > ```csharp
-> // Relkit.Core.Conditions — the seam the authorizer consumes
+> // Custodex.Core.Conditions — the seam the authorizer consumes
 > public interface IConditionEvaluator
 > {
 >     bool Evaluate(ConditionDef definition, ConditionRef invocation,
@@ -36,23 +36,23 @@ These reconcile the spec's prose ("depth/cycle guard tripped → deny") with the
 ### Task 1: Evaluation context — memo, visited set, depth budget
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/EvalContext.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/EvalContextTests.cs`
+- Create: `src/Custodex.Core/Evaluation/EvalContext.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/EvalContextTests.cs`
 
 **Interfaces:**
 - Produces: `EvalContext` carrying the per-request memo (`(object,permission,subject) → bool`), the current-path visited set (cycle guard), a depth counter against a configurable bound, and a "condition touched" flag. `EvalFrame` readonly struct as the memo/visited key. `EvaluationOptions(int MaxDepth = 64)`.
-- Consumes: `EntityRef`, `SubjectRef` from `Relkit.Abstractions`; `EvaluationLimitException`.
+- Consumes: `EntityRef`, `SubjectRef` from `Custodex.Abstractions`; `EvaluationLimitException`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/EvalContextTests.cs
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+// tests/Custodex.Core.Tests/Evaluation/EvalContextTests.cs
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class EvalContextTests
 {
@@ -101,16 +101,16 @@ public class EvalContextTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter EvalContextTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter EvalContextTests`
 Expected: FAIL — `EvalContext` not defined.
 
 - [ ] **Step 3: Implement the evaluation context**
 
 ```csharp
-// src/Relkit.Core/Evaluation/EvalContext.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EvalContext.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed record EvaluationOptions(int MaxDepth = 64);
 
@@ -179,13 +179,13 @@ public sealed class EvalContext
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter EvalContextTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter EvalContextTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/EvalContext.cs tests/Relkit.Core.Tests/Evaluation/EvalContextTests.cs
+git add src/Custodex.Core/Evaluation/EvalContext.cs tests/Custodex.Core.Tests/Evaluation/EvalContextTests.cs
 git commit -m "feat: add evaluation context with memo, cycle and depth guards"
 ```
 
@@ -194,9 +194,9 @@ git commit -m "feat: add evaluation context with memo, cycle and depth guards"
 ### Task 2: Condition-evaluator seam (null implementation until m0/06)
 
 **Files:**
-- Create: `src/Relkit.Core/Conditions/IConditionEvaluator.cs`
-- Create: `src/Relkit.Core/Conditions/NullConditionEvaluator.cs`
-- Test: `tests/Relkit.Core.Tests/Conditions/NullConditionEvaluatorTests.cs`
+- Create: `src/Custodex.Core/Conditions/IConditionEvaluator.cs`
+- Create: `src/Custodex.Core/Conditions/NullConditionEvaluator.cs`
+- Test: `tests/Custodex.Core.Tests/Conditions/NullConditionEvaluatorTests.cs`
 
 **Interfaces:**
 - Produces: `IConditionEvaluator` (the seam `m0/06` will implement for real) and `NullConditionEvaluator` (always satisfied), so this plan can construct `EngineDrivenAuthorizer` before the real evaluator exists.
@@ -207,13 +207,13 @@ git commit -m "feat: add evaluation context with memo, cycle and depth guards"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Core.Tests/Conditions/NullConditionEvaluatorTests.cs
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
+// tests/Custodex.Core.Tests/Conditions/NullConditionEvaluatorTests.cs
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Conditions;
+namespace Custodex.Core.Tests.Conditions;
 
 public class NullConditionEvaluatorTests
 {
@@ -237,16 +237,16 @@ public class NullConditionEvaluatorTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter NullConditionEvaluatorTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter NullConditionEvaluatorTests`
 Expected: FAIL — `IConditionEvaluator` / `NullConditionEvaluator` not defined.
 
 - [ ] **Step 3: Implement the seam**
 
 ```csharp
-// src/Relkit.Core/Conditions/IConditionEvaluator.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Conditions/IConditionEvaluator.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Conditions;
+namespace Custodex.Core.Conditions;
 
 /// <summary>
 /// Evaluates a schema-declared condition against synced resource attributes,
@@ -264,10 +264,10 @@ public interface IConditionEvaluator
 ```
 
 ```csharp
-// src/Relkit.Core/Conditions/NullConditionEvaluator.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Conditions/NullConditionEvaluator.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Conditions;
+namespace Custodex.Core.Conditions;
 
 /// <summary>Treats every condition as satisfied. Used before m0/06 and in pure-ReBAC tests.</summary>
 public sealed class NullConditionEvaluator : IConditionEvaluator
@@ -282,13 +282,13 @@ public sealed class NullConditionEvaluator : IConditionEvaluator
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter NullConditionEvaluatorTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter NullConditionEvaluatorTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Conditions tests/Relkit.Core.Tests/Conditions
+git add src/Custodex.Core/Conditions tests/Custodex.Core.Tests/Conditions
 git commit -m "feat: add condition-evaluator seam and null implementation"
 ```
 
@@ -297,8 +297,8 @@ git commit -m "feat: add condition-evaluator seam and null implementation"
 ### Task 3: Schema lookup helpers
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/SchemaIndex.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/SchemaIndexTests.cs`
+- Create: `src/Custodex.Core/Evaluation/SchemaIndex.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/SchemaIndexTests.cs`
 
 **Interfaces:**
 - Produces: `SchemaIndex` wrapping a `Schema` with O(1) lookups: `EntityTypeDef Type(string name)` (throws `UnknownTypeException`), `PermissionDef Permission(string type, string perm)` (throws `UnknownPermissionException`), `RelationDef Relation(string type, string rel)` (throws `UnknownRelationException`), `ConditionDef Condition(string name)`, and `bool TryPermission(string type, string perm, out PermissionDef def)`.
@@ -309,14 +309,14 @@ git commit -m "feat: add condition-evaluator seam and null implementation"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/SchemaIndexTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Evaluation;
+// tests/Custodex.Core.Tests/Evaluation/SchemaIndexTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Evaluation;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class SchemaIndexTests
 {
@@ -358,16 +358,16 @@ public class SchemaIndexTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter SchemaIndexTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter SchemaIndexTests`
 Expected: FAIL — `SchemaIndex` not defined.
 
 - [ ] **Step 3: Implement the index**
 
 ```csharp
-// src/Relkit.Core/Evaluation/SchemaIndex.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/SchemaIndex.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed class SchemaIndex
 {
@@ -423,13 +423,13 @@ public sealed class SchemaIndex
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter SchemaIndexTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter SchemaIndexTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/SchemaIndex.cs tests/Relkit.Core.Tests/Evaluation/SchemaIndexTests.cs
+git add src/Custodex.Core/Evaluation/SchemaIndex.cs tests/Custodex.Core.Tests/Evaluation/SchemaIndexTests.cs
 git commit -m "feat: add schema lookup index for evaluation"
 ```
 
@@ -438,28 +438,28 @@ git commit -m "feat: add schema lookup index for evaluation"
 ### Task 4: Subject-set membership — direct, wildcard, nested groups
 
 **Files:**
-- Create: `src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/SubjectMembershipTests.cs`
+- Create: `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/SubjectMembershipTests.cs`
 
 **Interfaces:**
 - Produces: `EngineDrivenAuthorizer` (constructor only + a private `ResolveRelationAsync`). Constructor: `EngineDrivenAuthorizer(ISchemaStore schema, IRelationStore relations, IAttributeStore attributes, IConditionEvaluator conditions, EvaluationOptions? options = null)`. This task adds the **relation-membership** primitive used by every later operator: does `subject` fill `object#relation` directly, via wildcard `type:*`, or via a nested `group:G#rel` subject-set?
-- Consumes: `ISchemaStore`, `IRelationStore`, `IAttributeStore` from `Relkit.Abstractions` (`m0/04` in-memory impls in tests); `EvalContext`, `SchemaIndex`, `IConditionEvaluator`.
+- Consumes: `ISchemaStore`, `IRelationStore`, `IAttributeStore` from `Custodex.Abstractions` (`m0/04` in-memory impls in tests); `EvalContext`, `SchemaIndex`, `IConditionEvaluator`.
 
 > **Subject-set expansion is the heart of nesting.** A tuple `object#relation@group:G#member` does not directly name a user; it delegates to "whoever is in `G#member`". To test whether `subject` matches, the walker recurses: fetch `G#member` tuples and ask the same membership question one level down. Wildcard `type:*` matches any subject of that type unconditionally. A tuple's own `Condition` (if present) is evaluated through `IConditionEvaluator`, and reaching one latches `ConditionTouched`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/SubjectMembershipTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Evaluation/SubjectMembershipTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class SubjectMembershipTests
 {
@@ -540,7 +540,7 @@ public class SubjectMembershipTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter SubjectMembershipTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter SubjectMembershipTests`
 Expected: FAIL — `EngineDrivenAuthorizer` not defined (and `CheckAsync` not yet implemented).
 
 - [ ] **Step 3: Implement the authorizer skeleton + membership primitive + a minimal `CheckAsync` for `RelationRef`**
@@ -548,12 +548,12 @@ Expected: FAIL — `EngineDrivenAuthorizer` not defined (and `CheckAsync` not ye
 This step lands the constructor, the relation-membership resolver, and just enough `CheckAsync` to evaluate a bare `RelationRef` permission (Task 5 generalizes `CheckAsync` to the full algebra). `ListObjects`/`ListSubjects`/`BatchCheck` throw `NotImplementedException` here and are implemented in `m0/07`.
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.cs
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.cs
 using System.Diagnostics;
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer : IAuthorizer
 {
@@ -678,10 +678,10 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer
 > `EvalExprAsync` is implemented in Task 5. For Task 4 to compile and exercise only `RelationRef`, add a temporary minimal `EvalExprAsync` handling `RelationRef` and throwing for the rest. Task 5 replaces it.
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Expr.cs  (temporary minimal form; Task 5 replaces)
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Expr.cs  (temporary minimal form; Task 5 replaces)
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
@@ -708,10 +708,10 @@ public sealed partial class EngineDrivenAuthorizer
 Add the not-yet-implemented `IAuthorizer` members so the class satisfies the interface; `m0/07` fills them in:
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.List.cs  (stubs; m0/07 implements)
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.List.cs  (stubs; m0/07 implements)
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
@@ -729,18 +729,18 @@ public sealed partial class EngineDrivenAuthorizer
 Add the InMemory provider reference to the test project if not already present:
 
 ```bash
-dotnet add tests/Relkit.Core.Tests reference src/Relkit.Storage.InMemory
+dotnet add tests/Custodex.Core.Tests reference src/Custodex.Storage.InMemory
 ```
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter SubjectMembershipTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter SubjectMembershipTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation tests/Relkit.Core.Tests/Evaluation/SubjectMembershipTests.cs
+git add src/Custodex.Core/Evaluation tests/Custodex.Core.Tests/Evaluation/SubjectMembershipTests.cs
 git commit -m "feat: add engine-driven authorizer with subject-set membership"
 ```
 
@@ -749,12 +749,12 @@ git commit -m "feat: add engine-driven authorizer with subject-set membership"
 ### Task 5: Full algebra — Union, Intersect, Exclude, Arrow, Conditioned
 
 **Files:**
-- Modify: `src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Expr.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/AlgebraTests.cs`
+- Modify: `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Expr.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/AlgebraTests.cs`
 
 **Interfaces:**
 - Produces: the complete `EvalExprAsync` handling all six `PermExpr` node kinds with short-circuiting and arrow recursion.
-- Consumes: `ResolveRelationAsync`, `CheckPermissionAsync` (Task 4); `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned`, `RelationRef` from `Relkit.Abstractions`.
+- Consumes: `ResolveRelationAsync`, `CheckPermissionAsync` (Task 4); `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned`, `RelationRef` from `Custodex.Abstractions`.
 
 > **Calibration note.** This is the algorithm-heavy heart of the engine and the genuinely hard part. The code below is the *approach to validate*, not guaranteed-correct copy-paste: nested intersection/exclusion interleaved with arrow traversal is exactly where a single code block can hide a bug. The durable correctness mechanism is `m0/09`'s six worked examples and CsCheck invariants, plus the M1 differential harness. Treat the tests in this task and in `m0/09` as the specification; the code is the candidate.
 >
@@ -768,16 +768,16 @@ git commit -m "feat: add engine-driven authorizer with subject-set membership"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/AlgebraTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Evaluation/AlgebraTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class AlgebraTests
 {
@@ -926,16 +926,16 @@ public class AlgebraTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter AlgebraTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter AlgebraTests`
 Expected: FAIL — `NotImplementedException` from the temporary `EvalExprAsync`.
 
 - [ ] **Step 3: Replace `EvalExprAsync` with the full algebra**
 
 ```csharp
-// src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Expr.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Expr.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Evaluation;
+namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
@@ -1071,13 +1071,13 @@ public sealed partial class EngineDrivenAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter AlgebraTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter AlgebraTests`
 Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.Expr.cs tests/Relkit.Core.Tests/Evaluation/AlgebraTests.cs
+git add src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Expr.cs tests/Custodex.Core.Tests/Evaluation/AlgebraTests.cs
 git commit -m "feat: implement full permission algebra in engine-driven check"
 ```
 
@@ -1086,7 +1086,7 @@ git commit -m "feat: implement full permission algebra in engine-driven check"
 ### Task 6: The quarantine structural gate (worked example 12.5, end to end)
 
 **Files:**
-- Test: `tests/Relkit.Core.Tests/Evaluation/QuarantineGateTests.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/QuarantineGateTests.cs`
 
 **Interfaces:**
 - Consumes: `EngineDrivenAuthorizer`, the full algebra (Task 5). No new production code — this task pins the discriminating worked example that proves the pointwise model on intersection + exclusion + arrow + wildcard together.
@@ -1103,16 +1103,16 @@ git commit -m "feat: implement full permission algebra in engine-driven check"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/QuarantineGateTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Evaluation/QuarantineGateTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class QuarantineGateTests
 {
@@ -1211,13 +1211,13 @@ public class QuarantineGateTests
 
 - [ ] **Step 2: Run to verify (expect PASS if Task 5 is correct)**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter QuarantineGateTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter QuarantineGateTests`
 Expected: PASS (3 tests). If any fails, the algebra in Task 5 is wrong for nested intersection/exclusion-through-arrow — fix Task 5, not the test. This is the discriminating case.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Core.Tests/Evaluation/QuarantineGateTests.cs
+git add tests/Custodex.Core.Tests/Evaluation/QuarantineGateTests.cs
 git commit -m "test: pin quarantine structural-gate worked example (12.5)"
 ```
 
@@ -1226,12 +1226,12 @@ git commit -m "test: pin quarantine structural-gate worked example (12.5)"
 ### Task 7: Per-request memoization, Explain tree, diagnostics span + histogram
 
 **Files:**
-- Modify: `src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.cs`
-- Test: `tests/Relkit.Core.Tests/Evaluation/CheckObservabilityTests.cs`
+- Modify: `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.cs`
+- Test: `tests/Custodex.Core.Tests/Evaluation/CheckObservabilityTests.cs`
 
 **Interfaces:**
-- Produces: `CheckAsync` wrapped in a `RelkitDiagnostics.ActivitySource` span recording the decision, and recording `RelkitDiagnostics.CheckDuration`; `CheckResult.Explain` populated when `CheckRequest.Explain`. The internal `ConditionTouched` flag is exposed to `m0/08` via an internal richer-result path (below).
-- Consumes: `RelkitDiagnostics` (from `m0/01`); `EvalContext.ConditionTouched`.
+- Produces: `CheckAsync` wrapped in a `CustodexDiagnostics.ActivitySource` span recording the decision, and recording `CustodexDiagnostics.CheckDuration`; `CheckResult.Explain` populated when `CheckRequest.Explain`. The internal `ConditionTouched` flag is exposed to `m0/08` via an internal richer-result path (below).
+- Consumes: `CustodexDiagnostics` (from `m0/01`); `EvalContext.ConditionTouched`.
 
 > **Memo vs Explain.** The per-request memo caches `(object,permission,subject)→bool`. When `Explain` is requested we **bypass the memo** so the trace is the full tree rather than a leaf "(memoized)" stub — `CheckPermissionAsync` already only reads/writes the memo when `explain is null` (Task 4). Non-explain checks keep memoization and so dedupe repeated sub-checks within one request.
 >
@@ -1240,18 +1240,18 @@ git commit -m "test: pin quarantine structural-gate worked example (12.5)"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Core.Tests/Evaluation/CheckObservabilityTests.cs
+// tests/Custodex.Core.Tests/Evaluation/CheckObservabilityTests.cs
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Evaluation;
+namespace Custodex.Core.Tests.Evaluation;
 
 public class CheckObservabilityTests
 {
@@ -1304,7 +1304,7 @@ public class CheckObservabilityTests
         var captured = new List<Activity>();
         using var listener = new ActivityListener
         {
-            ShouldListenTo = src => src.Name == "Relkit",
+            ShouldListenTo = src => src.Name == "Custodex",
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
             ActivityStopped = captured.Add
         };
@@ -1313,7 +1313,7 @@ public class CheckObservabilityTests
         var auth = await NewAsync();
         await auth.CheckAsync(Req(explain: false));
 
-        captured.ShouldContain(a => a.OperationName == "relkit.check");
+        captured.ShouldContain(a => a.OperationName == "Custodex.check");
     }
 
     [Fact]
@@ -1323,7 +1323,7 @@ public class CheckObservabilityTests
         using var mlistener = new MeterListener();
         mlistener.InstrumentPublished = (inst, l) =>
         {
-            if (inst.Meter.Name == "Relkit" && inst.Name == "relkit.check.duration")
+            if (inst.Meter.Name == "Custodex" && inst.Name == "Custodex.check.duration")
                 l.EnableMeasurementEvents(inst);
         };
         mlistener.SetMeasurementEventCallback<double>((_, _, _, _) => measured = true);
@@ -1348,16 +1348,16 @@ public class CheckObservabilityTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CheckObservabilityTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CheckObservabilityTests`
 Expected: FAIL — no span/histogram emitted; `CheckInternalAsync` not defined; explain root may be missing.
 
 - [ ] **Step 3: Expose internals to the test project**
 
-`CheckInternalAsync` is `internal`, and `CheckObservabilityTests` (in `Relkit.Core.Tests`) calls it. Make `Relkit.Core` internals visible to the test assembly. Add to `src/Relkit.Core/Relkit.Core.csproj`:
+`CheckInternalAsync` is `internal`, and `CheckObservabilityTests` (in `Custodex.Core.Tests`) calls it. Make `Custodex.Core` internals visible to the test assembly. Add to `src/Custodex.Core/Custodex.Core.csproj`:
 
 ```xml
 <ItemGroup>
-  <InternalsVisibleTo Include="Relkit.Core.Tests" />
+  <InternalsVisibleTo Include="Custodex.Core.Tests" />
 </ItemGroup>
 ```
 
@@ -1366,7 +1366,7 @@ Expected: FAIL — no span/histogram emitted; `CheckInternalAsync` not defined; 
 - [ ] **Step 4: Replace `CheckAsync` with the instrumented + internal-result form**
 
 ```csharp
-// In src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.cs — replace the CheckAsync from Task 4.
+// In src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.cs — replace the CheckAsync from Task 4.
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
         var (allowed, _, explain) = await RunCheckAsync(request, ct);
@@ -1389,10 +1389,10 @@ Expected: FAIL — no span/histogram emitted; `CheckInternalAsync` not defined; 
     private async Task<(bool Allowed, bool ConditionTouched, ExplainNode? Explain)> RunCheckAsync(
         CheckRequest request, CancellationToken ct)
     {
-        using var activity = RelkitDiagnostics.ActivitySource.StartActivity("relkit.check");
-        activity?.SetTag("relkit.object", request.Object.ToString());
-        activity?.SetTag("relkit.permission", request.Permission);
-        activity?.SetTag("relkit.subject", request.Subject.ToString());
+        using var activity = CustodexDiagnostics.ActivitySource.StartActivity("Custodex.check");
+        activity?.SetTag("Custodex.object", request.Object.ToString());
+        activity?.SetTag("Custodex.permission", request.Permission);
+        activity?.SetTag("Custodex.subject", request.Subject.ToString());
 
         var start = Stopwatch.GetTimestamp();
         try
@@ -1404,14 +1404,14 @@ Expected: FAIL — no span/histogram emitted; `CheckInternalAsync` not defined; 
                 index, request.Tenant, request.Object, request.Permission, request.Subject,
                 request.Context, ctx, roots, ct);
 
-            activity?.SetTag("relkit.allowed", allowed);
-            activity?.SetTag("relkit.condition_touched", ctx.ConditionTouched);
+            activity?.SetTag("Custodex.allowed", allowed);
+            activity?.SetTag("Custodex.condition_touched", ctx.ConditionTouched);
             return (allowed, ctx.ConditionTouched, roots is { Count: > 0 } ? roots[0] : null);
         }
         finally
         {
             var elapsedMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-            RelkitDiagnostics.CheckDuration.Record(elapsedMs);
+            CustodexDiagnostics.CheckDuration.Record(elapsedMs);
         }
     }
 ```
@@ -1420,18 +1420,18 @@ Expected: FAIL — no span/histogram emitted; `CheckInternalAsync` not defined; 
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CheckObservabilityTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CheckObservabilityTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Run the whole Check suite**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter Evaluation`
+Run: `dotnet test tests/Custodex.Core.Tests --filter Evaluation`
 Expected: PASS (all Evaluation tests: EvalContext, SubjectMembership, Algebra, QuarantineGate, CheckObservability).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Core/Evaluation/EngineDrivenAuthorizer.cs tests/Relkit.Core.Tests/Evaluation/CheckObservabilityTests.cs
+git add src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.cs tests/Custodex.Core.Tests/Evaluation/CheckObservabilityTests.cs
 git commit -m "feat: add explain tree, diagnostics, and internal condition-touched result to check"
 ```
 
@@ -1445,10 +1445,10 @@ git commit -m "feat: add explain tree, diagnostics, and internal condition-touch
 - [ ] Arrow recurses into the related object's full permission expression, so inner exclusions are honoured (Task 5, `Arrow_sees_inner_exclusion_on_the_related_object`).
 - [ ] Wildcard `type:*` grants every subject of that type (Task 4).
 - [ ] Per-request memo dedupes non-explain sub-checks; explain bypasses the memo for a full tree (Task 7).
-- [ ] One `relkit.check` Activity per check; `relkit.check.duration` recorded every check (Task 7).
+- [ ] One `Custodex.check` Activity per check; `Custodex.check.duration` recorded every check (Task 7).
 - [ ] `ListObjects`/`ListSubjects`/`BatchCheck` remain `NotImplementedException` for `m0/07` to fill.
 
 ## Contract gaps (reported, not changed)
 
 - **`CheckResult` cannot signal condition-dependence.** The public `CheckResult(bool Allowed, ExplainNode? Explain)` has no field indicating whether the decision touched a condition, but `m0/08` must cache only unconditioned results. Resolved **without** editing `README.md` by exposing an internal `EngineDrivenAuthorizer.CheckInternalAsync` returning `(bool Allowed, bool ConditionTouched)`. If a future revision wants this on the public surface, add a flag to `CheckResult` in the contract first.
-- **`IConditionEvaluator` seam vs `m0/06`'s `ConditionEvaluator` (shape mismatch — reconcile during execution).** This plan introduces `Relkit.Core.Conditions.IConditionEvaluator` (`bool Evaluate(ConditionDef, ConditionRef, IReadOnlyDictionary<string,object?>, RequestContext)`) and `NullConditionEvaluator` as the injectable seam the authorizer consumes. The already-written `m0/06` ships `ConditionEvaluator` as a **static class** returning `ConditionResult` with parameter order `(ConditionDef, attributes, RequestContext, parameters)` — it does **not** implement `IConditionEvaluator`. These are reconciled by a thin adapter `CelConditionEvaluator : IConditionEvaluator` that `m0/06` should add (forwarding to the static method, mapping `ConditionRef.Parameters → parameters` and `ConditionResult.Allow → true`, Deny/Error → false). Neither type is in `README.md`'s public contract (both are `Relkit.Core` internals), so no contract edit is required; this is a cross-plan integration note for the orchestrator — `m0/06` owns adding the adapter, this plan owns the seam. No `README.md` change made, and `m0/06` was not edited.
+- **`IConditionEvaluator` seam vs `m0/06`'s `ConditionEvaluator` (shape mismatch — reconcile during execution).** This plan introduces `Custodex.Core.Conditions.IConditionEvaluator` (`bool Evaluate(ConditionDef, ConditionRef, IReadOnlyDictionary<string,object?>, RequestContext)`) and `NullConditionEvaluator` as the injectable seam the authorizer consumes. The already-written `m0/06` ships `ConditionEvaluator` as a **static class** returning `ConditionResult` with parameter order `(ConditionDef, attributes, RequestContext, parameters)` — it does **not** implement `IConditionEvaluator`. These are reconciled by a thin adapter `CelConditionEvaluator : IConditionEvaluator` that `m0/06` should add (forwarding to the static method, mapping `ConditionRef.Parameters → parameters` and `ConditionResult.Allow → true`, Deny/Error → false). Neither type is in `README.md`'s public contract (both are `Custodex.Core` internals), so no contract edit is required; this is a cross-plan integration note for the orchestrator — `m0/06` owns adding the adapter, this plan owns the seam. No `README.md` change made, and `m0/06` was not edited.

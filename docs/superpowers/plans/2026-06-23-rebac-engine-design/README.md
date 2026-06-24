@@ -1,4 +1,4 @@
-# Relkit Implementation Plans — Foundation
+# Custodex Implementation Plans — Foundation
 
 > This is the **shared contract** for every plan under this directory. Each milestone plan (`m0/`–`m3/`) is written against the constraints, namespaces, interfaces, and type names defined here. When a plan needs a type, it uses the exact name and signature below. Changes to this contract are made here first, then propagated — see the maintenance note at the end.
 
@@ -6,7 +6,7 @@
 
 **Goal:** A runtime-configurable ReBAC + ABAC authorization engine, shipped as a reusable .NET library and later a standalone service.
 
-**Architecture:** Generic engine (`Relkit.Core`) over storage interfaces (`Relkit.Abstractions`), first implemented for Postgres (`Relkit.Storage.Postgres`). Tenant configuration is data (tuples + conditions) against a per-app schema. Evaluation is engine-driven traversal (the portable path and correctness oracle) with a Postgres recursive-CTE primary path; a maintained reverse index accelerates list operations.
+**Architecture:** Generic engine (`Custodex.Core`) over storage interfaces (`Custodex.Abstractions`), first implemented for Postgres (`Custodex.Storage.Postgres`). Tenant configuration is data (tuples + conditions) against a per-app schema. Evaluation is engine-driven traversal (the portable path and correctness oracle) with a Postgres recursive-CTE primary path; a maintained reverse index accelerates list operations.
 
 ---
 
@@ -26,39 +26,39 @@ Every task implicitly includes these.
 
 ## Repository & solution layout
 
-The solution is **.NET Aspire**-based and **already scaffolded** (`Relkit.slnx` + empty project shells exist). Plans **do not run `dotnet new sln`/`classlib`**; they add packages, references, and source to the existing projects.
+The solution is **.NET Aspire**-based and **already scaffolded** (`Custodex.slnx` + empty project shells exist). Plans **do not run `dotnet new sln`/`classlib`**; they add packages, references, and source to the existing projects.
 
-Projects marked **(NEW)** do not exist in `Relkit.slnx` yet; the plan that introduces one **creates it and adds it to the solution**. All others already exist.
+Projects marked **(NEW)** do not exist in `Custodex.slnx` yet; the plan that introduces one **creates it and adds it to the solution**. All others already exist.
 
 ```
-Relkit.slnx                 # solution (XML .slnx format — already exists)
+Custodex.slnx                 # solution (XML .slnx format — already exists)
 src/
-  Relkit.Abstractions/      # contracts only — no logic
-  Relkit.Core/              # engine: schema, evaluation, conditions, caching, DSL (Relkit.Core.Dsl), AddRelkit() builder
-  Relkit.Storage.InMemory/  # (NEW, m0/04) in-memory provider for tests/dev
-  Relkit.Storage.Postgres/  # Dapper/Npgsql provider + UsePostgres() + managers (M1+)
-  Relkit.Service/           # gRPC + REST host (M3); calls AddServiceDefaults()/MapDefaultEndpoints()
-  Relkit.Client/            # gRPC client implementing IAuthorizer (M3)
-  Relkit.AppHost/           # Aspire app host — orchestrates Postgres + Service for local dev
-  Relkit.ServiceDefaults/   # Aspire shared defaults — OTel, health (/health,/alive), discovery, resilience
+  Custodex.Abstractions/      # contracts only — no logic
+  Custodex.Core/              # engine: schema, evaluation, conditions, caching, DSL (Custodex.Core.Dsl), AddCustodex() builder
+  Custodex.Storage.InMemory/  # (NEW, m0/04) in-memory provider for tests/dev
+  Custodex.Storage.Postgres/  # Dapper/Npgsql provider + UsePostgres() + managers (M1+)
+  Custodex.Service/           # gRPC + REST host (M3); calls AddServiceDefaults()/MapDefaultEndpoints()
+  Custodex.Client/            # gRPC client implementing IAuthorizer (M3)
+  Custodex.AppHost/           # Aspire app host — orchestrates Postgres + Service for local dev
+  Custodex.ServiceDefaults/   # Aspire shared defaults — OTel, health (/health,/alive), discovery, resilience
 tests/
-  Relkit.Abstractions.Tests/
-  Relkit.Core.Tests/
-  Relkit.Storage.InMemory.Tests/   # (NEW, m0/04)
-  Relkit.Storage.Postgres.Tests/   # also hosts the CTE + index differential harnesses (…Tests.Differential)
-  Relkit.Service.Tests/            # (NEW, m3/01) host/gRPC/REST/auth/health tests
-  Relkit.Client.Tests/             # (NEW, m3/04)
-  Relkit.Conformance/              # shared declarative case suite + runner (M0+)
-  Relkit.Benchmarks/               # BenchmarkDotNet (M2+)
+  Custodex.Abstractions.Tests/
+  Custodex.Core.Tests/
+  Custodex.Storage.InMemory.Tests/   # (NEW, m0/04)
+  Custodex.Storage.Postgres.Tests/   # also hosts the CTE + index differential harnesses (…Tests.Differential)
+  Custodex.Service.Tests/            # (NEW, m3/01) host/gRPC/REST/auth/health tests
+  Custodex.Client.Tests/             # (NEW, m3/04)
+  Custodex.Conformance/              # shared declarative case suite + runner (M0+)
+  Custodex.Benchmarks/               # BenchmarkDotNet (M2+)
 ```
 
-The DSL (m3/05) lives in `Relkit.Core` under namespace `Relkit.Core.Dsl` with tests in `Relkit.Core.Tests` (no separate `Relkit.Dsl` project). The DI extensions live in existing packages: `AddRelkit()`/`AddRelkitInstrumentation()` in `Relkit.Core`, `.UsePostgres()` in `Relkit.Storage.Postgres` (no separate `Relkit.Extensions.DependencyInjection` project).
+The DSL (m3/05) lives in `Custodex.Core` under namespace `Custodex.Core.Dsl` with tests in `Custodex.Core.Tests` (no separate `Custodex.Dsl` project). The DI extensions live in existing packages: `AddCustodex()`/`AddCustodexInstrumentation()` in `Custodex.Core`, `.UsePostgres()` in `Custodex.Storage.Postgres` (no separate `Custodex.Extensions.DependencyInjection` project).
 
 See the **Aspire integration** section below before executing M0/01, M1/09, or any M3 plan.
 
 ## Canonical public contract
 
-All names below are normative. `Relkit.Abstractions` namespace unless noted.
+All names below are normative. `Custodex.Abstractions` namespace unless noted.
 
 ### References and tuples
 
@@ -244,37 +244,37 @@ Allow/deny is always a `CheckResult`, never an exception. The exceptions above s
 
 Decisions made after the milestone plans were drafted in parallel; these are authoritative and supersede any drafted plan text that conflicts. They are applied as each affected plan is executed (see the `rebac-plan-maintenance` memory).
 
-1. **Condition evaluator seam (Relkit.Core).** A single interface `IConditionEvaluator { ConditionResult Evaluate(ConditionDef def, IReadOnlyDictionary<string,object?> tupleParams, IReadOnlyDictionary<string,object?> resourceAttributes, RequestContext context); }` where `ConditionResult(bool Passed, string? Diagnostic)`. `ConditionEvaluator` (m0/06) implements it; `NullConditionEvaluator` returns `Passed=true`. A missing attribute or type mismatch is `Passed=false` with a diagnostic — never an exception. `EngineDrivenAuthorizer` (m0/05) and `NpgsqlCteAuthorizer` (m1/05) depend on the interface.
-2. **Cacheability seam (Relkit.Core).** Both authorizers expose `internal Task<(bool Allowed, bool ConditionTouched)> CheckInternalAsync(...)` via an internal interface `ICacheableAuthorizer`. `CachingAuthorizer` (m0/08) depends on `ICacheableAuthorizer`, so it wraps either the engine-driven or the CTE authorizer. Only `ConditionTouched == false` results are cached.
+1. **Condition evaluator seam (Custodex.Core).** A single interface `IConditionEvaluator { ConditionResult Evaluate(ConditionDef def, IReadOnlyDictionary<string,object?> tupleParams, IReadOnlyDictionary<string,object?> resourceAttributes, RequestContext context); }` where `ConditionResult(bool Passed, string? Diagnostic)`. `ConditionEvaluator` (m0/06) implements it; `NullConditionEvaluator` returns `Passed=true`. A missing attribute or type mismatch is `Passed=false` with a diagnostic — never an exception. `EngineDrivenAuthorizer` (m0/05) and `NpgsqlCteAuthorizer` (m1/05) depend on the interface.
+2. **Cacheability seam (Custodex.Core).** Both authorizers expose `internal Task<(bool Allowed, bool ConditionTouched)> CheckInternalAsync(...)` via an internal interface `ICacheableAuthorizer`. `CachingAuthorizer` (m0/08) depends on `ICacheableAuthorizer`, so it wraps either the engine-driven or the CTE authorizer. Only `ConditionTouched == false` results are cached.
 3. **`reverse_index` and `tenant_epochs`.** `reverse_index` carries `schema_version` (already in §6.3 DDL, m1/01). `ICacheStore.GetEpochAsync`/`BumpEpochAsync` are backed by a provider-internal `tenant_epochs(store_id, tenant_id, epoch bigint, PK(store_id,tenant_id))` table (m1/07) — distinct from the per-row `cache_entries.epoch` stamp.
-4. **`IIndexStore` members (m2/01).** Defined in `Relkit.Abstractions` by m2/01: `UpsertAsync` / `DeleteForObjectAsync` / `QueryObjectsAsync(subject, permission, objectType, paging)` / rebuild markers, all `(store, tenant, schema_version)`-scoped.
-5. **Provider references Core.** `Relkit.Storage.Postgres` takes a project reference on `Relkit.Core` (for `SchemaIndex`, `EvalContext`, `ContinuationCursor`, `IConditionEvaluator`). Spec §4 forbids DB code *inside* Core, not Core being referenced by a provider.
-6. **Manager registration.** The concrete `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` implementations are registered from `Relkit.Storage.Postgres` (they call the provider's in-transaction `AuditedWritePath`); they implement the `Relkit.Abstractions` interfaces, so consumers are unaffected.
+4. **`IIndexStore` members (m2/01).** Defined in `Custodex.Abstractions` by m2/01: `UpsertAsync` / `DeleteForObjectAsync` / `QueryObjectsAsync(subject, permission, objectType, paging)` / rebuild markers, all `(store, tenant, schema_version)`-scoped.
+5. **Provider references Core.** `Custodex.Storage.Postgres` takes a project reference on `Custodex.Core` (for `SchemaIndex`, `EvalContext`, `ContinuationCursor`, `IConditionEvaluator`). Spec §4 forbids DB code *inside* Core, not Core being referenced by a provider.
+6. **Manager registration.** The concrete `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` implementations are registered from `Custodex.Storage.Postgres` (they call the provider's in-transaction `AuditedWritePath`); they implement the `Custodex.Abstractions` interfaces, so consumers are unaffected.
 7. **Project structure (resolves cross-plan drift).** The milestone plans were drafted in parallel and reference some project names that are not the canonical layout above. When executing a plan, map them as follows — the layout above is authoritative:
-   - `Relkit.Service.Tests`, `Relkit.Client.Tests`, `Relkit.Storage.InMemory`, `Relkit.Storage.InMemory.Tests` are **(NEW)** — the introducing plan creates them and adds them to `Relkit.slnx`.
-   - `Relkit.Dsl` / `Relkit.Dsl.Tests` → `Relkit.Core` (namespace `Relkit.Core.Dsl`) / `Relkit.Core.Tests`.
-   - `Relkit.Extensions.DependencyInjection` / `…​.Tests` → `Relkit.Core` (DI builder) and `Relkit.Storage.Postgres` (`.UsePostgres()`); tested in `Relkit.Core.Tests` / `Relkit.Storage.Postgres.Tests`.
-   - `Relkit.Differential` → the differential harnesses live in `Relkit.Storage.Postgres.Tests` (namespace `…​.Differential`).
-   - Dotted names like `Relkit.Core.Evaluation`, `Relkit.Service.Rest`, `Relkit.Storage.Postgres.Index` are **namespaces/folders inside** their project, not separate projects.
+   - `Custodex.Service.Tests`, `Custodex.Client.Tests`, `Custodex.Storage.InMemory`, `Custodex.Storage.InMemory.Tests` are **(NEW)** — the introducing plan creates them and adds them to `Custodex.slnx`.
+   - `Custodex.Dsl` / `Custodex.Dsl.Tests` → `Custodex.Core` (namespace `Custodex.Core.Dsl`) / `Custodex.Core.Tests`.
+   - `Custodex.Extensions.DependencyInjection` / `…​.Tests` → `Custodex.Core` (DI builder) and `Custodex.Storage.Postgres` (`.UsePostgres()`); tested in `Custodex.Core.Tests` / `Custodex.Storage.Postgres.Tests`.
+   - `Custodex.Differential` → the differential harnesses live in `Custodex.Storage.Postgres.Tests` (namespace `…​.Differential`).
+   - Dotted names like `Custodex.Core.Evaluation`, `Custodex.Service.Rest`, `Custodex.Storage.Postgres.Index` are **namespaces/folders inside** their project, not separate projects.
 
 ## Aspire integration
 
 The solution targets .NET Aspire (see the layout above). Every affected plan applies these rules.
 
-- **Projects already exist** — M0/01 and any plan that "creates a project" instead **adds packages/references/source to the existing project**. The solution file is `Relkit.slnx`; add projects to it only if a plan introduces a genuinely new one (none should — the seven src + five test projects already exist).
-- **Observability flows through `Relkit.ServiceDefaults`.** `ServiceDefaults` already configures OpenTelemetry (traces/metrics/logs + OTLP export), so plans must NOT build a parallel OTel pipeline. The library still owns `RelkitDiagnostics` (the `"Relkit"` `ActivitySource` + `Meter`, M0/01); the integration point is registering them into the OTel pipeline. Implement `AddRelkitInstrumentation()` (M1/09) as OpenTelemetry builder extensions: `tracing.AddSource("Relkit")` and `metrics.AddMeter("Relkit")`, called from `Relkit.Service` after `AddServiceDefaults()`. Enable Aspire's commented-out `AddGrpcClientInstrumentation()` for the service.
+- **Projects already exist** — M0/01 and any plan that "creates a project" instead **adds packages/references/source to the existing project**. The solution file is `Custodex.slnx`; add projects to it only if a plan introduces a genuinely new one (none should — the seven src + five test projects already exist).
+- **Observability flows through `Custodex.ServiceDefaults`.** `ServiceDefaults` already configures OpenTelemetry (traces/metrics/logs + OTLP export), so plans must NOT build a parallel OTel pipeline. The library still owns `CustodexDiagnostics` (the `"Custodex"` `ActivitySource` + `Meter`, M0/01); the integration point is registering them into the OTel pipeline. Implement `AddCustodexInstrumentation()` (M1/09) as OpenTelemetry builder extensions: `tracing.AddSource("Custodex")` and `metrics.AddMeter("Custodex")`, called from `Custodex.Service` after `AddServiceDefaults()`. Enable Aspire's commented-out `AddGrpcClientInstrumentation()` for the service.
 - **Health checks flow through ServiceDefaults.** Reuse `MapDefaultEndpoints()` (`/health`, `/alive`). M3/06's `PostgresHealthCheck` is registered as a health check tagged `"ready"` (consumed by `/health`); do not hand-map `/health/ready` separately.
-- **Local orchestration is the AppHost.** `Relkit.AppHost` provisions a Postgres resource and runs `Relkit.Service` against it for development — this replaces docker-compose *for dev*. A production `Dockerfile` (M3/06) still applies for deploying the image.
-- **The `Relkit.Service` host** calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()`; M3/01–03 build their gRPC/REST/auth surface on top of that host rather than a bare `WebApplication`.
+- **Local orchestration is the AppHost.** `Custodex.AppHost` provisions a Postgres resource and runs `Custodex.Service` against it for development — this replaces docker-compose *for dev*. A production `Dockerfile` (M3/06) still applies for deploying the image.
+- **The `Custodex.Service` host** calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()`; M3/01–03 build their gRPC/REST/auth surface on top of that host rather than a bare `WebApplication`.
 
 ## Milestone → plan-file map
 
 ### M0 — Engine core (`m0/`)
-- `01-solution-and-abstractions.md` — solution, projects, `Relkit.Abstractions` contract above, building/CI. **Owns project-wide packaging** (`Directory.Build.props` with `Apache-2.0` license metadata, semver, symbol packages) and the **`Relkit.Diagnostics` observability primitives** (`ActivitySource` named `"Relkit"` and a `Meter` named `"Relkit"` exposing counter/histogram instruments that later plans populate).
+- `01-solution-and-abstractions.md` — solution, projects, `Custodex.Abstractions` contract above, building/CI. **Owns project-wide packaging** (`Directory.Build.props` with `Apache-2.0` license metadata, semver, symbol packages) and the **`Custodex.Diagnostics` observability primitives** (`ActivitySource` named `"Custodex"` and a `Meter` named `"Custodex"` exposing counter/histogram instruments that later plans populate).
 - `02-schema-model-and-builder.md` — the AST records and `SchemaBuilder`.
 - `03-schema-validation.md` — resolve relations/permissions, terminating-recursion check, condition type-checking; `SchemaValidationResult`.
 - `04-in-memory-providers.md` — in-memory `IRelationStore`/`ISchemaStore`/`IAttributeStore`/`ICacheStore`/`IChangeLogStore` + no-op `IUnitOfWork`.
-- `05-check-engine-driven.md` — engine-driven `CheckAsync`: union/intersection/exclusion/arrow/nesting/wildcards, cycle + depth guards, per-request memoization, `Explain`. Emits a `Relkit.Diagnostics` Activity span per check and a latency histogram.
+- `05-check-engine-driven.md` — engine-driven `CheckAsync`: union/intersection/exclusion/arrow/nesting/wildcards, cycle + depth guards, per-request memoization, `Explain`. Emits a `Custodex.Diagnostics` Activity span per check and a latency histogram.
 - `06-condition-evaluator.md` — typed predicate evaluator over attributes + context + params; `Conditioned` branches and condition-carrying tuples.
 - `07-list-and-batch.md` — engine-driven `ListObjects` (oracle), `ListSubjects`, `BatchCheck`, pagination contract.
 - `08-caching-orchestration.md` — per-request memo + cross-request `ICacheStore` cache, unconditioned-only, epoch invalidation.
@@ -289,7 +289,7 @@ The solution targets .NET Aspire (see the layout above). Every affected plan app
 - `06-cte-listobjects-and-pagination.md` — CTE `ListObjects`/`ListSubjects` with over-fetch/refill cursor.
 - `07-epoch-cache-and-change-audit.md` — epoch bump in-transaction; `change_log` append on every write.
 - `08-differential-harness-cte-vs-oracle.md` — CsCheck harness asserting CTE ≡ engine-driven oracle.
-- `09-di-and-usable-library.md` — `AddRelkit().UsePostgres(conn).UseSchema(builder)`; OpenTelemetry registration (`AddRelkitInstrumentation()` wiring the `"Relkit"` ActivitySource + Meter into OTel); end-to-end sample against Testcontainers.
+- `09-di-and-usable-library.md` — `AddCustodex().UsePostgres(conn).UseSchema(builder)`; OpenTelemetry registration (`AddCustodexInstrumentation()` wiring the `"Custodex"` ActivitySource + Meter into OTel); end-to-end sample against Testcontainers.
 
 ### M2 — Performance (`m2/`)
 - `01-reverse-index-schema.md` — `reverse_index` table + `schema_version` stamp + `IIndexStore`.
@@ -301,13 +301,13 @@ The solution targets .NET Aspire (see the layout above). Every affected plan app
 - `07-benchmarks.md` — BenchmarkDotNet for Check/ListObjects at representative scale.
 
 ### M3 — Service / AaaS (`m3/`)
-- `01-grpc-contracts.md` — proto for the four ops + management; `Relkit.Service` host.
+- `01-grpc-contracts.md` — proto for the four ops + management; `Custodex.Service` host.
 - `02-rest-and-openapi.md` — minimal-API REST surface + OpenAPI.
 - `03-authn-and-multistore.md` — API-key/OIDC auth, store/tenant resolution.
-- `04-relkit-client.md` — gRPC `IAuthorizer` client; DI swap with in-process.
+- `04-Custodex-client.md` — gRPC `IAuthorizer` client; DI swap with in-process.
 - `05-dsl-parser.md` — text DSL ⇄ canonical `Schema`.
 - `06-container-image.md` — production Dockerfile + image smoke test (dev orchestration lives in the AppHost, m3/07; health via ServiceDefaults).
-- `07-apphost-and-servicedefaults.md` — wire `Relkit.ServiceDefaults` into `Relkit.Service` (register the `"Relkit"` source/meter, Postgres readiness check), and the `Relkit.AppHost` orchestration (Postgres resource + Service reference) for local dev.
+- `07-apphost-and-servicedefaults.md` — wire `Custodex.ServiceDefaults` into `Custodex.Service` (register the `"Custodex"` source/meter, Postgres readiness check), and the `Custodex.AppHost` orchestration (Postgres resource + Service reference) for local dev.
 
 ## Conventions for every plan
 

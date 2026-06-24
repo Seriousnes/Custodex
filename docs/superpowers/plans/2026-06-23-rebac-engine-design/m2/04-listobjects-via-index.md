@@ -4,9 +4,9 @@
 
 **Goal:** Implement an index-backed `ListObjectsAsync` (and `ListSubjectsAsync`) on a new `IndexedAuthorizer` decorator that queries the maintained `reverse_index` (via `IIndexStore` from `m2/01`) for candidate objects, **re-checks only rows flagged `conditioned`** via the CTE condition path, applies the §7.5 over-fetch/refill pagination, and returns results identical to the `m1/06` CTE oracle path. The index is the fast path; on a schema-version mismatch or any per-candidate doubt the decorator falls back to the inner `NpgsqlCteAuthorizer`, and a parity assertion proves `index ≡ oracle`.
 
-**Architecture:** `IndexedAuthorizer : IAuthorizer` wraps the inner `NpgsqlCteAuthorizer` (`m1/05`/`m1/06`) and adds an `IIndexStore`. For `ListObjectsAsync` it scans `reverse_index` rows for `(store, tenant, schema_version, subject, permission, object_type)` — already-resolved **structural** grants. Unconditioned rows are returned directly (the maintained index already proved the structural grant holds). Rows flagged `conditioned` are **re-checked** with the full pointwise CTE Check (`CheckPermissionAsync` honours the tuple/branch conditions against synced attributes + request context) and dropped if the condition fails. The schema version stamped on the scan is the active schema's version; if the index holds no rows for the active version (a schema change invalidated it before the rebuild ran), the decorator **falls back** to the inner authorizer so a stale or not-yet-rebuilt index never serves wrong answers. Pagination is **over-fetch and refill** (spec §7.5), reusing `ContinuationCursor` from `Relkit.Core.Evaluation` byte-for-byte. `ListSubjectsAsync`, `CheckAsync`, and `BatchCheckAsync` delegate to the inner authorizer (the reverse index is keyed for the ListObjects subject→objects direction; ListSubjects stays on the CTE path).
+**Architecture:** `IndexedAuthorizer : IAuthorizer` wraps the inner `NpgsqlCteAuthorizer` (`m1/05`/`m1/06`) and adds an `IIndexStore`. For `ListObjectsAsync` it scans `reverse_index` rows for `(store, tenant, schema_version, subject, permission, object_type)` — already-resolved **structural** grants. Unconditioned rows are returned directly (the maintained index already proved the structural grant holds). Rows flagged `conditioned` are **re-checked** with the full pointwise CTE Check (`CheckPermissionAsync` honours the tuple/branch conditions against synced attributes + request context) and dropped if the condition fails. The schema version stamped on the scan is the active schema's version; if the index holds no rows for the active version (a schema change invalidated it before the rebuild ran), the decorator **falls back** to the inner authorizer so a stale or not-yet-rebuilt index never serves wrong answers. Pagination is **over-fetch and refill** (spec §7.5), reusing `ContinuationCursor` from `Custodex.Core.Evaluation` byte-for-byte. `ListSubjectsAsync`, `CheckAsync`, and `BatchCheckAsync` delegate to the inner authorizer (the reverse index is keyed for the ListObjects subject→objects direction; ListSubjects stays on the CTE path).
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Relkit.Core` (`ContinuationCursor`), `Relkit.Storage.Postgres` (`NpgsqlCteAuthorizer`, `IIndexStore`, `MigrationRunner`, `PostgresFixture`, `NpgsqlUnitOfWorkFactory`, the relation/schema/attribute stores).
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Custodex.Core` (`ContinuationCursor`), `Custodex.Storage.Postgres` (`NpgsqlCteAuthorizer`, `IIndexStore`, `MigrationRunner`, `PostgresFixture`, `NpgsqlUnitOfWorkFactory`, the relation/schema/attribute stores).
 
 ## Global Constraints
 
@@ -21,7 +21,7 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 This plan consumes `IIndexStore`, owned by `m2/01`. The exact member shape it relies on is pinned here so the two plans interlock; if `m2/01` lands a different shape, this plan adapts and the divergence is reported as a Contract gap (it does not edit `m2/01` or `README.md`). The relied-upon shape:
 
 ```csharp
-namespace Relkit.Abstractions;
+namespace Custodex.Abstractions;
 
 // A single resolved structural grant row from reverse_index.
 public sealed record IndexCandidate(string ObjectId, bool Conditioned);
@@ -49,25 +49,25 @@ The **`subject` string** is the canonical encoding `m2/01`/`m2/02` write into `r
 ### Task 1: `IndexSubject` — canonical subject-string encoding
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/IndexSubject.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/IndexSubjectTests.cs`
+- Create: `src/Custodex.Storage.Postgres/IndexSubject.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/IndexSubjectTests.cs`
 
 **Interfaces:**
 - Produces: `static string IndexSubject.Of(SubjectRef subject)` — the canonical `reverse_index.subject` string for a subject ref: `type:id`, or `type:id#relation` for a subject-set, or `type:*` for a wildcard. This is the exact encoding `m2/01`/`m2/02` store, so the `ScanObjectsAsync` key matches the maintained rows.
-- Consumes: `SubjectRef` from `Relkit.Abstractions`.
+- Consumes: `SubjectRef` from `Custodex.Abstractions`.
 
 > **Why a shared helper.** Both index maintenance (`m2/02`/`m2/03`) and index reads (this plan) must agree on the subject string byte-for-byte, or a scan misses the rows maintenance wrote. Centralising the encoding in one helper removes the chance of drift. `m2/01` owns the canonical definition; this helper mirrors it. If `m2/01` ships its own helper of the same name/signature, delete this copy and reference theirs (report as a Contract gap).
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/IndexSubjectTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Index/IndexSubjectTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 public class IndexSubjectTests
 {
@@ -93,16 +93,16 @@ public class IndexSubjectTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexSubjectTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexSubjectTests`
 Expected: FAIL — `IndexSubject` does not exist.
 
 - [ ] **Step 3: Implement the encoder**
 
 ```csharp
-// src/Relkit.Storage.Postgres/IndexSubject.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.Postgres/IndexSubject.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Canonical <c>reverse_index.subject</c> encoding. Index maintenance (m2/02/m2/03) and index
@@ -120,13 +120,13 @@ public static class IndexSubject
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexSubjectTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexSubjectTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/IndexSubject.cs tests/Relkit.Storage.Postgres.Tests/Index/IndexSubjectTests.cs
+git add src/Custodex.Storage.Postgres/IndexSubject.cs tests/Custodex.Storage.Postgres.Tests/Index/IndexSubjectTests.cs
 git commit -m "feat: add canonical reverse-index subject encoder"
 ```
 
@@ -135,8 +135,8 @@ git commit -m "feat: add canonical reverse-index subject encoder"
 ### Task 2: `IndexedAuthorizer` — delegate everything, fall back for ListObjects
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/IndexedAuthorizer.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/IndexedAuthorizerDelegationTests.cs`
+- Create: `src/Custodex.Storage.Postgres/IndexedAuthorizer.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/IndexedAuthorizerDelegationTests.cs`
 
 **Interfaces:**
 - Produces: `IndexedAuthorizer(NpgsqlCteAuthorizer inner, IIndexStore index, ISchemaStore schemaStore) : IAuthorizer`. This task wires `CheckAsync`/`BatchCheckAsync`/`ListSubjectsAsync` straight through to `inner`, and stubs `ListObjectsAsync` to delegate to `inner` (replaced in Task 3 with the index path + fallback). The schema store supplies the active schema version that keys the index scan.
@@ -147,15 +147,15 @@ git commit -m "feat: add canonical reverse-index subject encoder"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/IndexedAuthorizerDelegationTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Index/IndexedAuthorizerDelegationTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class IndexedAuthorizerDelegationTests(PostgresFixture fx) : IAsyncLifetime
@@ -237,16 +237,16 @@ public class IndexedAuthorizerDelegationTests(PostgresFixture fx) : IAsyncLifeti
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexedAuthorizerDelegationTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexedAuthorizerDelegationTests`
 Expected: FAIL — `IndexedAuthorizer` does not exist.
 
 - [ ] **Step 3: Implement the decorator with pass-through members**
 
 ```csharp
-// src/Relkit.Storage.Postgres/IndexedAuthorizer.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.Postgres/IndexedAuthorizer.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Index-backed decorator over <see cref="NpgsqlCteAuthorizer"/>. ListObjects is served from the
@@ -284,13 +284,13 @@ public sealed partial class IndexedAuthorizer : IAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexedAuthorizerDelegationTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexedAuthorizerDelegationTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/IndexedAuthorizer.cs tests/Relkit.Storage.Postgres.Tests/Index/IndexedAuthorizerDelegationTests.cs
+git add src/Custodex.Storage.Postgres/IndexedAuthorizer.cs tests/Custodex.Storage.Postgres.Tests/Index/IndexedAuthorizerDelegationTests.cs
 git commit -m "feat: add indexed authorizer decorator with pass-through members"
 ```
 
@@ -299,12 +299,12 @@ git commit -m "feat: add indexed authorizer decorator with pass-through members"
 ### Task 3: Index-backed `ListObjectsAsync` — scan, re-check conditioned, refill, fall back
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/IndexedAuthorizer.ListObjects.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/IndexedListObjectsTests.cs`
+- Create: `src/Custodex.Storage.Postgres/IndexedAuthorizer.ListObjects.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/IndexedListObjectsTests.cs`
 
 **Interfaces:**
 - Produces: the real `ListObjectsAsync` on `IndexedAuthorizer` (removing the Task-2 pass-through). It reads the active schema version; if the index has no rows for that version it **delegates to the inner CTE `ListObjectsAsync`** (the safety-net fallback). Otherwise it over-fetches `reverse_index` candidates strictly after the decoded cursor, returns unconditioned rows directly, **re-checks `conditioned` rows** via the inner CTE Check, and refills to exactly `PageSize` confirmed ids with a resumable `ContinuationCursor`.
-- Consumes: `IIndexStore.ScanObjectsAsync`/`HasRowsForVersionAsync` (`m2/01`), `IndexSubject.Of` (Task 1), `ContinuationCursor` (`Relkit.Core.Evaluation`, `m0/07`), the inner `NpgsqlCteAuthorizer.CheckAsync` (for the conditioned re-check) and `ListObjectsAsync` (fallback).
+- Consumes: `IIndexStore.ScanObjectsAsync`/`HasRowsForVersionAsync` (`m2/01`), `IndexSubject.Of` (Task 1), `ContinuationCursor` (`Custodex.Core.Evaluation`, `m0/07`), the inner `NpgsqlCteAuthorizer.CheckAsync` (for the conditioned re-check) and `ListObjectsAsync` (fallback).
 
 > **Why re-check only `conditioned` rows.** The maintained index stores resolved *structural* grants: an unconditioned row is the index asserting "this subject structurally holds this permission on this object" — already true, return it. A `conditioned` row's branch is gated by a request-time predicate the index cannot evaluate, so it is stored-but-flagged and **never assumed**; the decorator re-checks it with `CheckAsync` (which evaluates the condition against synced attributes + request context, spec §8). This is the §7.3 Milestone-2 contract: "one indexed scan plus a condition re-check only on rows flagged `conditioned`."
 
@@ -315,15 +315,15 @@ git commit -m "feat: add indexed authorizer decorator with pass-through members"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/IndexedListObjectsTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Index/IndexedListObjectsTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class IndexedListObjectsTests(PostgresFixture fx) : IAsyncLifetime
@@ -487,7 +487,7 @@ public class IndexedListObjectsTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexedListObjectsTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexedListObjectsTests`
 Expected: FAIL — `ListObjectsAsync` still delegates (no index scan), so conditioned re-check and pagination-on-drop fail.
 
 - [ ] **Step 3: Implement the index-backed ListObjects (remove the pass-through)**
@@ -495,11 +495,11 @@ Expected: FAIL — `ListObjectsAsync` still delegates (no index scan), so condit
 Delete the pass-through `ListObjectsAsync` from `IndexedAuthorizer.cs` (keep the other three members), and add:
 
 ```csharp
-// src/Relkit.Storage.Postgres/IndexedAuthorizer.ListObjects.cs
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+// src/Custodex.Storage.Postgres/IndexedAuthorizer.ListObjects.cs
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class IndexedAuthorizer
 {
@@ -602,13 +602,13 @@ public sealed partial class IndexedAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexedListObjectsTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexedListObjectsTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/IndexedAuthorizer.cs src/Relkit.Storage.Postgres/IndexedAuthorizer.ListObjects.cs tests/Relkit.Storage.Postgres.Tests/Index/IndexedListObjectsTests.cs
+git add src/Custodex.Storage.Postgres/IndexedAuthorizer.cs src/Custodex.Storage.Postgres/IndexedAuthorizer.ListObjects.cs tests/Custodex.Storage.Postgres.Tests/Index/IndexedListObjectsTests.cs
 git commit -m "feat: index-backed list objects with conditioned re-check and over-fetch pagination"
 ```
 
@@ -617,7 +617,7 @@ git commit -m "feat: index-backed list objects with conditioned re-check and ove
 ### Task 4: Parity assertion — `IndexedAuthorizer ≡ NpgsqlCteAuthorizer` for ListObjects
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/Index/IndexedListObjectsParityTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Index/IndexedListObjectsParityTests.cs`
 
 **Interfaces:**
 - Produces: a focused parity test proving the index-backed `ListObjectsAsync` returns the same ids (and the same paged ranges) as the inner CTE `ListObjectsAsync` oracle, across exclusion, wildcard, and conditioned-drop shapes. This is the per-test guard that complements the `m2/06` property-based `index ≡ oracle` harness — it documents the equivalence at the boundary this plan owns.
@@ -628,15 +628,15 @@ git commit -m "feat: index-backed list objects with conditioned re-check and ove
 - [ ] **Step 1: Write the parity test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Index/IndexedListObjectsParityTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Index/IndexedListObjectsParityTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Index;
+namespace Custodex.Storage.Postgres.Tests.Index;
 
 [Collection("postgres")]
 public class IndexedListObjectsParityTests(PostgresFixture fx) : IAsyncLifetime
@@ -738,13 +738,13 @@ public class IndexedListObjectsParityTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter IndexedListObjectsParityTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexedListObjectsParityTests`
 Expected: PASS (1 test) — index-backed paging equals the CTE oracle end to end.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Index/IndexedListObjectsParityTests.cs
+git add tests/Custodex.Storage.Postgres.Tests/Index/IndexedListObjectsParityTests.cs
 git commit -m "test: assert indexed list objects equals the cte oracle"
 ```
 

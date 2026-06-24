@@ -1,68 +1,68 @@
-# M3/04 — Relkit gRPC Client Implementation Plan
+# M3/04 — Custodex gRPC Client Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A `Relkit.Client` package: a gRPC client that implements the canonical `Relkit.Abstractions.IAuthorizer` over the network, so a consumer swaps in-process evaluation for the remote `Relkit.Service` by changing **one** DI registration; plus thin gRPC clients for the management interfaces (`IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`); and an `AddRelkitClient(address)` DI extension. The client is proven against the real `Relkit.Service` host (via `WebApplicationFactory` + `Grpc.Net.Client`) by asserting it returns the **identical** decisions the in-process `EngineDrivenAuthorizer` returns for the six spec §12 worked examples.
+**Goal:** A `Custodex.Client` package: a gRPC client that implements the canonical `Custodex.Abstractions.IAuthorizer` over the network, so a consumer swaps in-process evaluation for the remote `Custodex.Service` by changing **one** DI registration; plus thin gRPC clients for the management interfaces (`IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`); and an `AddCustodexClient(address)` DI extension. The client is proven against the real `Custodex.Service` host (via `WebApplicationFactory` + `Grpc.Net.Client`) by asserting it returns the **identical** decisions the in-process `EngineDrivenAuthorizer` returns for the six spec §12 worked examples.
 
-**Architecture:** `Relkit.Client` references `Relkit.Abstractions` (for the `IAuthorizer`/manager interfaces and the canonical request/result records) and the shared proto contract from `m3/01-grpc-contracts.md` (compiled with `Grpc.Tools`). `GrpcAuthorizer : IAuthorizer` holds a generated `Authorizer.AuthorizerClient`, maps the canonical request records to proto messages, calls the service, and maps proto results back to canonical records — so callers see only `Relkit.Abstractions`. A `ProtoMapping` static class owns every record⇄proto conversion in one place (the single source of marshalling truth, shared by the four management clients). `AddRelkitClient(address)` registers the gRPC channel and the four client facades against their `Relkit.Abstractions` interfaces. The DI swap is literal: a consumer who had `AddRelkit().UsePostgres(...)` (in-process, `m1/09`) instead calls `AddRelkitClient("https://...")` and every `IAuthorizer`/manager injection resolves to the remote client with no other code change (spec §4, §10.1).
+**Architecture:** `Custodex.Client` references `Custodex.Abstractions` (for the `IAuthorizer`/manager interfaces and the canonical request/result records) and the shared proto contract from `m3/01-grpc-contracts.md` (compiled with `Grpc.Tools`). `GrpcAuthorizer : IAuthorizer` holds a generated `Authorizer.AuthorizerClient`, maps the canonical request records to proto messages, calls the service, and maps proto results back to canonical records — so callers see only `Custodex.Abstractions`. A `ProtoMapping` static class owns every record⇄proto conversion in one place (the single source of marshalling truth, shared by the four management clients). `AddCustodexClient(address)` registers the gRPC channel and the four client facades against their `Custodex.Abstractions` interfaces. The DI swap is literal: a consumer who had `AddCustodex().UsePostgres(...)` (in-process, `m1/09`) instead calls `AddCustodexClient("https://...")` and every `IAuthorizer`/manager injection resolves to the remote client with no other code change (spec §4, §10.1).
 
 **Tech Stack:** .NET 10 (`net10.0`), C# 14, xUnit, Shouldly, `Grpc.Net.Client`, `Grpc.Net.ClientFactory`, `Google.Protobuf`, `Grpc.Tools`, `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory`).
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (`Relkit.Abstractions` contract), `m3/01` (the proto + `Relkit.Service` host), and reuses `tests/Relkit.Conformance` (`m0/09`) for the six worked examples.
+See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (`Custodex.Abstractions` contract), `m3/01` (the proto + `Custodex.Service` host), and reuses `tests/Custodex.Conformance` (`m0/09`) for the six worked examples.
 
 ## Shared decisions (locked)
 
-- **The proto is owned by `m3/01`.** `Relkit.Client` and `Relkit.Service` compile the **same** `relkit.proto` (a `<Protobuf>` item pointing at the shared file, `GrpcServices="Client"` here, `GrpcServices="Server"` in the host). This plan reproduces the relevant proto messages verbatim so the mapping is unambiguous; if `m3/01` named a field differently, the proto file is the single source of truth and `ProtoMapping` is adjusted to match (see Contract gaps).
+- **The proto is owned by `m3/01`.** `Custodex.Client` and `Custodex.Service` compile the **same** `Custodex.proto` (a `<Protobuf>` item pointing at the shared file, `GrpcServices="Client"` here, `GrpcServices="Server"` in the host). This plan reproduces the relevant proto messages verbatim so the mapping is unambiguous; if `m3/01` named a field differently, the proto file is the single source of truth and `ProtoMapping` is adjusted to match (see Contract gaps).
 - **`ProtoMapping` is the one marshalling seam.** Every `EntityRef`/`SubjectRef`/`RelationTuple`/`Schema`/condition conversion lives there. The four facades and `GrpcAuthorizer` call it; no conversion logic is duplicated.
 - **Deny vs. error preserved over the wire (spec §10.3).** Allow/deny is a normal `CheckResponse.allowed` boolean. The typed exceptions (`UnknownTypeException`, `UnknownRelationException`, `UnknownPermissionException`, `SchemaValidationException`, `EvaluationLimitException`) are carried as gRPC `Status` with a structured detail and **re-thrown** client-side as the same exception type, so a remote caller sees the identical exception a local caller would.
 - **`object?` condition params and attribute values** marshal through a `google.protobuf.Value`/`Struct`-shaped JSON payload (the proto from `m3/01` carries them as a `Struct`), so `int`/`long`/`double`/`bool`/`string`/timestamp round-trip. `ProtoMapping` centralizes the boxing rules.
 
 ---
 
-### Task 1: Create `Relkit.Client`, reference Abstractions, and compile the shared proto
+### Task 1: Create `Custodex.Client`, reference Abstractions, and compile the shared proto
 
 **Files:**
-- Create: `src/Relkit.Client/Relkit.Client.csproj`
-- Create: `src/Relkit.Client/Protos/relkit.proto`
-- Create: `tests/Relkit.Client.Tests/Relkit.Client.Tests.csproj`
-- Test: `tests/Relkit.Client.Tests/ClientWiringTests.cs`
+- Create: `src/Custodex.Client/Custodex.Client.csproj`
+- Create: `src/Custodex.Client/Protos/Custodex.proto`
+- Create: `tests/Custodex.Client.Tests/Custodex.Client.Tests.csproj`
+- Test: `tests/Custodex.Client.Tests/ClientWiringTests.cs`
 
 **Interfaces:**
-- Produces: the `Relkit.Client` assembly referencing `Relkit.Abstractions` and the generated gRPC client stubs (`Authorizer.AuthorizerClient`, `RelationManager.RelationManagerClient`, `SchemaManager.SchemaManagerClient`, `Provisioning.ProvisioningClient`).
-- Consumes: `Relkit.Abstractions`; the proto contract from `m3/01`.
+- Produces: the `Custodex.Client` assembly referencing `Custodex.Abstractions` and the generated gRPC client stubs (`Authorizer.AuthorizerClient`, `RelationManager.RelationManagerClient`, `SchemaManager.SchemaManagerClient`, `Provisioning.ProvisioningClient`).
+- Consumes: `Custodex.Abstractions`; the proto contract from `m3/01`.
 
-> **Proto source.** The canonical `relkit.proto` is authored in `m3/01`. Copy that file into `src/Relkit.Client/Protos/relkit.proto` (or add it as a linked `<Protobuf Include="..\..\proto\relkit.proto" Link="Protos\relkit.proto" />`). The proto below is the contract this client requires; it MUST match `m3/01` field-for-field. The host and client share it.
+> **Proto source.** The canonical `Custodex.proto` is authored in `m3/01`. Copy that file into `src/Custodex.Client/Protos/Custodex.proto` (or add it as a linked `<Protobuf Include="..\..\proto\Custodex.proto" Link="Protos\Custodex.proto" />`). The proto below is the contract this client requires; it MUST match `m3/01` field-for-field. The host and client share it.
 
 - [ ] **Step 1: Create the project and references**
 
 Run:
 ```bash
-dotnet new classlib -n Relkit.Client -o src/Relkit.Client -f net10.0
-dotnet new xunit -n Relkit.Client.Tests -o tests/Relkit.Client.Tests -f net10.0
-rm src/Relkit.Client/Class1.cs tests/Relkit.Client.Tests/UnitTest1.cs
-dotnet sln add src/Relkit.Client tests/Relkit.Client.Tests
-dotnet add src/Relkit.Client reference src/Relkit.Abstractions
-dotnet add src/Relkit.Client package Grpc.Net.Client
-dotnet add src/Relkit.Client package Grpc.Net.ClientFactory
-dotnet add src/Relkit.Client package Google.Protobuf
-dotnet add src/Relkit.Client package Grpc.Tools
-dotnet add src/Relkit.Client package Microsoft.Extensions.DependencyInjection.Abstractions
-dotnet add tests/Relkit.Client.Tests reference src/Relkit.Client
-dotnet add tests/Relkit.Client.Tests reference src/Relkit.Abstractions
-dotnet add tests/Relkit.Client.Tests package Shouldly
+dotnet new classlib -n Custodex.Client -o src/Custodex.Client -f net10.0
+dotnet new xunit -n Custodex.Client.Tests -o tests/Custodex.Client.Tests -f net10.0
+rm src/Custodex.Client/Class1.cs tests/Custodex.Client.Tests/UnitTest1.cs
+dotnet sln add src/Custodex.Client tests/Custodex.Client.Tests
+dotnet add src/Custodex.Client reference src/Custodex.Abstractions
+dotnet add src/Custodex.Client package Grpc.Net.Client
+dotnet add src/Custodex.Client package Grpc.Net.ClientFactory
+dotnet add src/Custodex.Client package Google.Protobuf
+dotnet add src/Custodex.Client package Grpc.Tools
+dotnet add src/Custodex.Client package Microsoft.Extensions.DependencyInjection.Abstractions
+dotnet add tests/Custodex.Client.Tests reference src/Custodex.Client
+dotnet add tests/Custodex.Client.Tests reference src/Custodex.Abstractions
+dotnet add tests/Custodex.Client.Tests package Shouldly
 ```
 
 - [ ] **Step 2: Write the shared proto** (the contract `m3/01` owns; reproduced for an unambiguous mapping)
 
 ```protobuf
-// src/Relkit.Client/Protos/relkit.proto
+// src/Custodex.Client/Protos/Custodex.proto
 syntax = "proto3";
 
-option csharp_namespace = "Relkit.Grpc";
+option csharp_namespace = "Custodex.Grpc";
 
-package relkit.v1;
+package Custodex.v1;
 
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
@@ -202,7 +202,7 @@ message CreateTenantRequest { TenantContext tenant = 1; }
 message CreateTenantResponse {}
 ```
 
-- [ ] **Step 3: Register the proto for client codegen** in `Relkit.Client.csproj`
+- [ ] **Step 3: Register the proto for client codegen** in `Custodex.Client.csproj`
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -210,7 +210,7 @@ message CreateTenantResponse {}
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Protobuf Include="Protos\relkit.proto" GrpcServices="Client" />
+    <Protobuf Include="Protos\Custodex.proto" GrpcServices="Client" />
   </ItemGroup>
 </Project>
 ```
@@ -220,40 +220,40 @@ message CreateTenantResponse {}
 - [ ] **Step 4: Write the wiring test**
 
 ```csharp
-// tests/Relkit.Client.Tests/ClientWiringTests.cs
+// tests/Custodex.Client.Tests/ClientWiringTests.cs
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Client.Tests;
+namespace Custodex.Client.Tests;
 
 public class ClientWiringTests
 {
     [Fact]
     public void Generated_client_stubs_exist()
     {
-        typeof(Relkit.Grpc.Authorizer.AuthorizerClient).ShouldNotBeNull();
-        typeof(Relkit.Grpc.RelationManager.RelationManagerClient).ShouldNotBeNull();
-        typeof(Relkit.Grpc.SchemaManager.SchemaManagerClient).ShouldNotBeNull();
-        typeof(Relkit.Grpc.Provisioning.ProvisioningClient).ShouldNotBeNull();
+        typeof(Custodex.Grpc.Authorizer.AuthorizerClient).ShouldNotBeNull();
+        typeof(Custodex.Grpc.RelationManager.RelationManagerClient).ShouldNotBeNull();
+        typeof(Custodex.Grpc.SchemaManager.SchemaManagerClient).ShouldNotBeNull();
+        typeof(Custodex.Grpc.Provisioning.ProvisioningClient).ShouldNotBeNull();
     }
 }
 ```
 
 - [ ] **Step 5: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter ClientWiringTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter ClientWiringTests`
 Expected: FAIL — the proto is not yet compiled / stubs missing until the build runs codegen. (After adding the `<Protobuf>` item the first `dotnet build` generates the stubs; if codegen is misconfigured the test fails to compile.)
 
 - [ ] **Step 6: Build to generate stubs, then run to verify pass**
 
-Run: `dotnet build src/Relkit.Client && dotnet test tests/Relkit.Client.Tests --filter ClientWiringTests`
+Run: `dotnet build src/Custodex.Client && dotnet test tests/Custodex.Client.Tests --filter ClientWiringTests`
 Expected: PASS (1 test).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Client tests/Relkit.Client.Tests
-git commit -m "chore: scaffold Relkit.Client with shared proto codegen"
+git add src/Custodex.Client tests/Custodex.Client.Tests
+git commit -m "chore: scaffold Custodex.Client with shared proto codegen"
 ```
 
 ---
@@ -261,25 +261,25 @@ git commit -m "chore: scaffold Relkit.Client with shared proto codegen"
 ### Task 2: `ProtoMapping` — record ⇄ proto marshalling
 
 **Files:**
-- Create: `src/Relkit.Client/ProtoMapping.cs`
-- Test: `tests/Relkit.Client.Tests/ProtoMappingTests.cs`
+- Create: `src/Custodex.Client/ProtoMapping.cs`
+- Test: `tests/Custodex.Client.Tests/ProtoMappingTests.cs`
 
 **Interfaces:**
 - Produces: `static class ProtoMapping` with `ToProto`/`ToDomain` overloads for `EntityRef`, `SubjectRef`, `ConditionRef?`, `RelationTuple`, `RequestContext`, `TenantContext`, `ExplainNode?`, `IReadOnlyDictionary<string,object?>` ⇄ `Struct`, and `TupleFilter`/`ChangeLogFilter`/`ChangeLogEntry`.
-- Consumes: the canonical records from `Relkit.Abstractions`; the generated `Relkit.Grpc.*` messages; `Google.Protobuf.WellKnownTypes` (`Struct`, `Value`, `Timestamp`).
+- Consumes: the canonical records from `Custodex.Abstractions`; the generated `Custodex.Grpc.*` messages; `Google.Protobuf.WellKnownTypes` (`Struct`, `Value`, `Timestamp`).
 
 > **Round-trip is the invariant.** Every `ToDomain(ToProto(x))` must equal `x`. The subject-set marker is `SubjectRef.Relation is null` ⇄ proto `relation == ""`; the wildcard is `Id == "*"` and survives untouched. `ConditionRef` is optional: domain `null` ⇄ proto `has_condition == false`. Attribute/parameter values box as `int`/`long` → `Value` number; `bool` → bool; `string` → string; `double` → number; `DateTimeOffset` → ISO-8601 string (the service decodes the same way). `long`/`int` both map to a JSON number; on decode an integral number returns `long` (the evaluator widens, `m0/06`).
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Client.Tests/ProtoMappingTests.cs
-using Relkit.Abstractions;
-using Relkit.Client;
+// tests/Custodex.Client.Tests/ProtoMappingTests.cs
+using Custodex.Abstractions;
+using Custodex.Client;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Client.Tests;
+namespace Custodex.Client.Tests;
 
 public class ProtoMappingTests
 {
@@ -360,20 +360,20 @@ public class ProtoMappingTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter ProtoMappingTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter ProtoMappingTests`
 Expected: FAIL — `ProtoMapping` does not exist.
 
 - [ ] **Step 3: Implement `ProtoMapping`**
 
 ```csharp
-// src/Relkit.Client/ProtoMapping.cs
+// src/Custodex.Client/ProtoMapping.cs
 using Google.Protobuf.WellKnownTypes;
-using Relkit.Abstractions;
-using G = Relkit.Grpc;
+using Custodex.Abstractions;
+using G = Custodex.Grpc;
 
-namespace Relkit.Client;
+namespace Custodex.Client;
 
-/// <summary>The single marshalling seam between the canonical Relkit.Abstractions records and the gRPC wire messages.</summary>
+/// <summary>The single marshalling seam between the canonical Custodex.Abstractions records and the gRPC wire messages.</summary>
 public static class ProtoMapping
 {
     // ---- EntityRef ----
@@ -501,13 +501,13 @@ public static class ProtoMapping
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter ProtoMappingTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter ProtoMappingTests`
 Expected: PASS (6 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Client tests/Relkit.Client.Tests
+git add src/Custodex.Client tests/Custodex.Client.Tests
 git commit -m "feat: add ProtoMapping record-proto marshalling seam"
 ```
 
@@ -516,26 +516,26 @@ git commit -m "feat: add ProtoMapping record-proto marshalling seam"
 ### Task 3: `RemoteStatus` — typed-exception preservation over the wire
 
 **Files:**
-- Create: `src/Relkit.Client/RemoteStatus.cs`
-- Test: `tests/Relkit.Client.Tests/RemoteStatusTests.cs`
+- Create: `src/Custodex.Client/RemoteStatus.cs`
+- Test: `tests/Custodex.Client.Tests/RemoteStatusTests.cs`
 
 **Interfaces:**
-- Produces: `static class RemoteStatus` with `T Unwrap<T>(Func<T> grpcCall)` and `Task<T> UnwrapAsync<T>(Func<Task<T>> grpcCall)` that catch `RpcException`, read the `relkit-error` trailer/metadata key, and re-throw the matching `Relkit.Abstractions` exception (`UnknownTypeException`, `UnknownRelationException`, `UnknownPermissionException`, `SchemaValidationException`, `EvaluationLimitException`), otherwise rethrow the `RpcException`.
+- Produces: `static class RemoteStatus` with `T Unwrap<T>(Func<T> grpcCall)` and `Task<T> UnwrapAsync<T>(Func<Task<T>> grpcCall)` that catch `RpcException`, read the `Custodex-error` trailer/metadata key, and re-throw the matching `Custodex.Abstractions` exception (`UnknownTypeException`, `UnknownRelationException`, `UnknownPermissionException`, `SchemaValidationException`, `EvaluationLimitException`), otherwise rethrow the `RpcException`.
 - Consumes: `Grpc.Core.RpcException`/`StatusCode`/`Metadata`; the exception hierarchy from `m0/01`.
 
-> **Error model (spec §10.3).** The service maps each typed exception to `StatusCode.InvalidArgument` (caller bug) or `FailedPrecondition` (schema) and stamps a trailer `relkit-error-kind` (e.g. `"unknown_type"`) plus detail trailers (`relkit-error-type`, `relkit-error-relation`, `relkit-error-permission`, `relkit-error-detail`, repeated `relkit-error-message` for validation errors). The client reconstructs the exact exception so a remote caller sees what a local caller sees. The exact trailer keys are owned by `m3/01`'s host; this plan reproduces them and adjusts if `m3/01` differs (Contract gaps).
+> **Error model (spec §10.3).** The service maps each typed exception to `StatusCode.InvalidArgument` (caller bug) or `FailedPrecondition` (schema) and stamps a trailer `Custodex-error-kind` (e.g. `"unknown_type"`) plus detail trailers (`Custodex-error-type`, `Custodex-error-relation`, `Custodex-error-permission`, `Custodex-error-detail`, repeated `Custodex-error-message` for validation errors). The client reconstructs the exact exception so a remote caller sees what a local caller sees. The exact trailer keys are owned by `m3/01`'s host; this plan reproduces them and adjusts if `m3/01` differs (Contract gaps).
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Client.Tests/RemoteStatusTests.cs
+// tests/Custodex.Client.Tests/RemoteStatusTests.cs
 using Grpc.Core;
-using Relkit.Abstractions;
-using Relkit.Client;
+using Custodex.Abstractions;
+using Custodex.Client;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Client.Tests;
+namespace Custodex.Client.Tests;
 
 public class RemoteStatusTests
 {
@@ -551,7 +551,7 @@ public class RemoteStatusTests
     {
         var ex = Should.Throw<UnknownTypeException>(() => RemoteStatus.Unwrap<int>(() =>
             throw Rpc(StatusCode.InvalidArgument,
-                ("relkit-error-kind", "unknown_type"), ("relkit-error-type", "dragon"))));
+                ("Custodex-error-kind", "unknown_type"), ("Custodex-error-type", "dragon"))));
         ex.Type.ShouldBe("dragon");
     }
 
@@ -560,8 +560,8 @@ public class RemoteStatusTests
     {
         var ex = Should.Throw<UnknownPermissionException>(() => RemoteStatus.Unwrap<int>(() =>
             throw Rpc(StatusCode.InvalidArgument,
-                ("relkit-error-kind", "unknown_permission"),
-                ("relkit-error-type", "animal"), ("relkit-error-permission", "fly"))));
+                ("Custodex-error-kind", "unknown_permission"),
+                ("Custodex-error-type", "animal"), ("Custodex-error-permission", "fly"))));
         ex.Type.ShouldBe("animal");
         ex.Permission.ShouldBe("fly");
     }
@@ -571,9 +571,9 @@ public class RemoteStatusTests
     {
         var ex = Should.Throw<SchemaValidationException>(() => RemoteStatus.Unwrap<int>(() =>
             throw Rpc(StatusCode.FailedPrecondition,
-                ("relkit-error-kind", "schema_invalid"),
-                ("relkit-error-message", "dangling relation 'x'"),
-                ("relkit-error-message", "non-terminating recursion"))));
+                ("Custodex-error-kind", "schema_invalid"),
+                ("Custodex-error-message", "dangling relation 'x'"),
+                ("Custodex-error-message", "non-terminating recursion"))));
         ex.Errors.Count.ShouldBe(2);
         ex.Errors.ShouldContain("dangling relation 'x'");
     }
@@ -589,20 +589,20 @@ public class RemoteStatusTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter RemoteStatusTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter RemoteStatusTests`
 Expected: FAIL — `RemoteStatus` does not exist.
 
 - [ ] **Step 3: Implement `RemoteStatus`**
 
 ```csharp
-// src/Relkit.Client/RemoteStatus.cs
+// src/Custodex.Client/RemoteStatus.cs
 using Grpc.Core;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Client;
+namespace Custodex.Client;
 
 /// <summary>
-/// Reconstructs Relkit.Abstractions typed exceptions from the structured gRPC trailers the service
+/// Reconstructs Custodex.Abstractions typed exceptions from the structured gRPC trailers the service
 /// stamps (spec §10.3), so a remote caller sees the same exception a local caller would. Unrecognized
 /// RpcExceptions are rethrown untouched.
 /// </summary>
@@ -622,17 +622,17 @@ public static class RemoteStatus
 
     private static Exception Translate(RpcException ex)
     {
-        var kind = Get(ex, "relkit-error-kind");
+        var kind = Get(ex, "Custodex-error-kind");
         return kind switch
         {
-            "unknown_type" => new UnknownTypeException(Get(ex, "relkit-error-type") ?? ""),
+            "unknown_type" => new UnknownTypeException(Get(ex, "Custodex-error-type") ?? ""),
             "unknown_relation" => new UnknownRelationException(
-                Get(ex, "relkit-error-type") ?? "", Get(ex, "relkit-error-relation") ?? ""),
+                Get(ex, "Custodex-error-type") ?? "", Get(ex, "Custodex-error-relation") ?? ""),
             "unknown_permission" => new UnknownPermissionException(
-                Get(ex, "relkit-error-type") ?? "", Get(ex, "relkit-error-permission") ?? ""),
-            "schema_invalid" => new SchemaValidationException(GetAll(ex, "relkit-error-message")),
-            "evaluation_limit" => new EvaluationLimitException(Get(ex, "relkit-error-detail") ?? "limit tripped"),
-            _ => ex,   // not a recognized Relkit error: surface the transport failure as-is
+                Get(ex, "Custodex-error-type") ?? "", Get(ex, "Custodex-error-permission") ?? ""),
+            "schema_invalid" => new SchemaValidationException(GetAll(ex, "Custodex-error-message")),
+            "evaluation_limit" => new EvaluationLimitException(Get(ex, "Custodex-error-detail") ?? "limit tripped"),
+            _ => ex,   // not a recognized Custodex error: surface the transport failure as-is
         };
     }
 
@@ -646,13 +646,13 @@ public static class RemoteStatus
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter RemoteStatusTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter RemoteStatusTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Client tests/Relkit.Client.Tests
+git add src/Custodex.Client tests/Custodex.Client.Tests
 git commit -m "feat: add RemoteStatus typed-exception translation from gRPC trailers"
 ```
 
@@ -661,11 +661,11 @@ git commit -m "feat: add RemoteStatus typed-exception translation from gRPC trai
 ### Task 4: `GrpcAuthorizer : IAuthorizer`
 
 **Files:**
-- Create: `src/Relkit.Client/GrpcAuthorizer.cs`
-- Test: `tests/Relkit.Client.Tests/GrpcAuthorizerMappingTests.cs`
+- Create: `src/Custodex.Client/GrpcAuthorizer.cs`
+- Test: `tests/Custodex.Client.Tests/GrpcAuthorizerMappingTests.cs`
 
 **Interfaces:**
-- Produces: `GrpcAuthorizer(Relkit.Grpc.Authorizer.AuthorizerClient client) : IAuthorizer` — `CheckAsync`/`BatchCheckAsync`/`ListObjectsAsync`/`ListSubjectsAsync`, each mapping the canonical request to proto, calling the stub, unwrapping typed errors via `RemoteStatus`, and mapping the response back.
+- Produces: `GrpcAuthorizer(Custodex.Grpc.Authorizer.AuthorizerClient client) : IAuthorizer` — `CheckAsync`/`BatchCheckAsync`/`ListObjectsAsync`/`ListSubjectsAsync`, each mapping the canonical request to proto, calling the stub, unwrapping typed errors via `RemoteStatus`, and mapping the response back.
 - Consumes: the generated `AuthorizerClient`; `ProtoMapping`; `RemoteStatus`; the `IAuthorizer` contract + request/result records (`m0/01`).
 
 > The constructor takes the generated client (not a channel) so a unit test can pass a stub built over an in-memory channel; the DI extension (Task 7) constructs the client from a channel. `ListObjectsRequest.ContinuationToken == null` maps to proto `""`; a proto `""` response token maps back to `null` (no more pages).
@@ -673,15 +673,15 @@ git commit -m "feat: add RemoteStatus typed-exception translation from gRPC trai
 - [ ] **Step 1: Write the failing tests** (mapping is asserted via an in-process server stub in Task 6; here we assert request shaping with a fake client)
 
 ```csharp
-// tests/Relkit.Client.Tests/GrpcAuthorizerMappingTests.cs
+// tests/Custodex.Client.Tests/GrpcAuthorizerMappingTests.cs
 using Grpc.Core;
-using Relkit.Abstractions;
-using Relkit.Client;
-using Relkit.Grpc;
+using Custodex.Abstractions;
+using Custodex.Client;
+using Custodex.Grpc;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Client.Tests;
+namespace Custodex.Client.Tests;
 
 public class GrpcAuthorizerMappingTests
 {
@@ -751,21 +751,21 @@ public class GrpcAuthorizerMappingTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter GrpcAuthorizerMappingTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter GrpcAuthorizerMappingTests`
 Expected: FAIL — `GrpcAuthorizer` does not exist.
 
 - [ ] **Step 3: Implement `GrpcAuthorizer`**
 
 ```csharp
-// src/Relkit.Client/GrpcAuthorizer.cs
-using Relkit.Abstractions;
-using G = Relkit.Grpc;
+// src/Custodex.Client/GrpcAuthorizer.cs
+using Custodex.Abstractions;
+using G = Custodex.Grpc;
 
-namespace Relkit.Client;
+namespace Custodex.Client;
 
 /// <summary>
 /// gRPC implementation of <see cref="IAuthorizer"/>. A consumer swaps in-process evaluation for the
-/// remote Relkit.Service by registering this type for <see cref="IAuthorizer"/> (spec §4, §10.1) — no
+/// remote Custodex.Service by registering this type for <see cref="IAuthorizer"/> (spec §4, §10.1) — no
 /// caller code changes. Maps canonical records to proto, calls the service, restores typed exceptions.
 /// </summary>
 public sealed class GrpcAuthorizer(G.Authorizer.AuthorizerClient client) : IAuthorizer
@@ -852,13 +852,13 @@ public sealed class GrpcAuthorizer(G.Authorizer.AuthorizerClient client) : IAuth
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter GrpcAuthorizerMappingTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter GrpcAuthorizerMappingTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Client tests/Relkit.Client.Tests
+git add src/Custodex.Client tests/Custodex.Client.Tests
 git commit -m "feat: add GrpcAuthorizer implementing IAuthorizer over gRPC"
 ```
 
@@ -867,34 +867,34 @@ git commit -m "feat: add GrpcAuthorizer implementing IAuthorizer over gRPC"
 ### Task 5: Management client facades + `SchemaJson` serialization
 
 **Files:**
-- Create: `src/Relkit.Client/SchemaJson.cs`
-- Create: `src/Relkit.Client/GrpcRelationManager.cs`
-- Create: `src/Relkit.Client/GrpcSchemaManager.cs`
-- Create: `src/Relkit.Client/GrpcProvisioning.cs`
-- Test: `tests/Relkit.Client.Tests/SchemaJsonTests.cs`
+- Create: `src/Custodex.Client/SchemaJson.cs`
+- Create: `src/Custodex.Client/GrpcRelationManager.cs`
+- Create: `src/Custodex.Client/GrpcSchemaManager.cs`
+- Create: `src/Custodex.Client/GrpcProvisioning.cs`
+- Test: `tests/Custodex.Client.Tests/SchemaJsonTests.cs`
 
 **Interfaces:**
 - Produces:
   - `static class SchemaJson` with `string Serialize(Schema)` and `Schema Deserialize(string)` using `System.Text.Json` with the polymorphic `PermExpr`/`ConditionExpr` configuration (spec §5.5 / §6.3 jsonb). Round-trips the canonical AST.
-  - `GrpcRelationManager(Relkit.Grpc.RelationManager.RelationManagerClient) : IRelationManager`.
-  - `GrpcSchemaManager(Relkit.Grpc.SchemaManager.SchemaManagerClient) : ISchemaManager`.
-  - `GrpcStoreManager` / `GrpcTenantManager` over `Relkit.Grpc.Provisioning.ProvisioningClient`, implementing `IStoreManager` / `ITenantManager`.
+  - `GrpcRelationManager(Custodex.Grpc.RelationManager.RelationManagerClient) : IRelationManager`.
+  - `GrpcSchemaManager(Custodex.Grpc.SchemaManager.SchemaManagerClient) : ISchemaManager`.
+  - `GrpcStoreManager` / `GrpcTenantManager` over `Custodex.Grpc.Provisioning.ProvisioningClient`, implementing `IStoreManager` / `ITenantManager`.
 - Consumes: `ProtoMapping`, `RemoteStatus`, the generated stubs, and the manager contracts from `m0/01`.
 
-> **`SchemaJson` mirrors the service's serializer.** The `Schema` AST carries `System.Text.Json` polymorphism for jsonb (per the contract and `m1/01`). The host serializes the same way, so a schema sent as JSON deserializes identically server-side. The exact `JsonSerializerOptions` / `[JsonPolymorphic]` discriminators are owned by the schema-serialization plan; this client uses the same options class. If the engine exposes a canonical `SchemaSerializer` in `Relkit.Core`, `SchemaJson` forwards to it instead of duplicating the configuration (Contract gaps).
+> **`SchemaJson` mirrors the service's serializer.** The `Schema` AST carries `System.Text.Json` polymorphism for jsonb (per the contract and `m1/01`). The host serializes the same way, so a schema sent as JSON deserializes identically server-side. The exact `JsonSerializerOptions` / `[JsonPolymorphic]` discriminators are owned by the schema-serialization plan; this client uses the same options class. If the engine exposes a canonical `SchemaSerializer` in `Custodex.Core`, `SchemaJson` forwards to it instead of duplicating the configuration (Contract gaps).
 > **`ISchemaManager.ValidateSchema` is synchronous** in the contract; the gRPC call is blocking-wrapped (`.GetAwaiter().GetResult()` on the unary call) to honour the interface. `SetActiveSchemaAsync`/`GetActiveSchemaAsync` are async.
 
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Client.Tests/SchemaJsonTests.cs
-using Relkit.Abstractions;
-using Relkit.Client;
-using Relkit.Core;
+// tests/Custodex.Client.Tests/SchemaJsonTests.cs
+using Custodex.Abstractions;
+using Custodex.Client;
+using Custodex.Core;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Client.Tests;
+namespace Custodex.Client.Tests;
 
 public class SchemaJsonTests
 {
@@ -919,25 +919,25 @@ public class SchemaJsonTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter SchemaJsonTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter SchemaJsonTests`
 Expected: FAIL — `SchemaJson` does not exist.
 
-- [ ] **Step 3: Implement `SchemaJson`** (reference `Relkit.Core` for the AST + builder used in tests)
+- [ ] **Step 3: Implement `SchemaJson`** (reference `Custodex.Core` for the AST + builder used in tests)
 
 Run:
 ```bash
-dotnet add src/Relkit.Client reference src/Relkit.Core
-dotnet add tests/Relkit.Client.Tests reference src/Relkit.Core
+dotnet add src/Custodex.Client reference src/Custodex.Core
+dotnet add tests/Custodex.Client.Tests reference src/Custodex.Core
 ```
 
 ```csharp
-// src/Relkit.Client/SchemaJson.cs
+// src/Custodex.Client/SchemaJson.cs
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
 
-namespace Relkit.Client;
+namespace Custodex.Client;
 
 /// <summary>
 /// Serializes the canonical <see cref="Schema"/> AST to/from JSON for the gRPC schema messages, using
@@ -1026,21 +1026,21 @@ file sealed class DelegatingResolver(
 }
 ```
 
-> **Simpler alternative if the engine ships a serializer.** If `Relkit.Core` (or `m1/01`) exposes `SchemaSerializer.Serialize/Deserialize` with the polymorphic config, delete the resolver plumbing above and forward `SchemaJson.Serialize/Deserialize` to it. Prefer that — one serializer, one set of discriminators, guaranteed to match the host. The fallback resolver here exists so the client compiles and round-trips even before that shared serializer lands; the discriminator strings must then match the host's.
+> **Simpler alternative if the engine ships a serializer.** If `Custodex.Core` (or `m1/01`) exposes `SchemaSerializer.Serialize/Deserialize` with the polymorphic config, delete the resolver plumbing above and forward `SchemaJson.Serialize/Deserialize` to it. Prefer that — one serializer, one set of discriminators, guaranteed to match the host. The fallback resolver here exists so the client compiles and round-trips even before that shared serializer lands; the discriminator strings must then match the host's.
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter SchemaJsonTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter SchemaJsonTests`
 Expected: PASS (1 test). Records give structural equality, so the whole AST (including the `Exclude(Union(...))` tree) must survive the round-trip.
 
 - [ ] **Step 5: Implement the management facades**
 
 ```csharp
-// src/Relkit.Client/GrpcRelationManager.cs
-using Relkit.Abstractions;
-using G = Relkit.Grpc;
+// src/Custodex.Client/GrpcRelationManager.cs
+using Custodex.Abstractions;
+using G = Custodex.Grpc;
 
-namespace Relkit.Client;
+namespace Custodex.Client;
 
 public sealed class GrpcRelationManager(G.RelationManager.RelationManagerClient client) : IRelationManager
 {
@@ -1095,11 +1095,11 @@ public sealed class GrpcRelationManager(G.RelationManager.RelationManagerClient 
 ```
 
 ```csharp
-// src/Relkit.Client/GrpcSchemaManager.cs
-using Relkit.Abstractions;
-using G = Relkit.Grpc;
+// src/Custodex.Client/GrpcSchemaManager.cs
+using Custodex.Abstractions;
+using G = Custodex.Grpc;
 
-namespace Relkit.Client;
+namespace Custodex.Client;
 
 public sealed class GrpcSchemaManager(G.SchemaManager.SchemaManagerClient client) : ISchemaManager
 {
@@ -1129,11 +1129,11 @@ public sealed class GrpcSchemaManager(G.SchemaManager.SchemaManagerClient client
 ```
 
 ```csharp
-// src/Relkit.Client/GrpcProvisioning.cs
-using Relkit.Abstractions;
-using G = Relkit.Grpc;
+// src/Custodex.Client/GrpcProvisioning.cs
+using Custodex.Abstractions;
+using G = Custodex.Grpc;
 
-namespace Relkit.Client;
+namespace Custodex.Client;
 
 public sealed class GrpcStoreManager(G.Provisioning.ProvisioningClient client) : IStoreManager
 {
@@ -1159,55 +1159,55 @@ public sealed class GrpcTenantManager(G.Provisioning.ProvisioningClient client) 
 
 - [ ] **Step 6: Build to verify the facades compile**
 
-Run: `dotnet build src/Relkit.Client`
+Run: `dotnet build src/Custodex.Client`
 Expected: clean build (the facades are exercised end-to-end in Task 6).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Client tests/Relkit.Client.Tests
+git add src/Custodex.Client tests/Custodex.Client.Tests
 git commit -m "feat: add SchemaJson and gRPC management client facades"
 ```
 
 ---
 
-### Task 6: `AddRelkitClient(address)` DI extension
+### Task 6: `AddCustodexClient(address)` DI extension
 
 **Files:**
-- Create: `src/Relkit.Client/RelkitClientServiceCollectionExtensions.cs`
-- Test: `tests/Relkit.Client.Tests/AddRelkitClientTests.cs`
+- Create: `src/Custodex.Client/CustodexClientServiceCollectionExtensions.cs`
+- Test: `tests/Custodex.Client.Tests/AddCustodexClientTests.cs`
 
 **Interfaces:**
-- Produces: `IServiceCollection AddRelkitClient(this IServiceCollection services, string address)` and an overload `AddRelkitClient(this IServiceCollection services, Uri address)` registering a single `GrpcChannel`, the four generated clients, and `GrpcAuthorizer`/`GrpcRelationManager`/`GrpcSchemaManager`/`GrpcStoreManager`/`GrpcTenantManager` against `IAuthorizer`/`IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager`.
+- Produces: `IServiceCollection AddCustodexClient(this IServiceCollection services, string address)` and an overload `AddCustodexClient(this IServiceCollection services, Uri address)` registering a single `GrpcChannel`, the four generated clients, and `GrpcAuthorizer`/`GrpcRelationManager`/`GrpcSchemaManager`/`GrpcStoreManager`/`GrpcTenantManager` against `IAuthorizer`/`IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager`.
 - Consumes: `Grpc.Net.Client.GrpcChannel`; `Microsoft.Extensions.DependencyInjection`.
 
-> **The one-line swap (spec §10.1).** A consumer who used the in-process engine (`AddRelkit().UsePostgres(...)`, `m1/09`) replaces that with `services.AddRelkitClient("https://relkit.internal:443")`. Every `IAuthorizer`/manager injection now resolves to the remote client. Callers are unchanged because both register the same `Relkit.Abstractions` interfaces.
+> **The one-line swap (spec §10.1).** A consumer who used the in-process engine (`AddCustodex().UsePostgres(...)`, `m1/09`) replaces that with `services.AddCustodexClient("https://Custodex.internal:443")`. Every `IAuthorizer`/manager injection now resolves to the remote client. Callers are unchanged because both register the same `Custodex.Abstractions` interfaces.
 
 - [ ] **Step 1: Add the DI package and write the failing test**
 
 Run:
 ```bash
-dotnet add src/Relkit.Client package Microsoft.Extensions.DependencyInjection.Abstractions
-dotnet add tests/Relkit.Client.Tests package Microsoft.Extensions.DependencyInjection
+dotnet add src/Custodex.Client package Microsoft.Extensions.DependencyInjection.Abstractions
+dotnet add tests/Custodex.Client.Tests package Microsoft.Extensions.DependencyInjection
 ```
 
 ```csharp
-// tests/Relkit.Client.Tests/AddRelkitClientTests.cs
+// tests/Custodex.Client.Tests/AddCustodexClientTests.cs
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
-using Relkit.Client;
+using Custodex.Abstractions;
+using Custodex.Client;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Client.Tests;
+namespace Custodex.Client.Tests;
 
-public class AddRelkitClientTests
+public class AddCustodexClientTests
 {
     [Fact]
-    public void AddRelkitClient_registers_authorizer_and_managers_as_abstractions()
+    public void AddCustodexClient_registers_authorizer_and_managers_as_abstractions()
     {
         var services = new ServiceCollection();
-        services.AddRelkitClient("https://localhost:5001");
+        services.AddCustodexClient("https://localhost:5001");
         var provider = services.BuildServiceProvider();
 
         provider.GetService<IAuthorizer>().ShouldBeOfType<GrpcAuthorizer>();
@@ -1221,32 +1221,32 @@ public class AddRelkitClientTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter AddRelkitClientTests`
-Expected: FAIL — `AddRelkitClient` does not exist.
+Run: `dotnet test tests/Custodex.Client.Tests --filter AddCustodexClientTests`
+Expected: FAIL — `AddCustodexClient` does not exist.
 
 - [ ] **Step 3: Implement the DI extension**
 
 ```csharp
-// src/Relkit.Client/RelkitClientServiceCollectionExtensions.cs
+// src/Custodex.Client/CustodexClientServiceCollectionExtensions.cs
 using Grpc.Net.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Relkit.Abstractions;
-using G = Relkit.Grpc;
+using Custodex.Abstractions;
+using G = Custodex.Grpc;
 
-namespace Relkit.Client;
+namespace Custodex.Client;
 
 /// <summary>
-/// Registers the Relkit gRPC client. A consumer swaps in-process evaluation (AddRelkit().UsePostgres())
+/// Registers the Custodex gRPC client. A consumer swaps in-process evaluation (AddCustodex().UsePostgres())
 /// for the remote service with a single call (spec §4, §10.1); all IAuthorizer/manager injections then
 /// resolve to the remote client with no other code change.
 /// </summary>
-public static class RelkitClientServiceCollectionExtensions
+public static class CustodexClientServiceCollectionExtensions
 {
-    public static IServiceCollection AddRelkitClient(this IServiceCollection services, string address)
-        => services.AddRelkitClient(new Uri(address));
+    public static IServiceCollection AddCustodexClient(this IServiceCollection services, string address)
+        => services.AddCustodexClient(new Uri(address));
 
-    public static IServiceCollection AddRelkitClient(this IServiceCollection services, Uri address)
+    public static IServiceCollection AddCustodexClient(this IServiceCollection services, Uri address)
     {
         services.TryAddSingleton(_ => GrpcChannel.ForAddress(address));
 
@@ -1268,14 +1268,14 @@ public static class RelkitClientServiceCollectionExtensions
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter AddRelkitClientTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter AddCustodexClientTests`
 Expected: PASS (1 test).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Client tests/Relkit.Client.Tests
-git commit -m "feat: add AddRelkitClient DI extension for the gRPC swap"
+git add src/Custodex.Client tests/Custodex.Client.Tests
+git commit -m "feat: add AddCustodexClient DI extension for the gRPC swap"
 ```
 
 ---
@@ -1283,44 +1283,44 @@ git commit -m "feat: add AddRelkitClient DI extension for the gRPC swap"
 ### Task 7: End-to-end — client over the real service equals in-process, for the six worked examples
 
 **Files:**
-- Create: `tests/Relkit.Client.Tests/Relkit.Client.Tests.csproj` (add references)
-- Create: `tests/Relkit.Client.Tests/ServiceFixture.cs`
-- Test: `tests/Relkit.Client.Tests/ClientParityTests.cs`
+- Create: `tests/Custodex.Client.Tests/Custodex.Client.Tests.csproj` (add references)
+- Create: `tests/Custodex.Client.Tests/ServiceFixture.cs`
+- Test: `tests/Custodex.Client.Tests/ClientParityTests.cs`
 
 **Interfaces:**
-- Consumes: `Relkit.Service` (the host from `m3/01`) via `WebApplicationFactory<Program>`; `Grpc.Net.Client` over the factory's in-memory `HttpClient`; the `Relkit.Conformance` suite (`ConformanceSuite.All()`, `ConformanceCase`, from `m0/09`) for the six §12 worked examples; the in-process `EngineDrivenAuthorizer` for the oracle comparison.
+- Consumes: `Custodex.Service` (the host from `m3/01`) via `WebApplicationFactory<Program>`; `Grpc.Net.Client` over the factory's in-memory `HttpClient`; the `Custodex.Conformance` suite (`ConformanceSuite.All()`, `ConformanceCase`, from `m0/09`) for the six §12 worked examples; the in-process `EngineDrivenAuthorizer` for the oracle comparison.
 
-> **The parity assertion (the point of this plan).** For each of the six worked examples, run the **same** decision two ways: (1) the in-process `EngineDrivenAuthorizer` over the in-memory provider (the `m0/09` `ConformanceRunner` already does this), and (2) `GrpcAuthorizer` against the running `Relkit.Service`, after seeding the same schema + tuples through the gRPC management facades. Assert the two `Allowed` results are identical, and that each equals the conformance case's declared `Expected`. This proves swapping to the remote service changes nothing the caller observes (spec §4).
+> **The parity assertion (the point of this plan).** For each of the six worked examples, run the **same** decision two ways: (1) the in-process `EngineDrivenAuthorizer` over the in-memory provider (the `m0/09` `ConformanceRunner` already does this), and (2) `GrpcAuthorizer` against the running `Custodex.Service`, after seeding the same schema + tuples through the gRPC management facades. Assert the two `Allowed` results are identical, and that each equals the conformance case's declared `Expected`. This proves swapping to the remote service changes nothing the caller observes (spec §4).
 >
-> The service is configured to use the in-memory provider for this test (so the test needs no Postgres) — the host from `m3/01` registers stores via DI; the fixture overrides them with `Relkit.Storage.InMemory` so the parity test isolates the transport, not the storage. If `m3/01`'s `Program` does not expose an in-memory test seam, the fixture connects to a Testcontainers Postgres instead (note in Contract gaps).
+> The service is configured to use the in-memory provider for this test (so the test needs no Postgres) — the host from `m3/01` registers stores via DI; the fixture overrides them with `Custodex.Storage.InMemory` so the parity test isolates the transport, not the storage. If `m3/01`'s `Program` does not expose an in-memory test seam, the fixture connects to a Testcontainers Postgres instead (note in Contract gaps).
 
 - [ ] **Step 1: Add the test references**
 
 Run:
 ```bash
-dotnet add tests/Relkit.Client.Tests package Microsoft.AspNetCore.Mvc.Testing
-dotnet add tests/Relkit.Client.Tests reference src/Relkit.Service
-dotnet add tests/Relkit.Client.Tests reference src/Relkit.Storage.InMemory
-dotnet add tests/Relkit.Client.Tests reference tests/Relkit.Conformance
+dotnet add tests/Custodex.Client.Tests package Microsoft.AspNetCore.Mvc.Testing
+dotnet add tests/Custodex.Client.Tests reference src/Custodex.Service
+dotnet add tests/Custodex.Client.Tests reference src/Custodex.Storage.InMemory
+dotnet add tests/Custodex.Client.Tests reference tests/Custodex.Conformance
 ```
 
-> `tests/Relkit.Conformance` is a test project; referencing it from another test project is allowed (it exposes `ConformanceSuite`/`WorkedExamples` as public types). If project-to-test references are undesirable in the build, move the worked-example case factory into a small shared `Relkit.Conformance.Cases` library — flagged in Contract gaps.
+> `tests/Custodex.Conformance` is a test project; referencing it from another test project is allowed (it exposes `ConformanceSuite`/`WorkedExamples` as public types). If project-to-test references are undesirable in the build, move the worked-example case factory into a small shared `Custodex.Conformance.Cases` library — flagged in Contract gaps.
 
 - [ ] **Step 2: Write the service fixture**
 
 ```csharp
-// tests/Relkit.Client.Tests/ServiceFixture.cs
+// tests/Custodex.Client.Tests/ServiceFixture.cs
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
-using Relkit.Storage.InMemory;
+using Custodex.Abstractions;
+using Custodex.Storage.InMemory;
 
-namespace Relkit.Client.Tests;
+namespace Custodex.Client.Tests;
 
 /// <summary>
-/// Hosts Relkit.Service in-memory via WebApplicationFactory and exposes a GrpcChannel over its test
+/// Hosts Custodex.Service in-memory via WebApplicationFactory and exposes a GrpcChannel over its test
 /// HttpClient. The provider is overridden to the in-memory stores so parity tests isolate the transport.
 /// </summary>
 public sealed class ServiceFixture : WebApplicationFactory<Program>
@@ -1356,15 +1356,15 @@ public sealed class ServiceFixture : WebApplicationFactory<Program>
 - [ ] **Step 3: Write the parity test**
 
 ```csharp
-// tests/Relkit.Client.Tests/ClientParityTests.cs
-using Relkit.Abstractions;
-using Relkit.Client;
-using Relkit.Conformance;
-using Relkit.Grpc;
+// tests/Custodex.Client.Tests/ClientParityTests.cs
+using Custodex.Abstractions;
+using Custodex.Client;
+using Custodex.Conformance;
+using Custodex.Grpc;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Client.Tests;
+namespace Custodex.Client.Tests;
 
 public class ClientParityTests : IClassFixture<ServiceFixture>
 {
@@ -1415,18 +1415,18 @@ public class ClientParityTests : IClassFixture<ServiceFixture>
 
 - [ ] **Step 4: Run the parity suite**
 
-Run: `dotnet test tests/Relkit.Client.Tests --filter ClientParityTests`
+Run: `dotnet test tests/Custodex.Client.Tests --filter ClientParityTests`
 Expected: PASS — one case per worked example, remote result equals in-process equals expected. A divergence here means the proto mapping or the host wiring lost information; diagnose `ProtoMapping`/`m3/01` before changing the engine.
 
 - [ ] **Step 5: Run the whole client suite**
 
-Run: `dotnet test tests/Relkit.Client.Tests`
+Run: `dotnet test tests/Custodex.Client.Tests`
 Expected: PASS (wiring, mapping, status, authorizer, schema-json, DI, and parity tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/Relkit.Client.Tests
+git add tests/Custodex.Client.Tests
 git commit -m "test: prove gRPC client parity with in-process for the six worked examples"
 ```
 
@@ -1435,15 +1435,15 @@ git commit -m "test: prove gRPC client parity with in-process for the six worked
 ## Self-review checklist (run after all tasks)
 
 - [ ] `dotnet build` clean with `TreatWarningsAsErrors=true` (generated proto warnings scoped, not blanket-suppressed).
-- [ ] `GrpcAuthorizer : IAuthorizer` implements all four ops; a consumer swaps in-process for remote with one `AddRelkitClient(address)` call and no caller change (spec §4, §10.1).
+- [ ] `GrpcAuthorizer : IAuthorizer` implements all four ops; a consumer swaps in-process for remote with one `AddCustodexClient(address)` call and no caller change (spec §4, §10.1).
 - [ ] `ProtoMapping` round-trips every record (`ToDomain(ToProto(x)) == x`), including the subject-set marker, wildcard, optional condition, and typed attribute/param values.
 - [ ] Typed exceptions (`UnknownType/Relation/Permission`, `SchemaValidation`, `EvaluationLimit`) re-throw client-side via `RemoteStatus`, so deny-vs-error (spec §10.3) survives the wire.
 - [ ] The four management facades cover `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager`; `SchemaJson` round-trips the polymorphic AST.
-- [ ] The parity test asserts remote == in-process == expected for all six §12 worked examples, against the real `Relkit.Service` over `WebApplicationFactory` + `Grpc.Net.Client`.
+- [ ] The parity test asserts remote == in-process == expected for all six §12 worked examples, against the real `Custodex.Service` over `WebApplicationFactory` + `Grpc.Net.Client`.
 
 ## Contract gaps (reported, not changed)
 
-- **Proto ownership (`m3/01`).** This plan reproduces `relkit.proto` (messages, services, the `relkit-error-*` trailer keys) so the mapping is unambiguous, but `m3/01` owns the canonical file. The client and host must compile the **same** proto. If `m3/01` names a field, RPC, `google.protobuf.Struct`-vs-bytes choice, or error trailer differently, `ProtoMapping`/`RemoteStatus` adjust to match `m3/01`; no engine contract changes. Recommended: `m3/01` keeps the shared `.proto` at `proto/relkit.proto` and both projects `<Protobuf Include>` it.
-- **Shared schema serializer.** `SchemaJson` here carries its own `System.Text.Json` polymorphic resolver with `$kind` discriminators for `PermExpr`/`ConditionExpr`. The host (`m3/01`/`m1/01`) must serialize schemas with the **identical** discriminators or the jsonb/JSON round-trip breaks across the wire. The clean fix is a single `SchemaSerializer` in `Relkit.Core` (or `Relkit.Abstractions`) that both the host and this client call. Flagged for the contract owner to add a canonical serializer; until then the discriminator strings in `SchemaJson` and the host must be kept in lockstep.
-- **`Relkit.Service` test seam.** The parity fixture assumes the host's `Program` is reachable as `WebApplicationFactory<Program>` and lets the test override storage with the in-memory provider. `m3/01` should expose `public partial class Program;` and register stores via swappable DI so tests can inject `Relkit.Storage.InMemory`. If not, the fixture falls back to a Testcontainers Postgres-backed host. Flagged for `m3/01`.
-- **Conformance reuse.** This plan references `tests/Relkit.Conformance` to reuse `ConformanceSuite.All()`. If a test-project-to-test-project reference is undesirable, extract the worked-example case factory into a small shared library (`Relkit.Conformance.Cases`) that both the conformance suite and this parity test reference. Flagged; not changed here.
+- **Proto ownership (`m3/01`).** This plan reproduces `Custodex.proto` (messages, services, the `Custodex-error-*` trailer keys) so the mapping is unambiguous, but `m3/01` owns the canonical file. The client and host must compile the **same** proto. If `m3/01` names a field, RPC, `google.protobuf.Struct`-vs-bytes choice, or error trailer differently, `ProtoMapping`/`RemoteStatus` adjust to match `m3/01`; no engine contract changes. Recommended: `m3/01` keeps the shared `.proto` at `proto/Custodex.proto` and both projects `<Protobuf Include>` it.
+- **Shared schema serializer.** `SchemaJson` here carries its own `System.Text.Json` polymorphic resolver with `$kind` discriminators for `PermExpr`/`ConditionExpr`. The host (`m3/01`/`m1/01`) must serialize schemas with the **identical** discriminators or the jsonb/JSON round-trip breaks across the wire. The clean fix is a single `SchemaSerializer` in `Custodex.Core` (or `Custodex.Abstractions`) that both the host and this client call. Flagged for the contract owner to add a canonical serializer; until then the discriminator strings in `SchemaJson` and the host must be kept in lockstep.
+- **`Custodex.Service` test seam.** The parity fixture assumes the host's `Program` is reachable as `WebApplicationFactory<Program>` and lets the test override storage with the in-memory provider. `m3/01` should expose `public partial class Program;` and register stores via swappable DI so tests can inject `Custodex.Storage.InMemory`. If not, the fixture falls back to a Testcontainers Postgres-backed host. Flagged for `m3/01`.
+- **Conformance reuse.** This plan references `tests/Custodex.Conformance` to reuse `ConformanceSuite.All()`. If a test-project-to-test-project reference is undesirable, extract the worked-example case factory into a small shared library (`Custodex.Conformance.Cases`) that both the conformance suite and this parity test reference. Flagged; not changed here.

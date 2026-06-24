@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A caching decorator over `IAuthorizer` that adds a cross-request `ICacheStore` check cache keyed by `(store, tenant, schema_version, object, permission, subject)`, caching **only unconditioned** results, with epoch-based invalidation and `RelkitDiagnostics.CacheHits`/`CacheMisses` accounting.
+**Goal:** A caching decorator over `IAuthorizer` that adds a cross-request `ICacheStore` check cache keyed by `(store, tenant, schema_version, object, permission, subject)`, caching **only unconditioned** results, with epoch-based invalidation and `CustodexDiagnostics.CacheHits`/`CacheMisses` accounting.
 
 **Architecture:** `CachingAuthorizer` wraps an inner `IAuthorizer` (the `EngineDrivenAuthorizer` from `m0/05`–`m0/07`). On `CheckAsync` it builds the cache key, reads the current tenant epoch via `ICacheStore.GetEpochAsync`, looks up a `CacheEntry`, and treats a missing entry or an epoch mismatch as a miss. On a miss it calls the inner authorizer through the internal `(Allowed, ConditionTouched)` path (from `m0/05`); it caches the result **only when no condition was touched**, stamping the entry with the current epoch. Writes bump the epoch (the actual bump happens in the write path / M1; this plan documents the integration point and records `CacheHits`/`CacheMisses`). `Explain`, `ListObjects`, `ListSubjects`, and `BatchCheck` pass straight through to the inner authorizer uncached.
 
-**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly. Uses `Relkit.Storage.InMemory`'s `InMemoryCacheStore` (from `m0/04`).
+**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly. Uses `Custodex.Storage.InMemory`'s `InMemoryCacheStore` (from `m0/04`).
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. All I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings. Depends on `m0/05`–`m0/07` (`EngineDrivenAuthorizer` incl. internal `CheckInternalAsync`), `m0/01` (`ICacheStore`, `CacheEntry`, `RelkitDiagnostics`), `m0/04` (`InMemoryCacheStore`).
+See `../README.md` → Global Constraints. All I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings. Depends on `m0/05`–`m0/07` (`EngineDrivenAuthorizer` incl. internal `CheckInternalAsync`), `m0/01` (`ICacheStore`, `CacheEntry`, `CustodexDiagnostics`), `m0/04` (`InMemoryCacheStore`).
 
 **Caching rules (spec §9.1):**
 - Cache key: `(store, tenant, schema_version, object, permission, subject)`. Schema version is read from the active schema so a schema change naturally re-keys (old entries are unreachable).
@@ -22,25 +22,25 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 ### Task 1: Cache key builder
 
 **Files:**
-- Create: `src/Relkit.Core/Caching/CheckCacheKey.cs`
-- Test: `tests/Relkit.Core.Tests/Caching/CheckCacheKeyTests.cs`
+- Create: `src/Custodex.Core/Caching/CheckCacheKey.cs`
+- Test: `tests/Custodex.Core.Tests/Caching/CheckCacheKeyTests.cs`
 
 **Interfaces:**
 - Produces: `static string CheckCacheKey.Build(TenantContext tenant, string schemaVersion, EntityRef obj, string permission, SubjectRef subject)` — a stable, collision-resistant string key over the six components.
-- Consumes: `TenantContext`, `EntityRef`, `SubjectRef` from `Relkit.Abstractions`.
+- Consumes: `TenantContext`, `EntityRef`, `SubjectRef` from `Custodex.Abstractions`.
 
 > The key must be unambiguous across components (so `object=a, perm=bc` cannot collide with `object=ab, perm=c`). Use a fixed separator that cannot appear in an identifier together with length-safe joining; here identifiers are joined with the ASCII Unit Separator (a control char never valid in an identifier), prefixed with the field role.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Caching/CheckCacheKeyTests.cs
-using Relkit.Abstractions;
-using Relkit.Core.Caching;
+// tests/Custodex.Core.Tests/Caching/CheckCacheKeyTests.cs
+using Custodex.Abstractions;
+using Custodex.Core.Caching;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Caching;
+namespace Custodex.Core.Tests.Caching;
 
 public class CheckCacheKeyTests
 {
@@ -77,16 +77,16 @@ public class CheckCacheKeyTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CheckCacheKeyTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CheckCacheKeyTests`
 Expected: FAIL — `CheckCacheKey` not defined.
 
 - [ ] **Step 3: Implement the key builder**
 
 ```csharp
-// src/Relkit.Core/Caching/CheckCacheKey.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Caching/CheckCacheKey.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Caching;
+namespace Custodex.Core.Caching;
 
 public static class CheckCacheKey
 {
@@ -99,7 +99,7 @@ public static class CheckCacheKey
             ? $"{subject.Type}:{subject.Id}"
             : $"{subject.Type}:{subject.Id}#{subject.Relation}";
         return string.Join(Sep,
-            "relkit.check",
+            "Custodex.check",
             tenant.Store,
             tenant.Tenant,
             schemaVersion,
@@ -112,13 +112,13 @@ public static class CheckCacheKey
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CheckCacheKeyTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CheckCacheKeyTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Caching/CheckCacheKey.cs tests/Relkit.Core.Tests/Caching/CheckCacheKeyTests.cs
+git add src/Custodex.Core/Caching/CheckCacheKey.cs tests/Custodex.Core.Tests/Caching/CheckCacheKeyTests.cs
 git commit -m "feat: add check cache key builder"
 ```
 
@@ -127,8 +127,8 @@ git commit -m "feat: add check cache key builder"
 ### Task 2: Boolean cache-value codec
 
 **Files:**
-- Create: `src/Relkit.Core/Caching/CacheValueCodec.cs`
-- Test: `tests/Relkit.Core.Tests/Caching/CacheValueCodecTests.cs`
+- Create: `src/Custodex.Core/Caching/CacheValueCodec.cs`
+- Test: `tests/Custodex.Core.Tests/Caching/CacheValueCodecTests.cs`
 
 **Interfaces:**
 - Produces: `static byte[] CacheValueCodec.Encode(bool allowed)` and `static bool CacheValueCodec.Decode(byte[] value)`. `CacheEntry.Value` is `byte[]`, so a `bool` decision is one byte.
@@ -137,12 +137,12 @@ git commit -m "feat: add check cache key builder"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Caching/CacheValueCodecTests.cs
-using Relkit.Core.Caching;
+// tests/Custodex.Core.Tests/Caching/CacheValueCodecTests.cs
+using Custodex.Core.Caching;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Caching;
+namespace Custodex.Core.Tests.Caching;
 
 public class CacheValueCodecTests
 {
@@ -163,14 +163,14 @@ public class CacheValueCodecTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CacheValueCodecTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CacheValueCodecTests`
 Expected: FAIL — `CacheValueCodec` not defined.
 
 - [ ] **Step 3: Implement the codec**
 
 ```csharp
-// src/Relkit.Core/Caching/CacheValueCodec.cs
-namespace Relkit.Core.Caching;
+// src/Custodex.Core/Caching/CacheValueCodec.cs
+namespace Custodex.Core.Caching;
 
 public static class CacheValueCodec
 {
@@ -181,13 +181,13 @@ public static class CacheValueCodec
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CacheValueCodecTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CacheValueCodecTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Caching/CacheValueCodec.cs tests/Relkit.Core.Tests/Caching/CacheValueCodecTests.cs
+git add src/Custodex.Core/Caching/CacheValueCodec.cs tests/Custodex.Core.Tests/Caching/CacheValueCodecTests.cs
 git commit -m "feat: add boolean cache-value codec"
 ```
 
@@ -196,30 +196,30 @@ git commit -m "feat: add boolean cache-value codec"
 ### Task 3: `CachingAuthorizer` — read-through with epoch validation
 
 **Files:**
-- Create: `src/Relkit.Core/Caching/CachingAuthorizer.cs`
-- Test: `tests/Relkit.Core.Tests/Caching/CachingAuthorizerTests.cs`
+- Create: `src/Custodex.Core/Caching/CachingAuthorizer.cs`
+- Test: `tests/Custodex.Core.Tests/Caching/CachingAuthorizerTests.cs`
 
 **Interfaces:**
 - Produces: `CachingAuthorizer : IAuthorizer` wrapping `EngineDrivenAuthorizer` + `ISchemaStore` (for the schema version) + `ICacheStore`, with constructor `CachingAuthorizer(EngineDrivenAuthorizer inner, ISchemaStore schemaStore, ICacheStore cache, TimeSpan? ttl = null)`. `CheckAsync` is read-through-cached for unconditioned results; `BatchCheckAsync`/`ListObjectsAsync`/`ListSubjectsAsync` delegate uncached; `CheckAsync` with `Explain=true` bypasses the cache (returns a fresh trace).
-- Consumes: `EngineDrivenAuthorizer.CheckInternalAsync` (internal, from `m0/05`); `ICacheStore`, `CacheEntry`, `RelkitDiagnostics.CacheHits`/`CacheMisses`; `CheckCacheKey`, `CacheValueCodec`.
+- Consumes: `EngineDrivenAuthorizer.CheckInternalAsync` (internal, from `m0/05`); `ICacheStore`, `CacheEntry`, `CustodexDiagnostics.CacheHits`/`CacheMisses`; `CheckCacheKey`, `CacheValueCodec`.
 
-> **Why wrap `EngineDrivenAuthorizer` concretely (not `IAuthorizer`).** The cacheability signal (`ConditionTouched`) is only on the internal `CheckInternalAsync`, not the public `IAuthorizer`. The decorator therefore takes the concrete inner type. This is the resolution recorded as a Contract gap in `m0/05`. `InternalsVisibleTo("Relkit.Core.Tests")` (added in `m0/07`) lets the test see the internal call indirectly through `CachingAuthorizer`.
+> **Why wrap `EngineDrivenAuthorizer` concretely (not `IAuthorizer`).** The cacheability signal (`ConditionTouched`) is only on the internal `CheckInternalAsync`, not the public `IAuthorizer`. The decorator therefore takes the concrete inner type. This is the resolution recorded as a Contract gap in `m0/05`. `InternalsVisibleTo("Custodex.Core.Tests")` (added in `m0/07`) lets the test see the internal call indirectly through `CachingAuthorizer`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Core.Tests/Caching/CachingAuthorizerTests.cs
+// tests/Custodex.Core.Tests/Caching/CachingAuthorizerTests.cs
 using System.Diagnostics.Metrics;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Caching;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Caching;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Caching;
+namespace Custodex.Core.Tests.Caching;
 
 public class CachingAuthorizerTests
 {
@@ -342,13 +342,13 @@ public class CachingAuthorizerTests
         using var ml = new MeterListener();
         ml.InstrumentPublished = (inst, l) =>
         {
-            if (inst.Meter.Name == "Relkit" && inst.Name is "relkit.cache.hits" or "relkit.cache.misses")
+            if (inst.Meter.Name == "Custodex" && inst.Name is "Custodex.cache.hits" or "Custodex.cache.misses")
                 l.EnableMeasurementEvents(inst);
         };
         ml.SetMeasurementEventCallback<long>((inst, m, _, _) =>
         {
-            if (inst.Name == "relkit.cache.hits") hits += m;
-            else if (inst.Name == "relkit.cache.misses") misses += m;
+            if (inst.Name == "Custodex.cache.hits") hits += m;
+            else if (inst.Name == "Custodex.cache.misses") misses += m;
         });
         ml.Start();
 
@@ -373,17 +373,17 @@ public class CachingAuthorizerTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CachingAuthorizerTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CachingAuthorizerTests`
 Expected: FAIL — `CachingAuthorizer` not defined.
 
 - [ ] **Step 3: Implement `CachingAuthorizer`**
 
 ```csharp
-// src/Relkit.Core/Caching/CachingAuthorizer.cs
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+// src/Custodex.Core/Caching/CachingAuthorizer.cs
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Core.Caching;
+namespace Custodex.Core.Caching;
 
 /// <summary>
 /// Caching decorator over <see cref="EngineDrivenAuthorizer"/>. Caches only
@@ -422,11 +422,11 @@ public sealed class CachingAuthorizer : IAuthorizer
         var entry = await _cache.GetAsync(key, ct);
         if (entry is not null && entry.Epoch == epoch)
         {
-            RelkitDiagnostics.CacheHits.Add(1);
+            CustodexDiagnostics.CacheHits.Add(1);
             return new CheckResult(CacheValueCodec.Decode(entry.Value));
         }
 
-        RelkitDiagnostics.CacheMisses.Add(1);
+        CustodexDiagnostics.CacheMisses.Add(1);
         var (allowed, conditionTouched) = await _inner.CheckInternalAsync(request, ct);
 
         // Cache only unconditioned results; stamp with the epoch read above.
@@ -449,13 +449,13 @@ public sealed class CachingAuthorizer : IAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CachingAuthorizerTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CachingAuthorizerTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Caching/CachingAuthorizer.cs tests/Relkit.Core.Tests/Caching/CachingAuthorizerTests.cs
+git add src/Custodex.Core/Caching/CachingAuthorizer.cs tests/Custodex.Core.Tests/Caching/CachingAuthorizerTests.cs
 git commit -m "feat: add caching authorizer with epoch invalidation and unconditioned-only caching"
 ```
 
@@ -464,8 +464,8 @@ git commit -m "feat: add caching authorizer with epoch invalidation and uncondit
 ### Task 4: Write-path epoch-bump integration point (documentation + guard test)
 
 **Files:**
-- Create: `src/Relkit.Core/Caching/CacheInvalidation.cs`
-- Test: `tests/Relkit.Core.Tests/Caching/CacheInvalidationTests.cs`
+- Create: `src/Custodex.Core/Caching/CacheInvalidation.cs`
+- Test: `tests/Custodex.Core.Tests/Caching/CacheInvalidationTests.cs`
 
 **Interfaces:**
 - Produces: `static Task CacheInvalidation.OnWriteAsync(ICacheStore cache, TenantContext tenant, IUnitOfWork uow, CancellationToken ct)` — the single call the write path (`IRelationManager.WriteTuplesAsync`/`DeleteTuplesAsync`/`WriteAttributesAsync`, implemented in M1) invokes inside the write transaction to bump the epoch. M0 has no write path yet; this is the integration seam plus a guard test proving a bump makes a prior cached entry stale.
@@ -476,14 +476,14 @@ git commit -m "feat: add caching authorizer with epoch invalidation and uncondit
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Core.Tests/Caching/CacheInvalidationTests.cs
-using Relkit.Abstractions;
-using Relkit.Core.Caching;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Core.Tests/Caching/CacheInvalidationTests.cs
+using Custodex.Abstractions;
+using Custodex.Core.Caching;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Core.Tests.Caching;
+namespace Custodex.Core.Tests.Caching;
 
 public class CacheInvalidationTests
 {
@@ -514,16 +514,16 @@ public class CacheInvalidationTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CacheInvalidationTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CacheInvalidationTests`
 Expected: FAIL — `CacheInvalidation` not defined.
 
 - [ ] **Step 3: Implement the invalidation seam**
 
 ```csharp
-// src/Relkit.Core/Caching/CacheInvalidation.cs
-using Relkit.Abstractions;
+// src/Custodex.Core/Caching/CacheInvalidation.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Core.Caching;
+namespace Custodex.Core.Caching;
 
 /// <summary>
 /// The cache-invalidation integration point for the write path. The M1 write path
@@ -539,13 +539,13 @@ public static class CacheInvalidation
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Core.Tests --filter CacheInvalidationTests`
+Run: `dotnet test tests/Custodex.Core.Tests --filter CacheInvalidationTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Core/Caching/CacheInvalidation.cs tests/Relkit.Core.Tests/Caching/CacheInvalidationTests.cs
+git add src/Custodex.Core/Caching/CacheInvalidation.cs tests/Custodex.Core.Tests/Caching/CacheInvalidationTests.cs
 git commit -m "feat: add write-path cache-invalidation seam"
 ```
 

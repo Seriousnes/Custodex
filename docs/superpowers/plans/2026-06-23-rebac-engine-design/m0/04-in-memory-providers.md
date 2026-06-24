@@ -2,54 +2,54 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A thread-safe, in-memory implementation of every storage provider interface — `IRelationStore`, `ISchemaStore`, `IAttributeStore`, `ICacheStore`, `IChangeLogStore` — plus a no-op `IUnitOfWork`/`IUnitOfWorkFactory`, in a new `Relkit.Storage.InMemory` project. These back the fast millisecond unit tests for every later M0 plan and serve as the portable reference provider.
+**Goal:** A thread-safe, in-memory implementation of every storage provider interface — `IRelationStore`, `ISchemaStore`, `IAttributeStore`, `ICacheStore`, `IChangeLogStore` — plus a no-op `IUnitOfWork`/`IUnitOfWorkFactory`, in a new `Custodex.Storage.InMemory` project. These back the fast millisecond unit tests for every later M0 plan and serve as the portable reference provider.
 
 **Architecture:** Each store keeps its data in plain in-memory dictionaries guarded by a single per-store lock (simple, correct locking; the engine targets small scale and these providers exist for tests and dev). Every operation filters on `(store, tenant)` as a hard, non-optional predicate (spec §6.3 — tenant isolation is a core invariant of data access, not an ambient filter). The no-op `IUnitOfWork` applies writes immediately and `CommitAsync` is a no-op, matching the transaction seam (spec README: "the in-memory provider uses a no-op; Postgres enlists in an ambient or supplied DbTransaction"). Time-dependent behaviour (cache TTL) flows through an injected `TimeProvider`, never `DateTimeOffset.UtcNow`, so expiry tests are deterministic.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, xUnit, Shouldly. Project name: `Relkit.Storage.InMemory`.
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, xUnit, Shouldly. Project name: `Custodex.Storage.InMemory`.
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard; determinism — no ambient `DateTime.Now`. Depends on `m0/01` (`Relkit.Abstractions`).
+See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard; determinism — no ambient `DateTime.Now`. Depends on `m0/01` (`Custodex.Abstractions`).
 
 ---
 
-### Task 1: Create `Relkit.Storage.InMemory` and the no-op unit of work
+### Task 1: Create `Custodex.Storage.InMemory` and the no-op unit of work
 
 **Files:**
-- Create: `src/Relkit.Storage.InMemory/Relkit.Storage.InMemory.csproj`
-- Create: `src/Relkit.Storage.InMemory/NoOpUnitOfWork.cs`
-- Create: `tests/Relkit.Storage.InMemory.Tests/Relkit.Storage.InMemory.Tests.csproj`
-- Test: `tests/Relkit.Storage.InMemory.Tests/UnitOfWorkTests.cs`
+- Create: `src/Custodex.Storage.InMemory/Custodex.Storage.InMemory.csproj`
+- Create: `src/Custodex.Storage.InMemory/NoOpUnitOfWork.cs`
+- Create: `tests/Custodex.Storage.InMemory.Tests/Custodex.Storage.InMemory.Tests.csproj`
+- Test: `tests/Custodex.Storage.InMemory.Tests/UnitOfWorkTests.cs`
 
 **Interfaces:**
 - Produces: `NoOpUnitOfWork : IUnitOfWork`, `NoOpUnitOfWorkFactory : IUnitOfWorkFactory`.
-- Consumes: `IUnitOfWork`, `IUnitOfWorkFactory` from `Relkit.Abstractions`.
+- Consumes: `IUnitOfWork`, `IUnitOfWorkFactory` from `Custodex.Abstractions`.
 
 - [ ] **Step 1: Create the project and references**
 
 Run:
 ```bash
-dotnet new classlib -n Relkit.Storage.InMemory -o src/Relkit.Storage.InMemory -f net10.0
-dotnet new xunit -n Relkit.Storage.InMemory.Tests -o tests/Relkit.Storage.InMemory.Tests -f net10.0
-rm src/Relkit.Storage.InMemory/Class1.cs tests/Relkit.Storage.InMemory.Tests/UnitTest1.cs
-dotnet sln add src/Relkit.Storage.InMemory tests/Relkit.Storage.InMemory.Tests
-dotnet add src/Relkit.Storage.InMemory reference src/Relkit.Abstractions
-dotnet add tests/Relkit.Storage.InMemory.Tests reference src/Relkit.Storage.InMemory
-dotnet add tests/Relkit.Storage.InMemory.Tests reference src/Relkit.Abstractions
-dotnet add tests/Relkit.Storage.InMemory.Tests package Shouldly
+dotnet new classlib -n Custodex.Storage.InMemory -o src/Custodex.Storage.InMemory -f net10.0
+dotnet new xunit -n Custodex.Storage.InMemory.Tests -o tests/Custodex.Storage.InMemory.Tests -f net10.0
+rm src/Custodex.Storage.InMemory/Class1.cs tests/Custodex.Storage.InMemory.Tests/UnitTest1.cs
+dotnet sln add src/Custodex.Storage.InMemory tests/Custodex.Storage.InMemory.Tests
+dotnet add src/Custodex.Storage.InMemory reference src/Custodex.Abstractions
+dotnet add tests/Custodex.Storage.InMemory.Tests reference src/Custodex.Storage.InMemory
+dotnet add tests/Custodex.Storage.InMemory.Tests reference src/Custodex.Abstractions
+dotnet add tests/Custodex.Storage.InMemory.Tests package Shouldly
 ```
 
 - [ ] **Step 2: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.InMemory.Tests/UnitOfWorkTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Storage.InMemory.Tests/UnitOfWorkTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.InMemory.Tests;
+namespace Custodex.Storage.InMemory.Tests;
 
 public class UnitOfWorkTests
 {
@@ -67,16 +67,16 @@ public class UnitOfWorkTests
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter UnitOfWorkTests`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter UnitOfWorkTests`
 Expected: FAIL — `NoOpUnitOfWorkFactory` does not exist.
 
 - [ ] **Step 4: Implement the no-op unit of work**
 
 ```csharp
-// src/Relkit.Storage.InMemory/NoOpUnitOfWork.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.InMemory/NoOpUnitOfWork.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.InMemory;
+namespace Custodex.Storage.InMemory;
 
 public sealed class NoOpUnitOfWork : IUnitOfWork
 {
@@ -93,14 +93,14 @@ public sealed class NoOpUnitOfWorkFactory : IUnitOfWorkFactory
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter UnitOfWorkTests`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter UnitOfWorkTests`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Storage.InMemory tests/Relkit.Storage.InMemory.Tests
-git commit -m "chore: scaffold Relkit.Storage.InMemory with a no-op unit of work"
+git add src/Custodex.Storage.InMemory tests/Custodex.Storage.InMemory.Tests
+git commit -m "chore: scaffold Custodex.Storage.InMemory with a no-op unit of work"
 ```
 
 ---
@@ -108,8 +108,8 @@ git commit -m "chore: scaffold Relkit.Storage.InMemory with a no-op unit of work
 ### Task 2: In-memory `IRelationStore`
 
 **Files:**
-- Create: `src/Relkit.Storage.InMemory/InMemoryRelationStore.cs`
-- Test: `tests/Relkit.Storage.InMemory.Tests/RelationStoreTests.cs`
+- Create: `src/Custodex.Storage.InMemory/InMemoryRelationStore.cs`
+- Test: `tests/Custodex.Storage.InMemory.Tests/RelationStoreTests.cs`
 
 **Interfaces:**
 - Produces: `InMemoryRelationStore : IRelationStore`.
@@ -120,13 +120,13 @@ Tuple identity for add/remove cannot rely on `RelationTuple` record equality: `C
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.InMemory.Tests/RelationStoreTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Storage.InMemory.Tests/RelationStoreTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.InMemory.Tests;
+namespace Custodex.Storage.InMemory.Tests;
 
 public class RelationStoreTests
 {
@@ -201,16 +201,16 @@ public class RelationStoreTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter RelationStoreTests`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter RelationStoreTests`
 Expected: FAIL — `InMemoryRelationStore` does not exist.
 
 - [ ] **Step 3: Implement the relation store**
 
 ```csharp
-// src/Relkit.Storage.InMemory/InMemoryRelationStore.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.InMemory/InMemoryRelationStore.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.InMemory;
+namespace Custodex.Storage.InMemory;
 
 public sealed class InMemoryRelationStore : IRelationStore
 {
@@ -283,13 +283,13 @@ public sealed class InMemoryRelationStore : IRelationStore
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter RelationStoreTests`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter RelationStoreTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.InMemory tests/Relkit.Storage.InMemory.Tests
+git add src/Custodex.Storage.InMemory tests/Custodex.Storage.InMemory.Tests
 git commit -m "feat: add in-memory relation store with identity-based add/remove"
 ```
 
@@ -298,10 +298,10 @@ git commit -m "feat: add in-memory relation store with identity-based add/remove
 ### Task 3: In-memory `ISchemaStore` and `IAttributeStore`
 
 **Files:**
-- Create: `src/Relkit.Storage.InMemory/InMemorySchemaStore.cs`
-- Create: `src/Relkit.Storage.InMemory/InMemoryAttributeStore.cs`
-- Test: `tests/Relkit.Storage.InMemory.Tests/SchemaStoreTests.cs`
-- Test: `tests/Relkit.Storage.InMemory.Tests/AttributeStoreTests.cs`
+- Create: `src/Custodex.Storage.InMemory/InMemorySchemaStore.cs`
+- Create: `src/Custodex.Storage.InMemory/InMemoryAttributeStore.cs`
+- Test: `tests/Custodex.Storage.InMemory.Tests/SchemaStoreTests.cs`
+- Test: `tests/Custodex.Storage.InMemory.Tests/AttributeStoreTests.cs`
 
 **Interfaces:**
 - Produces: `InMemorySchemaStore : ISchemaStore`, `InMemoryAttributeStore : IAttributeStore`.
@@ -312,13 +312,13 @@ git commit -m "feat: add in-memory relation store with identity-based add/remove
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.InMemory.Tests/SchemaStoreTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Storage.InMemory.Tests/SchemaStoreTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.InMemory.Tests;
+namespace Custodex.Storage.InMemory.Tests;
 
 public class SchemaStoreTests
 {
@@ -354,13 +354,13 @@ public class SchemaStoreTests
 ```
 
 ```csharp
-// tests/Relkit.Storage.InMemory.Tests/AttributeStoreTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Storage.InMemory.Tests/AttributeStoreTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.InMemory.Tests;
+namespace Custodex.Storage.InMemory.Tests;
 
 public class AttributeStoreTests
 {
@@ -410,16 +410,16 @@ public class AttributeStoreTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter "SchemaStoreTests|AttributeStoreTests"`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter "SchemaStoreTests|AttributeStoreTests"`
 Expected: FAIL — the stores do not exist.
 
 - [ ] **Step 3: Implement the schema and attribute stores**
 
 ```csharp
-// src/Relkit.Storage.InMemory/InMemorySchemaStore.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.InMemory/InMemorySchemaStore.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.InMemory;
+namespace Custodex.Storage.InMemory;
 
 public sealed class InMemorySchemaStore : ISchemaStore
 {
@@ -442,10 +442,10 @@ public sealed class InMemorySchemaStore : ISchemaStore
 ```
 
 ```csharp
-// src/Relkit.Storage.InMemory/InMemoryAttributeStore.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.InMemory/InMemoryAttributeStore.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.InMemory;
+namespace Custodex.Storage.InMemory;
 
 public sealed class InMemoryAttributeStore : IAttributeStore
 {
@@ -482,13 +482,13 @@ public sealed class InMemoryAttributeStore : IAttributeStore
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter "SchemaStoreTests|AttributeStoreTests"`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter "SchemaStoreTests|AttributeStoreTests"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.InMemory tests/Relkit.Storage.InMemory.Tests
+git add src/Custodex.Storage.InMemory tests/Custodex.Storage.InMemory.Tests
 git commit -m "feat: add in-memory schema and attribute stores"
 ```
 
@@ -497,8 +497,8 @@ git commit -m "feat: add in-memory schema and attribute stores"
 ### Task 4: In-memory `IChangeLogStore`
 
 **Files:**
-- Create: `src/Relkit.Storage.InMemory/InMemoryChangeLogStore.cs`
-- Test: `tests/Relkit.Storage.InMemory.Tests/ChangeLogStoreTests.cs`
+- Create: `src/Custodex.Storage.InMemory/InMemoryChangeLogStore.cs`
+- Test: `tests/Custodex.Storage.InMemory.Tests/ChangeLogStoreTests.cs`
 
 **Interfaces:**
 - Produces: `InMemoryChangeLogStore : IChangeLogStore`.
@@ -509,13 +509,13 @@ The store assigns the sequential `long Id` on append (the caller's `ChangeLogEnt
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.InMemory.Tests/ChangeLogStoreTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Storage.InMemory.Tests/ChangeLogStoreTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.InMemory.Tests;
+namespace Custodex.Storage.InMemory.Tests;
 
 public class ChangeLogStoreTests
 {
@@ -572,16 +572,16 @@ public class ChangeLogStoreTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter ChangeLogStoreTests`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter ChangeLogStoreTests`
 Expected: FAIL — `InMemoryChangeLogStore` does not exist.
 
 - [ ] **Step 3: Implement the change-log store**
 
 ```csharp
-// src/Relkit.Storage.InMemory/InMemoryChangeLogStore.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.InMemory/InMemoryChangeLogStore.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.InMemory;
+namespace Custodex.Storage.InMemory;
 
 public sealed class InMemoryChangeLogStore : IChangeLogStore
 {
@@ -634,13 +634,13 @@ public sealed class InMemoryChangeLogStore : IChangeLogStore
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter ChangeLogStoreTests`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter ChangeLogStoreTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.InMemory tests/Relkit.Storage.InMemory.Tests
+git add src/Custodex.Storage.InMemory tests/Custodex.Storage.InMemory.Tests
 git commit -m "feat: add in-memory change-log store with sequential ids"
 ```
 
@@ -649,8 +649,8 @@ git commit -m "feat: add in-memory change-log store with sequential ids"
 ### Task 5: In-memory `ICacheStore` with epoch and deterministic TTL
 
 **Files:**
-- Create: `src/Relkit.Storage.InMemory/InMemoryCacheStore.cs`
-- Test: `tests/Relkit.Storage.InMemory.Tests/CacheStoreTests.cs`
+- Create: `src/Custodex.Storage.InMemory/InMemoryCacheStore.cs`
+- Test: `tests/Custodex.Storage.InMemory.Tests/CacheStoreTests.cs`
 
 **Interfaces:**
 - Produces: `InMemoryCacheStore : ICacheStore`, constructed with a `TimeProvider` (default `TimeProvider.System`).
@@ -661,13 +661,13 @@ The cache stores `CacheEntry(byte[] Value, long Epoch)` by key with an expiry de
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.InMemory.Tests/CacheStoreTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.InMemory;
+// tests/Custodex.Storage.InMemory.Tests/CacheStoreTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.InMemory;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.InMemory.Tests;
+namespace Custodex.Storage.InMemory.Tests;
 
 public class CacheStoreTests
 {
@@ -728,16 +728,16 @@ public class CacheStoreTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter CacheStoreTests`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter CacheStoreTests`
 Expected: FAIL — `InMemoryCacheStore` does not exist.
 
 - [ ] **Step 3: Implement the cache store**
 
 ```csharp
-// src/Relkit.Storage.InMemory/InMemoryCacheStore.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.InMemory/InMemoryCacheStore.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.InMemory;
+namespace Custodex.Storage.InMemory;
 
 public sealed class InMemoryCacheStore(TimeProvider? timeProvider = null) : ICacheStore
 {
@@ -791,13 +791,13 @@ public sealed class InMemoryCacheStore(TimeProvider? timeProvider = null) : ICac
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.InMemory.Tests --filter CacheStoreTests`
+Run: `dotnet test tests/Custodex.Storage.InMemory.Tests --filter CacheStoreTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.InMemory tests/Relkit.Storage.InMemory.Tests
+git add src/Custodex.Storage.InMemory tests/Custodex.Storage.InMemory.Tests
 git commit -m "feat: add in-memory cache store with epoch and deterministic ttl"
 ```
 

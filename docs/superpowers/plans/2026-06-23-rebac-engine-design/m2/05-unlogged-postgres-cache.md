@@ -24,8 +24,8 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 ### Task 1: `PostgresCacheStoreFactory` — per-tenant scoped stores over shared rows
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/PostgresCacheStoreFactory.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cache/PostgresCacheStoreFactoryTests.cs`
+- Create: `src/Custodex.Storage.Postgres/PostgresCacheStoreFactory.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cache/PostgresCacheStoreFactoryTests.cs`
 
 **Interfaces:**
 - Produces: `PostgresCacheStoreFactory(string connectionString)` with `ICacheStore For(TenantContext tenant)` returning a `PostgresCacheStore` scoped to that tenant. The factory is the process-wide DI singleton; per-request code calls `For(tenant)`. Because `cache_entries` rows are keyed by `(store_id, tenant_id, key)`, two stores built by the factory for the same tenant read and write the same rows — a shared cache across instances.
@@ -36,12 +36,12 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cache/PostgresCacheStoreFactoryTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/Cache/PostgresCacheStoreFactoryTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cache;
+namespace Custodex.Storage.Postgres.Tests.Cache;
 
 [Collection("postgres")]
 public class PostgresCacheStoreFactoryTests(PostgresFixture fx) : IAsyncLifetime
@@ -105,16 +105,16 @@ public class PostgresCacheStoreFactoryTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter PostgresCacheStoreFactoryTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter PostgresCacheStoreFactoryTests`
 Expected: FAIL — `PostgresCacheStoreFactory` does not exist.
 
 - [ ] **Step 3: Implement the factory**
 
 ```csharp
-// src/Relkit.Storage.Postgres/PostgresCacheStoreFactory.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.Postgres/PostgresCacheStoreFactory.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Process-wide factory for tenant-scoped <see cref="PostgresCacheStore"/> instances. Registered once
@@ -130,13 +130,13 @@ public sealed class PostgresCacheStoreFactory(string connectionString)
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter PostgresCacheStoreFactoryTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter PostgresCacheStoreFactoryTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/PostgresCacheStoreFactory.cs tests/Relkit.Storage.Postgres.Tests/Cache/PostgresCacheStoreFactoryTests.cs
+git add src/Custodex.Storage.Postgres/PostgresCacheStoreFactory.cs tests/Custodex.Storage.Postgres.Tests/Cache/PostgresCacheStoreFactoryTests.cs
 git commit -m "feat: add per-tenant Postgres cache-store factory over shared rows"
 ```
 
@@ -145,8 +145,8 @@ git commit -m "feat: add per-tenant Postgres cache-store factory over shared row
 ### Task 2: `CacheSweep` — delete expired rows (the swept-TTL primitive)
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/CacheSweep.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cache/CacheSweepTests.cs`
+- Create: `src/Custodex.Storage.Postgres/CacheSweep.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cache/CacheSweepTests.cs`
 
 **Interfaces:**
 - Produces: `static Task<int> CacheSweep.RunAsync(string connectionString, CancellationToken ct = default)` — deletes every `cache_entries` row whose `expires_at <= now()` across all tenants and returns the number of rows reclaimed. This is the unit of work the background service (Task 3) invokes on a schedule; isolating it makes it testable without a hosted service.
@@ -157,12 +157,12 @@ git commit -m "feat: add per-tenant Postgres cache-store factory over shared row
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cache/CacheSweepTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/Cache/CacheSweepTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cache;
+namespace Custodex.Storage.Postgres.Tests.Cache;
 
 [Collection("postgres")]
 public class CacheSweepTests(PostgresFixture fx) : IAsyncLifetime
@@ -228,17 +228,17 @@ public class CacheSweepTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CacheSweepTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CacheSweepTests`
 Expected: FAIL — `CacheSweep` does not exist.
 
 - [ ] **Step 3: Implement the sweep**
 
 ```csharp
-// src/Relkit.Storage.Postgres/CacheSweep.cs
+// src/Custodex.Storage.Postgres/CacheSweep.cs
 using Dapper;
 using Npgsql;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Reclaims expired rows from the UNLOGGED <c>cache_entries</c> table. Complements the lazy read-time
@@ -260,13 +260,13 @@ public static class CacheSweep
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CacheSweepTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CacheSweepTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/CacheSweep.cs tests/Relkit.Storage.Postgres.Tests/Cache/CacheSweepTests.cs
+git add src/Custodex.Storage.Postgres/CacheSweep.cs tests/Custodex.Storage.Postgres.Tests/Cache/CacheSweepTests.cs
 git commit -m "feat: add expired-row sweep for the unlogged cache table"
 ```
 
@@ -275,43 +275,43 @@ git commit -m "feat: add expired-row sweep for the unlogged cache table"
 ### Task 3: `CacheSweepService` — the background TTL sweep job
 
 **Files:**
-- Modify: `src/Relkit.Storage.Postgres/Relkit.Storage.Postgres.csproj` (add `Microsoft.Extensions.Hosting.Abstractions`)
-- Create: `src/Relkit.Storage.Postgres/CacheSweepOptions.cs`
-- Create: `src/Relkit.Storage.Postgres/CacheSweepService.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cache/CacheSweepServiceTests.cs`
+- Modify: `src/Custodex.Storage.Postgres/Custodex.Storage.Postgres.csproj` (add `Microsoft.Extensions.Hosting.Abstractions`)
+- Create: `src/Custodex.Storage.Postgres/CacheSweepOptions.cs`
+- Create: `src/Custodex.Storage.Postgres/CacheSweepService.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cache/CacheSweepServiceTests.cs`
 
 **Interfaces:**
-- Produces: `CacheSweepOptions { string ConnectionString; TimeSpan Interval = 5 min }` and `CacheSweepService(CacheSweepOptions options) : BackgroundService` running `CacheSweep.RunAsync` every `Interval` until the host stops, recording each sweep's reclaimed-row count to `RelkitDiagnostics` (a new `relkit.cache.swept` counter) for the spec §11.4 observability surface.
-- Consumes: `CacheSweep.RunAsync` (Task 2); `BackgroundService`/`IHostedService` from `Microsoft.Extensions.Hosting.Abstractions`; `RelkitDiagnostics.Meter` (`m0/01`).
+- Produces: `CacheSweepOptions { string ConnectionString; TimeSpan Interval = 5 min }` and `CacheSweepService(CacheSweepOptions options) : BackgroundService` running `CacheSweep.RunAsync` every `Interval` until the host stops, recording each sweep's reclaimed-row count to `CustodexDiagnostics` (a new `Custodex.cache.swept` counter) for the spec §11.4 observability surface.
+- Consumes: `CacheSweep.RunAsync` (Task 2); `BackgroundService`/`IHostedService` from `Microsoft.Extensions.Hosting.Abstractions`; `CustodexDiagnostics.Meter` (`m0/01`).
 
 > **Hosting dependency.** `BackgroundService` lives in `Microsoft.Extensions.Hosting.Abstractions` (a Microsoft package, MIT — permitted under the README license rule). The service is opt-in: it is only registered when the consuming app uses the Postgres cache and wants automatic sweeping (wired in `m1/09`'s DI extension as `AddHostedService<CacheSweepService>()` when configured). The store works without it (lazy expiry keeps reads correct); the service only reclaims space.
 
-> **New diagnostic instrument.** `relkit.cache.swept` (a `Counter<long>`) is added to `RelkitDiagnostics` so the sweep's reclaimed-row count is observable alongside `relkit.cache.hits`/`misses` (spec §11.4). Adding an instrument to the existing `RelkitDiagnostics.Meter` is additive and does not change any contract type; it is flagged in this plan's return as an addition to the `m0/01` diagnostics holder.
+> **New diagnostic instrument.** `Custodex.cache.swept` (a `Counter<long>`) is added to `CustodexDiagnostics` so the sweep's reclaimed-row count is observable alongside `Custodex.cache.hits`/`misses` (spec §11.4). Adding an instrument to the existing `CustodexDiagnostics.Meter` is additive and does not change any contract type; it is flagged in this plan's return as an addition to the `m0/01` diagnostics holder.
 
 - [ ] **Step 1: Add the hosting package**
 
 Run:
 ```bash
-dotnet add src/Relkit.Storage.Postgres package Microsoft.Extensions.Hosting.Abstractions
+dotnet add src/Custodex.Storage.Postgres package Microsoft.Extensions.Hosting.Abstractions
 ```
 
-- [ ] **Step 2: Add the `relkit.cache.swept` counter to `RelkitDiagnostics`**
+- [ ] **Step 2: Add the `Custodex.cache.swept` counter to `CustodexDiagnostics`**
 
-Add to `src/Relkit.Abstractions/RelkitDiagnostics.cs` (alongside `CacheHits`/`CacheMisses`):
+Add to `src/Custodex.Abstractions/CustodexDiagnostics.cs` (alongside `CacheHits`/`CacheMisses`):
 
 ```csharp
-    public static readonly Counter<long> CacheSwept = Meter.CreateCounter<long>("relkit.cache.swept");
+    public static readonly Counter<long> CacheSwept = Meter.CreateCounter<long>("Custodex.cache.swept");
 ```
 
 - [ ] **Step 3: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cache/CacheSweepServiceTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/Cache/CacheSweepServiceTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cache;
+namespace Custodex.Storage.Postgres.Tests.Cache;
 
 [Collection("postgres")]
 public class CacheSweepServiceTests(PostgresFixture fx) : IAsyncLifetime
@@ -375,14 +375,14 @@ public class CacheSweepServiceTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 4: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CacheSweepServiceTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CacheSweepServiceTests`
 Expected: FAIL — `CacheSweepOptions`/`CacheSweepService` do not exist.
 
 - [ ] **Step 5: Implement the options and service**
 
 ```csharp
-// src/Relkit.Storage.Postgres/CacheSweepOptions.cs
-namespace Relkit.Storage.Postgres;
+// src/Custodex.Storage.Postgres/CacheSweepOptions.cs
+namespace Custodex.Storage.Postgres;
 
 /// <summary>Configuration for the background <c>cache_entries</c> TTL sweep (spec §9.1).</summary>
 public sealed class CacheSweepOptions
@@ -393,16 +393,16 @@ public sealed class CacheSweepOptions
 ```
 
 ```csharp
-// src/Relkit.Storage.Postgres/CacheSweepService.cs
+// src/Custodex.Storage.Postgres/CacheSweepService.cs
 using Microsoft.Extensions.Hosting;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Background TTL sweep for the UNLOGGED <c>cache_entries</c> table. Runs <see cref="CacheSweep.RunAsync"/>
 /// every <see cref="CacheSweepOptions.Interval"/> until the host stops, reporting reclaimed rows to
-/// <see cref="RelkitDiagnostics.CacheSwept"/> (spec §9.1 / §11.4). Opt-in: registered via the DI
+/// <see cref="CustodexDiagnostics.CacheSwept"/> (spec §9.1 / §11.4). Opt-in: registered via the DI
 /// extension only when automatic sweeping is wanted; the store stays correct without it (lazy expiry).
 /// </summary>
 public sealed class CacheSweepService(CacheSweepOptions options) : BackgroundService
@@ -416,7 +416,7 @@ public sealed class CacheSweepService(CacheSweepOptions options) : BackgroundSer
             {
                 var reclaimed = await CacheSweep.RunAsync(options.ConnectionString, stoppingToken);
                 if (reclaimed > 0)
-                    RelkitDiagnostics.CacheSwept.Add(reclaimed);
+                    CustodexDiagnostics.CacheSwept.Add(reclaimed);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -438,13 +438,13 @@ public sealed class CacheSweepService(CacheSweepOptions options) : BackgroundSer
 
 - [ ] **Step 6: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CacheSweepServiceTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CacheSweepServiceTests`
 Expected: PASS (1 test).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/CacheSweepOptions.cs src/Relkit.Storage.Postgres/CacheSweepService.cs src/Relkit.Storage.Postgres/Relkit.Storage.Postgres.csproj src/Relkit.Abstractions/RelkitDiagnostics.cs tests/Relkit.Storage.Postgres.Tests/Cache/CacheSweepServiceTests.cs
+git add src/Custodex.Storage.Postgres/CacheSweepOptions.cs src/Custodex.Storage.Postgres/CacheSweepService.cs src/Custodex.Storage.Postgres/Custodex.Storage.Postgres.csproj src/Custodex.Abstractions/CustodexDiagnostics.cs tests/Custodex.Storage.Postgres.Tests/Cache/CacheSweepServiceTests.cs
 git commit -m "feat: add background TTL sweep service for the unlogged cache"
 ```
 
@@ -453,31 +453,31 @@ git commit -m "feat: add background TTL sweep service for the unlogged cache"
 ### Task 4: `CacheValueCodec` round-trip through the Postgres store (epoch-mismatch is a miss)
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cache/PostgresCacheCodecTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cache/PostgresCacheCodecTests.cs`
 
 **Interfaces:**
 - Produces: a guard test proving the `m0/08` `CacheValueCodec` round-trips a `bool` decision through `PostgresCacheStore.SetAsync`/`GetAsync` (the value boundary the `CachingAuthorizer` owns), and that an **epoch mismatch reads as a miss** at the caching-layer level — exactly how `CachingAuthorizer` (`m0/08`) treats a stale stamp. No production code: this pins the integration `m0/08` + `m1/07` + this plan rely on.
-- Consumes: `CacheValueCodec` (`m0/08`, in `Relkit.Core.Caching`), `PostgresCacheStore` (`m1/07`).
+- Consumes: `CacheValueCodec` (`m0/08`, in `Custodex.Core.Caching`), `PostgresCacheStore` (`m1/07`).
 
-> **Why test the codec here.** `CacheValueCodec` lives in `Relkit.Core` and the Postgres store is value-opaque (`byte[]`), so neither side alone proves the end-to-end value boundary over a real database. This test wires `Encode → SetAsync → GetAsync → Decode` against Testcontainers Postgres and asserts the decision survives, then asserts the epoch-mismatch-is-a-miss rule the `CachingAuthorizer` enforces. It requires the test project to reference `Relkit.Core`.
+> **Why test the codec here.** `CacheValueCodec` lives in `Custodex.Core` and the Postgres store is value-opaque (`byte[]`), so neither side alone proves the end-to-end value boundary over a real database. This test wires `Encode → SetAsync → GetAsync → Decode` against Testcontainers Postgres and asserts the decision survives, then asserts the epoch-mismatch-is-a-miss rule the `CachingAuthorizer` enforces. It requires the test project to reference `Custodex.Core`.
 
-- [ ] **Step 1: Ensure the test project references `Relkit.Core`** (idempotent — added by `m1/05` if not already)
+- [ ] **Step 1: Ensure the test project references `Custodex.Core`** (idempotent — added by `m1/05` if not already)
 
 Run:
 ```bash
-dotnet add tests/Relkit.Storage.Postgres.Tests reference src/Relkit.Core
+dotnet add tests/Custodex.Storage.Postgres.Tests reference src/Custodex.Core
 ```
 
 - [ ] **Step 2: Write the test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cache/PostgresCacheCodecTests.cs
-using Relkit.Abstractions;
-using Relkit.Core.Caching;
+// tests/Custodex.Storage.Postgres.Tests/Cache/PostgresCacheCodecTests.cs
+using Custodex.Abstractions;
+using Custodex.Core.Caching;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cache;
+namespace Custodex.Storage.Postgres.Tests.Cache;
 
 [Collection("postgres")]
 public class PostgresCacheCodecTests(PostgresFixture fx) : IAsyncLifetime
@@ -546,13 +546,13 @@ public class PostgresCacheCodecTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 3: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter PostgresCacheCodecTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter PostgresCacheCodecTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Cache/PostgresCacheCodecTests.cs tests/Relkit.Storage.Postgres.Tests/Relkit.Storage.Postgres.Tests.csproj
+git add tests/Custodex.Storage.Postgres.Tests/Cache/PostgresCacheCodecTests.cs tests/Custodex.Storage.Postgres.Tests/Custodex.Storage.Postgres.Tests.csproj
 git commit -m "test: assert cache-value codec round-trips and epoch-mismatch is a miss"
 ```
 
@@ -564,10 +564,10 @@ git commit -m "test: assert cache-value codec round-trips and epoch-mismatch is 
 - [ ] The existing `m1/07` `PostgresCacheStore` is unchanged — this plan only adds the factory, sweep, service, codec test, and one diagnostics counter.
 - [ ] `PostgresCacheStoreFactory.For(tenant)` yields a tenant-scoped store; two instances for the same tenant share rows; different tenants are isolated (Task 1).
 - [ ] `CacheSweep.RunAsync` deletes expired rows and leaves live ones; the row count drops (Task 2).
-- [ ] `CacheSweepService` sweeps on its interval and stops with the host; reclaimed rows feed `relkit.cache.swept` (Task 3).
+- [ ] `CacheSweepService` sweeps on its interval and stops with the host; reclaimed rows feed `Custodex.cache.swept` (Task 3).
 - [ ] `CacheValueCodec` round-trips a `bool` decision through the Postgres store; an epoch-mismatch entry is recognised as a miss by the caching layer's stamp comparison (Task 4).
 
 ## Contract gaps (reported, not changed)
 
-- **`RelkitDiagnostics.CacheSwept` counter added (additive).** Task 3 adds a `relkit.cache.swept` `Counter<long>` to the existing `m0/01` `RelkitDiagnostics` holder for the spec §11.4 reverse-index/cache observability surface. This is an additive instrument on the existing `"Relkit"` Meter, not a change to any contract record/interface, so no `README.md` change is required; flagged here for visibility.
-- **Hosting dependency on `Microsoft.Extensions.Hosting.Abstractions` (MIT).** `CacheSweepService : BackgroundService` adds this Microsoft package to `Relkit.Storage.Postgres`. It is MIT-licensed (permitted under the README license rule) and the sweep service is opt-in. No `README.md` change made; recorded for the packaging review.
+- **`CustodexDiagnostics.CacheSwept` counter added (additive).** Task 3 adds a `Custodex.cache.swept` `Counter<long>` to the existing `m0/01` `CustodexDiagnostics` holder for the spec §11.4 reverse-index/cache observability surface. This is an additive instrument on the existing `"Custodex"` Meter, not a change to any contract record/interface, so no `README.md` change is required; flagged here for visibility.
+- **Hosting dependency on `Microsoft.Extensions.Hosting.Abstractions` (MIT).** `CacheSweepService : BackgroundService` adds this Microsoft package to `Custodex.Storage.Postgres`. It is MIT-licensed (permitted under the README license rule) and the sweep service is opt-in. No `README.md` change made; recorded for the packaging review.

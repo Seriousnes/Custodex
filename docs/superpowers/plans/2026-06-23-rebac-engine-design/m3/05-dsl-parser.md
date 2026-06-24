@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A text DSL ⇄ canonical `Schema` round-trip. A Permify/OpenFGA-style schema text parses into the **exact** `Relkit.Abstractions` `Schema`/`PermExpr` AST (`Union`=`+`, `Intersect`=`&`, `Exclude`=`-`, `Arrow`=`rel->perm`, `Conditioned`=`expr with cond`), and a serializer renders any `Schema` back to that text. The property `parse(serialize(schema)) == schema` holds for generated schemas, and the `m0/02` animal schema parses to the **same AST the `SchemaBuilder` produces**.
+**Goal:** A text DSL ⇄ canonical `Schema` round-trip. A Permify/OpenFGA-style schema text parses into the **exact** `Custodex.Abstractions` `Schema`/`PermExpr` AST (`Union`=`+`, `Intersect`=`&`, `Exclude`=`-`, `Arrow`=`rel->perm`, `Conditioned`=`expr with cond`), and a serializer renders any `Schema` back to that text. The property `parse(serialize(schema)) == schema` holds for generated schemas, and the `m0/02` animal schema parses to the **same AST the `SchemaBuilder` produces**.
 
-**Architecture:** A hand-written recursive-descent parser in a new `Relkit.Dsl` package (`Relkit.Core` reference for nothing structural; it targets `Relkit.Abstractions` AST + `Relkit.Core.Conditions` body nodes). Three layers: a `Lexer` (tokens: identifiers, the operators `+ & - -> | * : # ( ) = ,`, keywords `type relation permission condition with`, and condition operators), a `SchemaParser` producing `Schema`, and a `SchemaWriter` rendering `Schema` to text. The permission expression grammar fixes precedence so the parse tree matches the builder's left-associative accumulation: `Union` (`+`) and `Exclude` (`-`) and `Intersect` (`&`) are parsed left-to-right at one precedence tier (matching `m0/02`'s "default chaining, then wrap" builder), `Arrow` (`->`) and parenthesized groups are primaries, and `with` (Conditioned) binds tightest to its left operand. The serializer is the inverse and is parenthesis-minimal but round-trip-faithful.
+**Architecture:** A hand-written recursive-descent parser in a new `Custodex.Dsl` package (`Custodex.Core` reference for nothing structural; it targets `Custodex.Abstractions` AST + `Custodex.Core.Conditions` body nodes). Three layers: a `Lexer` (tokens: identifiers, the operators `+ & - -> | * : # ( ) = ,`, keywords `type relation permission condition with`, and condition operators), a `SchemaParser` producing `Schema`, and a `SchemaWriter` rendering `Schema` to text. The permission expression grammar fixes precedence so the parse tree matches the builder's left-associative accumulation: `Union` (`+`) and `Exclude` (`-`) and `Intersect` (`&`) are parsed left-to-right at one precedence tier (matching `m0/02`'s "default chaining, then wrap" builder), `Arrow` (`->`) and parenthesized groups are primaries, and `with` (Conditioned) binds tightest to its left operand. The serializer is the inverse and is parenthesis-minimal but round-trip-faithful.
 
 **Tech Stack:** .NET 10 (`net10.0`), C# 14, xUnit, Shouldly, **CsCheck** (MIT, for the round-trip property).
 
@@ -64,15 +64,15 @@ condPrimary := number | string | "true" | "false"
 
 ---
 
-### Task 1: Create `Relkit.Dsl` and the lexer
+### Task 1: Create `Custodex.Dsl` and the lexer
 
 **Files:**
-- Create: `src/Relkit.Dsl/Relkit.Dsl.csproj`
-- Create: `src/Relkit.Dsl/Lexing/Token.cs`
-- Create: `src/Relkit.Dsl/Lexing/Lexer.cs`
-- Create: `src/Relkit.Dsl/DslParseException.cs`
-- Create: `tests/Relkit.Dsl.Tests/Relkit.Dsl.Tests.csproj`
-- Test: `tests/Relkit.Dsl.Tests/LexerTests.cs`
+- Create: `src/Custodex.Dsl/Custodex.Dsl.csproj`
+- Create: `src/Custodex.Dsl/Lexing/Token.cs`
+- Create: `src/Custodex.Dsl/Lexing/Lexer.cs`
+- Create: `src/Custodex.Dsl/DslParseException.cs`
+- Create: `tests/Custodex.Dsl.Tests/Custodex.Dsl.Tests.csproj`
+- Test: `tests/Custodex.Dsl.Tests/LexerTests.cs`
 
 **Interfaces:**
 - Produces: `enum TokenKind`; `readonly record struct Token(TokenKind Kind, string Text, int Line, int Column)`; `Lexer.Tokenize(string source) -> IReadOnlyList<Token>` (terminated by an `Eof` token); `DslParseException(string message, int line, int column)`.
@@ -82,27 +82,27 @@ condPrimary := number | string | "true" | "false"
 
 Run:
 ```bash
-dotnet new classlib -n Relkit.Dsl -o src/Relkit.Dsl -f net10.0
-dotnet new xunit -n Relkit.Dsl.Tests -o tests/Relkit.Dsl.Tests -f net10.0
-rm src/Relkit.Dsl/Class1.cs tests/Relkit.Dsl.Tests/UnitTest1.cs
-dotnet sln add src/Relkit.Dsl tests/Relkit.Dsl.Tests
-dotnet add src/Relkit.Dsl reference src/Relkit.Abstractions
-dotnet add src/Relkit.Dsl reference src/Relkit.Core
-dotnet add tests/Relkit.Dsl.Tests reference src/Relkit.Dsl
-dotnet add tests/Relkit.Dsl.Tests reference src/Relkit.Core
-dotnet add tests/Relkit.Dsl.Tests package Shouldly
-dotnet add tests/Relkit.Dsl.Tests package CsCheck
+dotnet new classlib -n Custodex.Dsl -o src/Custodex.Dsl -f net10.0
+dotnet new xunit -n Custodex.Dsl.Tests -o tests/Custodex.Dsl.Tests -f net10.0
+rm src/Custodex.Dsl/Class1.cs tests/Custodex.Dsl.Tests/UnitTest1.cs
+dotnet sln add src/Custodex.Dsl tests/Custodex.Dsl.Tests
+dotnet add src/Custodex.Dsl reference src/Custodex.Abstractions
+dotnet add src/Custodex.Dsl reference src/Custodex.Core
+dotnet add tests/Custodex.Dsl.Tests reference src/Custodex.Dsl
+dotnet add tests/Custodex.Dsl.Tests reference src/Custodex.Core
+dotnet add tests/Custodex.Dsl.Tests package Shouldly
+dotnet add tests/Custodex.Dsl.Tests package CsCheck
 ```
 
 - [ ] **Step 2: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Dsl.Tests/LexerTests.cs
-using Relkit.Dsl.Lexing;
+// tests/Custodex.Dsl.Tests/LexerTests.cs
+using Custodex.Dsl.Lexing;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Dsl.Tests;
+namespace Custodex.Dsl.Tests;
 
 public class LexerTests
 {
@@ -147,14 +147,14 @@ public class LexerTests
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter LexerTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter LexerTests`
 Expected: FAIL — `Lexer`/`Token` not defined.
 
 - [ ] **Step 4: Implement the token model and exception**
 
 ```csharp
-// src/Relkit.Dsl/DslParseException.cs
-namespace Relkit.Dsl;
+// src/Custodex.Dsl/DslParseException.cs
+namespace Custodex.Dsl;
 
 public sealed class DslParseException(string message, int line, int column)
     : Exception($"{message} (line {line}, column {column})")
@@ -165,8 +165,8 @@ public sealed class DslParseException(string message, int line, int column)
 ```
 
 ```csharp
-// src/Relkit.Dsl/Lexing/Token.cs
-namespace Relkit.Dsl.Lexing;
+// src/Custodex.Dsl/Lexing/Token.cs
+namespace Custodex.Dsl.Lexing;
 
 public enum TokenKind
 {
@@ -187,10 +187,10 @@ public readonly record struct Token(TokenKind Kind, string Text, int Line, int C
 ```
 
 ```csharp
-// src/Relkit.Dsl/Lexing/Lexer.cs
+// src/Custodex.Dsl/Lexing/Lexer.cs
 using System.Text;
 
-namespace Relkit.Dsl.Lexing;
+namespace Custodex.Dsl.Lexing;
 
 public static class Lexer
 {
@@ -306,14 +306,14 @@ public static class Lexer
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter LexerTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter LexerTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Dsl tests/Relkit.Dsl.Tests
-git commit -m "feat: add Relkit.Dsl lexer and token model"
+git add src/Custodex.Dsl tests/Custodex.Dsl.Tests
+git commit -m "feat: add Custodex.Dsl lexer and token model"
 ```
 
 ---
@@ -321,24 +321,24 @@ git commit -m "feat: add Relkit.Dsl lexer and token model"
 ### Task 2: Parse relations and subject lists
 
 **Files:**
-- Create: `src/Relkit.Dsl/Parsing/TokenStream.cs`
-- Create: `src/Relkit.Dsl/Parsing/SchemaParser.cs`
-- Test: `tests/Relkit.Dsl.Tests/RelationParseTests.cs`
+- Create: `src/Custodex.Dsl/Parsing/TokenStream.cs`
+- Create: `src/Custodex.Dsl/Parsing/SchemaParser.cs`
+- Test: `tests/Custodex.Dsl.Tests/RelationParseTests.cs`
 
 **Interfaces:**
 - Produces: `TokenStream` (a cursor over the token list with `Peek`/`Next`/`Expect(TokenKind)`); `SchemaParser.Parse(string source) -> Schema`. This task implements `type`/`relation` parsing only; permissions and conditions follow in Tasks 3–4 (a permission/condition member throws "not yet" until then — but author the full parser dispatch now and fill members incrementally).
-- Consumes: `Lexer`, `Token`, `TokenKind`; `Schema`, `EntityTypeDef`, `RelationDef`, `SubjectTypeRef` from `Relkit.Abstractions`.
+- Consumes: `Lexer`, `Token`, `TokenKind`; `Schema`, `EntityTypeDef`, `RelationDef`, `SubjectTypeRef` from `Custodex.Abstractions`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Dsl.Tests/RelationParseTests.cs
-using Relkit.Abstractions;
-using Relkit.Dsl.Parsing;
+// tests/Custodex.Dsl.Tests/RelationParseTests.cs
+using Custodex.Abstractions;
+using Custodex.Dsl.Parsing;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Dsl.Tests;
+namespace Custodex.Dsl.Tests;
 
 public class RelationParseTests
 {
@@ -381,16 +381,16 @@ public class RelationParseTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter RelationParseTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter RelationParseTests`
 Expected: FAIL — `SchemaParser` not defined.
 
 - [ ] **Step 3: Implement the token stream and parser skeleton**
 
 ```csharp
-// src/Relkit.Dsl/Parsing/TokenStream.cs
-using Relkit.Dsl.Lexing;
+// src/Custodex.Dsl/Parsing/TokenStream.cs
+using Custodex.Dsl.Lexing;
 
-namespace Relkit.Dsl.Parsing;
+namespace Custodex.Dsl.Parsing;
 
 public sealed class TokenStream(IReadOnlyList<Token> tokens)
 {
@@ -419,11 +419,11 @@ public sealed class TokenStream(IReadOnlyList<Token> tokens)
 ```
 
 ```csharp
-// src/Relkit.Dsl/Parsing/SchemaParser.cs
-using Relkit.Abstractions;
-using Relkit.Dsl.Lexing;
+// src/Custodex.Dsl/Parsing/SchemaParser.cs
+using Custodex.Abstractions;
+using Custodex.Dsl.Lexing;
 
-namespace Relkit.Dsl.Parsing;
+namespace Custodex.Dsl.Parsing;
 
 public static partial class SchemaParser
 {
@@ -501,11 +501,11 @@ public static partial class SchemaParser
 > `ParsePermission` and `ParseCondition` are added in Tasks 3–4 (the `partial class` lets each task add its members in its own file). For this task, add a temporary stub in `SchemaParser` so it compiles:
 
 ```csharp
-// src/Relkit.Dsl/Parsing/SchemaParser.Stubs.cs   (DELETED in Tasks 3 and 4 as the real members land)
-using Relkit.Abstractions;
-using Relkit.Dsl.Lexing;
+// src/Custodex.Dsl/Parsing/SchemaParser.Stubs.cs   (DELETED in Tasks 3 and 4 as the real members land)
+using Custodex.Abstractions;
+using Custodex.Dsl.Lexing;
 
-namespace Relkit.Dsl.Parsing;
+namespace Custodex.Dsl.Parsing;
 
 public static partial class SchemaParser
 {
@@ -519,13 +519,13 @@ public static partial class SchemaParser
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter RelationParseTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter RelationParseTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Dsl tests/Relkit.Dsl.Tests
+git add src/Custodex.Dsl tests/Custodex.Dsl.Tests
 git commit -m "feat: parse types, relations, and subject lists from DSL"
 ```
 
@@ -534,26 +534,26 @@ git commit -m "feat: parse types, relations, and subject lists from DSL"
 ### Task 3: Parse the permission algebra to the exact AST
 
 **Files:**
-- Create: `src/Relkit.Dsl/Parsing/SchemaParser.Permission.cs`
-- Delete: `src/Relkit.Dsl/Parsing/SchemaParser.Stubs.cs` (replace the permission stub)
-- Test: `tests/Relkit.Dsl.Tests/PermissionParseTests.cs`
+- Create: `src/Custodex.Dsl/Parsing/SchemaParser.Permission.cs`
+- Delete: `src/Custodex.Dsl/Parsing/SchemaParser.Stubs.cs` (replace the permission stub)
+- Test: `tests/Custodex.Dsl.Tests/PermissionParseTests.cs`
 
 **Interfaces:**
 - Produces: `SchemaParser.ParsePermission(TokenStream) -> PermissionDef` building `RelationRef`/`Union`/`Intersect`/`Exclude`/`Arrow`/`Conditioned` matching the operators `+ & - -> with`.
-- Consumes: `PermExpr` and subtypes from `Relkit.Abstractions`.
+- Consumes: `PermExpr` and subtypes from `Custodex.Abstractions`.
 
 > **The parse tree must match the `SchemaBuilder` output** for the animal permission `medicator + enclosure->edit - blocked`: `Exclude(Union(RelationRef "medicator", Arrow("enclosure","edit")), RelationRef "blocked")`. The single left-associative tier for `+ & -` (the builder's "default-chain then wrap" semantics) produces exactly that. `with` binds to its immediate left primary (Conditioned wraps the tightest operand).
 
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Dsl.Tests/PermissionParseTests.cs
-using Relkit.Abstractions;
-using Relkit.Dsl.Parsing;
+// tests/Custodex.Dsl.Tests/PermissionParseTests.cs
+using Custodex.Abstractions;
+using Custodex.Dsl.Parsing;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Dsl.Tests;
+namespace Custodex.Dsl.Tests;
 
 public class PermissionParseTests
 {
@@ -619,7 +619,7 @@ public class PermissionParseTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter PermissionParseTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter PermissionParseTests`
 Expected: FAIL — `ParsePermission` still throws the "not parsed yet" stub.
 
 - [ ] **Step 3: Remove the permission stub and implement the algebra parser**
@@ -629,14 +629,14 @@ Expected: FAIL — `ParsePermission` still throws the "not parsed yet" stub.
 # condition stub there until Task 4; here we delete the permission stub line.
 ```
 
-Edit `src/Relkit.Dsl/Parsing/SchemaParser.Stubs.cs` to drop `ParsePermission` (leave `ParseCondition`), then add:
+Edit `src/Custodex.Dsl/Parsing/SchemaParser.Stubs.cs` to drop `ParsePermission` (leave `ParseCondition`), then add:
 
 ```csharp
-// src/Relkit.Dsl/Parsing/SchemaParser.Permission.cs
-using Relkit.Abstractions;
-using Relkit.Dsl.Lexing;
+// src/Custodex.Dsl/Parsing/SchemaParser.Permission.cs
+using Custodex.Abstractions;
+using Custodex.Dsl.Lexing;
 
-namespace Relkit.Dsl.Parsing;
+namespace Custodex.Dsl.Parsing;
 
 public static partial class SchemaParser
 {
@@ -697,13 +697,13 @@ public static partial class SchemaParser
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter PermissionParseTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter PermissionParseTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Dsl tests/Relkit.Dsl.Tests
+git add src/Custodex.Dsl tests/Custodex.Dsl.Tests
 git commit -m "feat: parse permission algebra to the exact PermExpr AST"
 ```
 
@@ -712,9 +712,9 @@ git commit -m "feat: parse permission algebra to the exact PermExpr AST"
 ### Task 4: Parse conditions and their CEL-shaped bodies
 
 **Files:**
-- Create: `src/Relkit.Dsl/Parsing/SchemaParser.Condition.cs`
-- Delete: `src/Relkit.Dsl/Parsing/SchemaParser.Stubs.cs` (replace the condition stub)
-- Test: `tests/Relkit.Dsl.Tests/ConditionParseTests.cs`
+- Create: `src/Custodex.Dsl/Parsing/SchemaParser.Condition.cs`
+- Delete: `src/Custodex.Dsl/Parsing/SchemaParser.Stubs.cs` (replace the condition stub)
+- Test: `tests/Custodex.Dsl.Tests/ConditionParseTests.cs`
 
 **Interfaces:**
 - Produces: `SchemaParser.ParseCondition(TokenStream) -> ConditionDef`, parsing the param list (`name: type`) and an optional `= body` whose AST uses the `m0/06` nodes (`Compare`, `BoolOp`, `Not`, `Arithmetic`, `InList`, `HourOf`, `ParamRef`, `AttributeRef`, `ContextNow`, `ContextSubject`, literals). A param-only condition with no body attaches `EmptyConditionBody` (from `m0/02`).
@@ -723,15 +723,15 @@ git commit -m "feat: parse permission algebra to the exact PermExpr AST"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Dsl.Tests/ConditionParseTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Dsl.Parsing;
+// tests/Custodex.Dsl.Tests/ConditionParseTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Dsl.Parsing;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Dsl.Tests;
+namespace Custodex.Dsl.Tests;
 
 public class ConditionParseTests
 {
@@ -788,24 +788,24 @@ public class ConditionParseTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter ConditionParseTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter ConditionParseTests`
 Expected: FAIL — `ParseCondition` still throws the stub.
 
 - [ ] **Step 3: Delete the stub file and implement the condition parser**
 
 ```bash
-rm src/Relkit.Dsl/Parsing/SchemaParser.Stubs.cs
+rm src/Custodex.Dsl/Parsing/SchemaParser.Stubs.cs
 ```
 
 ```csharp
-// src/Relkit.Dsl/Parsing/SchemaParser.Condition.cs
+// src/Custodex.Dsl/Parsing/SchemaParser.Condition.cs
 using System.Globalization;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Dsl.Lexing;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Dsl.Lexing;
 
-namespace Relkit.Dsl.Parsing;
+namespace Custodex.Dsl.Parsing;
 
 public static partial class SchemaParser
 {
@@ -974,18 +974,18 @@ public static partial class SchemaParser
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter ConditionParseTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter ConditionParseTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Run the whole parse suite (relations + permissions + conditions)**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests`
+Run: `dotnet test tests/Custodex.Dsl.Tests`
 Expected: PASS — the stub file is gone and every parser path is real.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Dsl tests/Relkit.Dsl.Tests
+git add src/Custodex.Dsl tests/Custodex.Dsl.Tests
 git commit -m "feat: parse conditions and CEL-shaped bodies to the m0/06 AST"
 ```
 
@@ -994,8 +994,8 @@ git commit -m "feat: parse conditions and CEL-shaped bodies to the m0/06 AST"
 ### Task 5: `SchemaWriter` — serialize `Schema` back to DSL text
 
 **Files:**
-- Create: `src/Relkit.Dsl/SchemaWriter.cs`
-- Test: `tests/Relkit.Dsl.Tests/SchemaWriterTests.cs`
+- Create: `src/Custodex.Dsl/SchemaWriter.cs`
+- Test: `tests/Custodex.Dsl.Tests/SchemaWriterTests.cs`
 
 **Interfaces:**
 - Produces: `static class SchemaWriter` with `string Write(Schema schema)` rendering types, relations, permissions (with parenthesis-minimal but round-trip-faithful algebra), and conditions (params + body).
@@ -1006,15 +1006,15 @@ git commit -m "feat: parse conditions and CEL-shaped bodies to the m0/06 AST"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Dsl.Tests/SchemaWriterTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Dsl;
-using Relkit.Dsl.Parsing;
+// tests/Custodex.Dsl.Tests/SchemaWriterTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Dsl;
+using Custodex.Dsl.Parsing;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Dsl.Tests;
+namespace Custodex.Dsl.Tests;
 
 public class SchemaWriterTests
 {
@@ -1065,20 +1065,20 @@ public class SchemaWriterTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter SchemaWriterTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter SchemaWriterTests`
 Expected: FAIL — `SchemaWriter` not defined.
 
 - [ ] **Step 3: Implement `SchemaWriter`**
 
 ```csharp
-// src/Relkit.Dsl/SchemaWriter.cs
+// src/Custodex.Dsl/SchemaWriter.cs
 using System.Globalization;
 using System.Text;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
 
-namespace Relkit.Dsl;
+namespace Custodex.Dsl;
 
 public static class SchemaWriter
 {
@@ -1183,13 +1183,13 @@ public static class SchemaWriter
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter SchemaWriterTests`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter SchemaWriterTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Dsl tests/Relkit.Dsl.Tests
+git add src/Custodex.Dsl tests/Custodex.Dsl.Tests
 git commit -m "feat: add SchemaWriter serializing Schema back to DSL text"
 ```
 
@@ -1198,9 +1198,9 @@ git commit -m "feat: add SchemaWriter serializing Schema back to DSL text"
 ### Task 6: Round-trip property + animal-schema parity with the builder
 
 **Files:**
-- Create: `tests/Relkit.Dsl.Tests/RoundTripTests.cs`
-- Create: `tests/Relkit.Dsl.Tests/SchemaGenerators.cs`
-- Test: `tests/Relkit.Dsl.Tests/AnimalSchemaParityTests.cs`
+- Create: `tests/Custodex.Dsl.Tests/RoundTripTests.cs`
+- Create: `tests/Custodex.Dsl.Tests/SchemaGenerators.cs`
+- Test: `tests/Custodex.Dsl.Tests/AnimalSchemaParityTests.cs`
 
 **Interfaces:**
 - Produces: a CsCheck `Gen<Schema>` over relations, permission algebra trees (`Union`/`Intersect`/`Exclude`/`Arrow`/`RelationRef`/`Conditioned`), and condition bodies; the property `Parse(Write(schema)) == schema`; and a parity test that the `m0/02` animal schema text parses to the **same** AST the `SchemaBuilder` produces.
@@ -1213,12 +1213,12 @@ git commit -m "feat: add SchemaWriter serializing Schema back to DSL text"
 - [ ] **Step 1: Write the generators**
 
 ```csharp
-// tests/Relkit.Dsl.Tests/SchemaGenerators.cs
+// tests/Custodex.Dsl.Tests/SchemaGenerators.cs
 using CsCheck;
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
 
-namespace Relkit.Dsl.Tests;
+namespace Custodex.Dsl.Tests;
 
 public static class SchemaGenerators
 {
@@ -1266,14 +1266,14 @@ public static class SchemaGenerators
 - [ ] **Step 2: Write the round-trip property test**
 
 ```csharp
-// tests/Relkit.Dsl.Tests/RoundTripTests.cs
+// tests/Custodex.Dsl.Tests/RoundTripTests.cs
 using CsCheck;
-using Relkit.Dsl;
-using Relkit.Dsl.Parsing;
+using Custodex.Dsl;
+using Custodex.Dsl.Parsing;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Dsl.Tests;
+namespace Custodex.Dsl.Tests;
 
 public class RoundTripTests
 {
@@ -1309,14 +1309,14 @@ public class RoundTripTests
 - [ ] **Step 3: Write the animal-schema parity test**
 
 ```csharp
-// tests/Relkit.Dsl.Tests/AnimalSchemaParityTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Dsl.Parsing;
+// tests/Custodex.Dsl.Tests/AnimalSchemaParityTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Dsl.Parsing;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Dsl.Tests;
+namespace Custodex.Dsl.Tests;
 
 public class AnimalSchemaParityTests
 {
@@ -1357,18 +1357,18 @@ public class AnimalSchemaParityTests
 
 - [ ] **Step 4: Run to verify (expect PASS)**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests --filter "RoundTripTests|AnimalSchemaParityTests"`
+Run: `dotnet test tests/Custodex.Dsl.Tests --filter "RoundTripTests|AnimalSchemaParityTests"`
 Expected: PASS. A CsCheck counterexample on the round-trip is a genuine parser/writer bug — minimize it and fix the parenthesization rule. A parity failure means the parser's tree shape diverges from the builder's; fix the parser, not the test.
 
 - [ ] **Step 5: Run the whole DSL suite**
 
-Run: `dotnet test tests/Relkit.Dsl.Tests`
+Run: `dotnet test tests/Custodex.Dsl.Tests`
 Expected: PASS (lexer, relation, permission, condition, writer, round-trip, parity).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/Relkit.Dsl.Tests
+git add tests/Custodex.Dsl.Tests
 git commit -m "test: prove DSL round-trip property and animal-schema builder parity"
 ```
 
@@ -1385,6 +1385,6 @@ git commit -m "test: prove DSL round-trip property and animal-schema builder par
 
 ## Contract gaps (reported, not changed)
 
-- **`EmptyConditionBody` location.** The DSL parser and writer reference `Relkit.Core.EmptyConditionBody` (the placeholder record `m0/02` declares in `Relkit.Core`'s `SchemaBuilder.cs`) for param-only conditions. This couples `Relkit.Dsl` to a type that lives in `Relkit.Core` rather than `Relkit.Abstractions`. `Relkit.Dsl` already references `Relkit.Core` (for the `m0/06` body nodes, which also live in `Relkit.Core.Conditions`), so there is no new dependency, but if the contract owner prefers, `EmptyConditionBody` could move to `Relkit.Abstractions` alongside the `ConditionExpr` marker. Flagged; not changed.
+- **`EmptyConditionBody` location.** The DSL parser and writer reference `Custodex.Core.EmptyConditionBody` (the placeholder record `m0/02` declares in `Custodex.Core`'s `SchemaBuilder.cs`) for param-only conditions. This couples `Custodex.Dsl` to a type that lives in `Custodex.Core` rather than `Custodex.Abstractions`. `Custodex.Dsl` already references `Custodex.Core` (for the `m0/06` body nodes, which also live in `Custodex.Core.Conditions`), so there is no new dependency, but if the contract owner prefers, `EmptyConditionBody` could move to `Custodex.Abstractions` alongside the `ConditionExpr` marker. Flagged; not changed.
 - **No explicit schema-version syntax.** The DSL has no surface for the `Schema.Version` string (it is `"v1"` by default via `SchemaParser.Parse(source)`, or caller-supplied via `Parse(source, version)`). The round-trip property fixes the version on both sides, so it holds; if the DSL should carry a version header (e.g. a leading `version "v2"` line), that is an additive grammar change. Flagged as a possible future addition; the current contract has no version-in-text requirement.
-- **Condition body node home (`m0/06`).** The body nodes (`Compare`, `HourOf`, etc.) live in `Relkit.Core.Conditions` per `m0/06`. This plan's parser/writer depend on that namespace. If `m0/06`'s final node names or namespace differ, adjust the `using` and the node constructors here; the grammar and tests are unaffected. No contract change requested.
+- **Condition body node home (`m0/06`).** The body nodes (`Compare`, `HourOf`, etc.) live in `Custodex.Core.Conditions` per `m0/06`. This plan's parser/writer depend on that namespace. If `m0/06`'s final node names or namespace differ, adjust the `using` and the node constructors here; the grammar and tests are unaffected. No contract change requested.
