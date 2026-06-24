@@ -1,6 +1,6 @@
 using Custodex.Abstractions;
 
-namespace Custodex.Conformance;
+namespace Custodex.Core.Tests.Conformance;
 
 /// <summary>Synced resource attributes to seed for one object before the query runs.</summary>
 public sealed record AttributeSeed(EntityRef Object, IReadOnlyDictionary<string, object?> Attributes);
