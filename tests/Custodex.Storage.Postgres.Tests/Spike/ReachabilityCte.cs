@@ -4,7 +4,7 @@ using Npgsql;
 namespace Custodex.Storage.Postgres.Tests.Spike;
 
 /// <summary>
-/// Candidate recursive-CTE reachability primitive (validated by this spike + the m1/08 harness).
+/// Candidate recursive-CTE reachability primitive (validated by this spike and the differential harness).
 /// Given one (object, relation), returns the distinct leaf subjects reachable by transitively
 /// expanding subject-set (group#member-style) tuples. Leaf rows are subjects with NULL
 /// subject_relation (concrete users and wildcards). Subject-sets are expanded, never returned.

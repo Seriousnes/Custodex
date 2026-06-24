@@ -1,10 +1,10 @@
 namespace Custodex.Storage.Postgres.Tests.Spike;
 
 /// <summary>
-/// Throwaway spike fixtures. Two cases interleave algebra WITH arrow traversal — the shape
-/// spec §7.1 calls out as the hardest. Tuples are raw column rows (the spike writes them with
-/// Dapper, bypassing the not-yet-built relation store). Expected answers are hand-computed and
-/// match what the m0/05 EngineDrivenAuthorizer returns for the same data.
+/// Throwaway spike fixtures. Two cases interleave algebra WITH arrow traversal — the hardest
+/// shape. Tuples are raw column rows (the spike writes them with Dapper, bypassing the
+/// not-yet-built relation store). Expected answers are hand-computed and match what the
+/// EngineDrivenAuthorizer returns for the same data.
 /// </summary>
 internal static class SpikeData
 {
@@ -37,7 +37,7 @@ internal static class SpikeData
         };
 
     /// <summary>
-    /// Case B (spec §12.5): <c>animal.access = enclosure-&gt;is_quarantine &amp; vet_member &amp; trained_member</c>.
+    /// Case B: <c>animal.access = enclosure-&gt;is_quarantine &amp; vet_member &amp; trained_member</c>.
     /// Q1 carries <c>is_quarantine@user:*</c>, making the arrow gate universal, so access reduces to vet ∧ trained.
     /// </summary>
     internal static readonly IReadOnlyList<Fact> CaseB =
@@ -51,7 +51,7 @@ internal static class SpikeData
         new("group", "trained", "member", "user", "dr-smith"),
     ];
 
-    /// <summary>Hand-computed truth for <c>animal:EL-001#access</c> (Case B / §12.5).</summary>
+    /// <summary>Hand-computed truth for <c>animal:EL-001#access</c> (Case B).</summary>
     internal static readonly IReadOnlyDictionary<(string Obj, string Subject), bool> CaseB_Expected =
         new Dictionary<(string, string), bool>
         {

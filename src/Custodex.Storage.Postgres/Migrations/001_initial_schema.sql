@@ -1,10 +1,10 @@
--- stores: one per consuming application (spec §6.1)
+-- stores: one per consuming application
 CREATE TABLE IF NOT EXISTS stores (
     id    text PRIMARY KEY,
     name  text NOT NULL DEFAULT ''
 );
 
--- schema_versions: the versioned application schema lineage (spec §6.3)
+-- schema_versions: the versioned application schema lineage
 CREATE TABLE IF NOT EXISTS schema_versions (
     store_id    text    NOT NULL REFERENCES stores(id),
     version     text    NOT NULL,
@@ -18,14 +18,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_schema_versions_active
     ON schema_versions (store_id)
     WHERE is_active;
 
--- tenants: the data-isolation discriminator within a store (spec §6.1)
+-- tenants: the data-isolation discriminator within a store
 CREATE TABLE IF NOT EXISTS tenants (
     store_id   text NOT NULL REFERENCES stores(id),
     tenant_id  text NOT NULL,
     PRIMARY KEY (store_id, tenant_id)
 );
 
--- relation_tuples: the atomic stored facts (spec §6.2/§6.3)
+-- relation_tuples: the atomic stored facts
 CREATE TABLE IF NOT EXISTS relation_tuples (
     store_id           text  NOT NULL,
     tenant_id          text  NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS relation_tuples (
     FOREIGN KEY (store_id, tenant_id) REFERENCES tenants(store_id, tenant_id)
 );
 
--- Natural key (locked in shared decisions): COALESCE collapses null vs '' relation.
+-- Natural key: COALESCE collapses null vs '' relation.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_relation_tuples_natural
     ON relation_tuples (
         store_id, tenant_id, object_type, object_id, relation,
@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS ix_relation_tuples_forward
 CREATE INDEX IF NOT EXISTS ix_relation_tuples_reverse
     ON relation_tuples (store_id, tenant_id, subject_type, subject_id);
 
--- object_attributes: synced authz-relevant resource fields (spec §6.4)
+-- object_attributes: synced authz-relevant resource fields
 CREATE TABLE IF NOT EXISTS object_attributes (
     store_id     text  NOT NULL,
     tenant_id    text  NOT NULL,
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS object_attributes (
     FOREIGN KEY (store_id, tenant_id) REFERENCES tenants(store_id, tenant_id)
 );
 
--- reverse_index: the maintained structural expansion (M2; spec §6.3/§7.3)
+-- reverse_index: the maintained structural expansion
 CREATE TABLE IF NOT EXISTS reverse_index (
     store_id        text    NOT NULL,
     tenant_id       text    NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS reverse_index (
 CREATE INDEX IF NOT EXISTS ix_reverse_index_scan
     ON reverse_index (store_id, tenant_id, schema_version, subject, permission, object_type);
 
--- cache_entries: UNLOGGED Postgres-native cache (M2; spec §9.1)
+-- cache_entries: UNLOGGED Postgres-native cache
 CREATE UNLOGGED TABLE IF NOT EXISTS cache_entries (
     store_id    text        NOT NULL,
     tenant_id   text        NOT NULL,
@@ -97,7 +97,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS cache_entries (
 CREATE INDEX IF NOT EXISTS ix_cache_entries_expiry
     ON cache_entries (expires_at);
 
--- change_log: append-only config-change audit (spec §6.5)
+-- change_log: append-only config-change audit
 CREATE TABLE IF NOT EXISTS change_log (
     id           bigserial   PRIMARY KEY,
     store_id     text        NOT NULL,
@@ -114,8 +114,7 @@ CREATE TABLE IF NOT EXISTS change_log (
 CREATE INDEX IF NOT EXISTS ix_change_log_read
     ON change_log (store_id, tenant_id, occurred_at DESC);
 
--- tenant_epochs: authoritative cache-epoch counter (CONTRACT GAP)
--- Backs ICacheStore.GetEpochAsync / BumpEpochAsync; not a spec §6.3 table.
+-- tenant_epochs: authoritative cache-epoch counter backing ICacheStore.GetEpochAsync / BumpEpochAsync.
 CREATE TABLE IF NOT EXISTS tenant_epochs (
     store_id   text   NOT NULL,
     tenant_id  text   NOT NULL,
