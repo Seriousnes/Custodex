@@ -10,7 +10,7 @@ public class CelConditionEvaluatorTests
 {
     private readonly TestWorld _world = TestWorld.New();
     private readonly string _condition;
-    private readonly string _attribute;   // attribute key compared to the request subject
+    private readonly string _attribute;
 
     public CelConditionEvaluatorTests()
     {
@@ -64,7 +64,6 @@ public class CelConditionEvaluatorTests
         var viewerTuple = _world.Tuple(objType, objId, viewer, _world.User(subject));
         var obj = _world.Object(objType, objId);
 
-        // Case 1: attribute == subject → Allowed
         {
             var auth = await _world.BuildAsync(schema, new CelConditionEvaluator(), [viewerTuple],
                 [(obj, new Dictionary<string, object?> { [_attribute] = subject })]);
@@ -72,7 +71,6 @@ public class CelConditionEvaluatorTests
             (await auth.CheckAsync(req)).Allowed.ShouldBeTrue();
         }
 
-        // Case 2: attribute != subject → Denied (condition gates the viewer grant)
         {
             var auth = await _world.BuildAsync(schema, new CelConditionEvaluator(), [viewerTuple],
                 [(obj, new Dictionary<string, object?> { [_attribute] = nonMatch })]);

@@ -16,7 +16,7 @@ public class RecursionTerminationTests
         var schema = new Schema(world.Version,
             [new EntityTypeDef(objType,
                 [],
-                [new PermissionDef(edit, new RelationRef(edit))])],   // edit -> edit
+                [new PermissionDef(edit, new RelationRef(edit))])],
             []);
 
         var result = SchemaValidator.Validate(schema);
@@ -28,7 +28,6 @@ public class RecursionTerminationTests
     [Fact]
     public void Permission_cycle_through_an_arrow_is_detected()
     {
-        // typeA.edit -> typeB.edit -> typeA.edit  (via back-arrows)
         var world = TestWorld.New();
         var typeA = world.EntityType();
         var typeB = world.EntityType();
@@ -64,7 +63,7 @@ public class RecursionTerminationTests
             .Type(objType, t => t
                 .Relation(grant, s => s.Type(world.UserType))
                 .Permission(edit, p => p.Relation(grant))
-                .Permission(manage, p => p.Relation(edit)))   // manage -> edit -> grant (relation, stops)
+                .Permission(manage, p => p.Relation(edit)))
             .Build();
 
         SchemaValidator.Validate(schema).IsValid.ShouldBeTrue();
@@ -73,7 +72,6 @@ public class RecursionTerminationTests
     [Fact]
     public void Subject_set_self_reference_is_not_a_permission_cycle()
     {
-        // group.member fills with group#member (nesting) — a relation filler, not a permission edge.
         var world = TestWorld.New();
         var read = world.Permission();
         var schema = new SchemaBuilder(world.Version)
@@ -89,12 +87,9 @@ public class RecursionTerminationTests
     [Fact]
     public void Permission_referencing_a_same_named_relation_is_not_a_cycle()
     {
-        // A type has a relation 'gate' AND a permission 'gate' = RelationRef("gate").
-        // The authorizer resolves the RelationRef as the RELATION (it never recurses into a same-named
-        // permission), so this is NOT a permission self-cycle and must validate.
         var world = TestWorld.New();
         var objType = world.EntityType();
-        var gate = world.Relation();   // serves as both the relation and the permission name
+        var gate = world.Relation();
         var schema = new SchemaBuilder(world.Version)
             .Type(objType, t => t
                 .Relation(gate, s => s.Wildcard(world.UserType))

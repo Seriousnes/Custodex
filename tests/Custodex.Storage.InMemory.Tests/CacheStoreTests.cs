@@ -43,7 +43,7 @@ public class CacheStoreTests
         clock.Advance(TimeSpan.FromMinutes(4));
         (await store.GetAsync("k")).ShouldNotBeNull();
 
-        clock.Advance(TimeSpan.FromMinutes(2));   // now 6 minutes > 5-minute TTL
+        clock.Advance(TimeSpan.FromMinutes(2));
         (await store.GetAsync("k")).ShouldBeNull();
     }
 

@@ -56,9 +56,9 @@ public class BatchCheckTests
             new Dictionary<string, object?>());
         var req = new BatchCheckRequest(T, new[]
         {
-            new CheckItem(new EntityRef(_objType, _objId1), _view, _world.User(_viaGroup)),  // via group => true
-            new CheckItem(new EntityRef(_objType, _objId1), _view, _world.User(_direct)),    // false
-            new CheckItem(new EntityRef(_objType, _objId2), _view, _world.User(_direct)),    // direct => true
+            new CheckItem(new EntityRef(_objType, _objId1), _view, _world.User(_viaGroup)),
+            new CheckItem(new EntityRef(_objType, _objId1), _view, _world.User(_direct)),
+            new CheckItem(new EntityRef(_objType, _objId2), _view, _world.User(_direct)),
         }, ctx);
 
         var results = await auth.BatchCheckAsync(req);

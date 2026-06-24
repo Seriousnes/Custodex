@@ -15,9 +15,9 @@ public class ConditionEvaluatorTests
     private readonly string _endParam;
     private readonly string _atLeast;
     private readonly string _nParam;
-    private readonly string _measure;       // numeric attribute key
+    private readonly string _measure;
     private readonly string _isCreator;
-    private readonly string _creatorAttr;   // subject-valued attribute key
+    private readonly string _creatorAttr;
 
     public ConditionEvaluatorTests()
     {
@@ -34,7 +34,6 @@ public class ConditionEvaluatorTests
     private RequestContext Context(DateTimeOffset now, string subjectId) =>
         new(now, _world.User(subjectId), new Dictionary<string, object?>());
 
-    // within_hours(start, end) = context.now.hour >= start && context.now.hour < end
     private ConditionDef WithinHours() => new(
         _withinHours,
         [new ConditionParam(_startParam, ConditionType.Int), new ConditionParam(_endParam, ConditionType.Int)],
@@ -43,13 +42,11 @@ public class ConditionEvaluatorTests
             BoolConnective.And,
             new Compare(new HourOf(new ContextNow()), CompareOp.Lt, new ParamRef(_endParam))));
 
-    // at_least(n) = resource[measure] >= n  — 'measure' selects the attribute name.
     private ConditionDef AtLeastMeasure() => new(
         _atLeast,
         [new ConditionParam(_nParam, ConditionType.Int)],
         new Compare(new AttributeRef(_measure), CompareOp.Ge, new ParamRef(_nParam)));
 
-    // is_creator() = resource[creatorAttr] == context.subject
     private ConditionDef IsCreator() => new(
         _isCreator,
         [],
@@ -107,7 +104,7 @@ public class ConditionEvaluatorTests
     public void Missing_attribute_is_a_deny_with_a_diagnostic_not_an_exception()
     {
         var def = AtLeastMeasure();
-        var result = ConditionEvaluator.Evaluate(def, NoAttrs,   // no measure attribute
+        var result = ConditionEvaluator.Evaluate(def, NoAttrs,
             Context(DateTimeOffset.UnixEpoch, _world.SubjectId()),
             new Dictionary<string, object?> { [_nParam] = 30 });
 
@@ -120,7 +117,7 @@ public class ConditionEvaluatorTests
     {
         var def = AtLeastMeasure();
         var result = ConditionEvaluator.Evaluate(def,
-            new Dictionary<string, object?> { [_measure] = "not-a-number" },   // string vs int compare
+            new Dictionary<string, object?> { [_measure] = "not-a-number" },
             Context(DateTimeOffset.UnixEpoch, _world.SubjectId()),
             new Dictionary<string, object?> { [_nParam] = 30 });
 

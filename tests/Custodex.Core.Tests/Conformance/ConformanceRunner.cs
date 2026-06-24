@@ -14,15 +14,10 @@ public static class ConformanceRunner
     public static async Task<CheckResult> RunAsync(
         ConformanceCase c, IConditionEvaluator conditions, CancellationToken ct = default)
     {
-        // Validate the schema through the real m0/03 validator so malformed cases fail loudly.
-        // SchemaValidator is a static class (m0/03); EmptyConditionBody passes validation there
-        // (body type-checking is deferred to m0/06), so a deferred-body condition case validates.
         var validation = SchemaValidator.Validate(c.Schema);
         if (!validation.IsValid)
             throw new SchemaValidationException(validation.Errors);
 
-        // The runner owns the world so the activated schema, written tuples, and the issued
-        // CheckRequest all share one tenant (the case is tenant-agnostic).
         var world = TestWorld.New();
         var attributes = c.Attributes
             .Select(seed => (seed.Object, seed.Attributes))

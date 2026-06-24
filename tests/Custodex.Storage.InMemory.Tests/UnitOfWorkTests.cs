@@ -11,7 +11,7 @@ public class UnitOfWorkTests
         IUnitOfWorkFactory factory = new NoOpUnitOfWorkFactory();
 
         await using var uow = await factory.BeginAsync();
-        await uow.CommitAsync();   // no-op, must not throw
+        await uow.CommitAsync();
         uow.ShouldBeAssignableTo<IUnitOfWork>();
     }
 }

@@ -60,7 +60,7 @@ public class ConditionBodyCheckTests
         var world = TestWorld.New();
         var n = world.ParamName();
         var def = new ConditionDef(world.ConditionName(), [new ConditionParam(n, ConditionType.Int)],
-            new ParamRef(n));   // top-level Int, not Bool
+            new ParamRef(n));
         var schema = new Schema(world.Version, [], [def]);
 
         SchemaValidator.Validate(schema).IsValid.ShouldBeFalse();

@@ -92,7 +92,7 @@ public class CachingAuthorizerTests
         afterFirst.ShouldBeGreaterThan(0);
 
         (await auth.CheckAsync(Req(_subjectId))).Allowed.ShouldBeTrue();
-        counter.GetByObjectCalls.ShouldBe(afterFirst);   // no further store reads: cache hit
+        counter.GetByObjectCalls.ShouldBe(afterFirst);
     }
 
     [Fact]
@@ -104,17 +104,16 @@ public class CachingAuthorizerTests
         await auth.CheckAsync(Req(_subjectId));
         var afterFirst = counter.GetByObjectCalls;
 
-        await cache.BumpEpochAsync(T, uow);   // simulate a write bumping the epoch
+        await cache.BumpEpochAsync(T, uow);
         await uow.CommitAsync();
 
         await auth.CheckAsync(Req(_subjectId));
-        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);   // epoch mismatch => miss => recompute
+        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);
     }
 
     [Fact]
     public async Task Conditioned_results_are_never_cached()
     {
-        // A schema whose tuple carries a condition => result touches a condition => not cacheable.
         var schema = ConditionedSchema();
         var conditioned = new RelationTuple(
             new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId),
@@ -125,7 +124,7 @@ public class CachingAuthorizerTests
         var afterFirst = counter.GetByObjectCalls;
 
         await auth.CheckAsync(Req(_subjectId));
-        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);   // recomputed: condition touched => not cached
+        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);
     }
 
     [Fact]
@@ -140,7 +139,7 @@ public class CachingAuthorizerTests
 
         var explainedAgain = await auth.CheckAsync(Req(_subjectId, explain: true));
         explainedAgain.Explain.ShouldNotBeNull();
-        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);   // never cached: fresh trace each time
+        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);
     }
 
     [Fact]
@@ -163,8 +162,8 @@ public class CachingAuthorizerTests
         var (auth, _, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
             new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
 
-        await auth.CheckAsync(Req(_subjectId));   // miss
-        await auth.CheckAsync(Req(_subjectId));   // hit
+        await auth.CheckAsync(Req(_subjectId));
+        await auth.CheckAsync(Req(_subjectId));
         ml.Dispose();
 
         misses.ShouldBeGreaterThanOrEqualTo(1);

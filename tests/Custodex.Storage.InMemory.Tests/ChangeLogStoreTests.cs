@@ -25,7 +25,7 @@ public class ChangeLogStoreTests
 
         var entries = await store.ReadAsync(tenant, new ChangeLogFilter());
 
-        entries.Select(e => e.Id).ShouldBe([2, 1]);   // newest first
+        entries.Select(e => e.Id).ShouldBe([2, 1]);
         entries[0].Actor.ShouldBe(actor2);
     }
 

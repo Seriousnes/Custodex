@@ -56,7 +56,6 @@ public class CheckObservabilityTests
         explained.Allowed.ShouldBeTrue();
         explained.Explain.ShouldNotBeNull();
         explained.Explain!.Description.ShouldContain(_access);
-        // The union branch and its two relation children are present.
         explained.Explain.Children.ShouldNotBeEmpty();
     }
 
@@ -103,6 +102,6 @@ public class CheckObservabilityTests
         var auth = await NewAsync();
         var (allowed, conditionTouched) = await auth.CheckInternalAsync(Req(explain: false));
         allowed.ShouldBeTrue();
-        conditionTouched.ShouldBeFalse();   // no conditions on this schema
+        conditionTouched.ShouldBeFalse();
     }
 }

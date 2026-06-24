@@ -34,7 +34,6 @@ public class CheckCacheKeyTests
         var obj = new EntityRef(objType, objId);
         var subject = _world.User(subjectId);
 
-        // Distinct alternates that vary exactly one component from the base.
         var otherVersion = "v2";
         var otherTenant = new TenantContext(t.Store, _world.SubjectId());
         var otherObjId = _world.ObjectId();

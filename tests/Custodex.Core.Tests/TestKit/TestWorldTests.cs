@@ -3,11 +3,6 @@ using Shouldly;
 
 namespace Custodex.Core.Tests.TestKit;
 
-/// <summary>
-/// Pins the two properties the de-domained suite depends on: TestWorld output is
-/// deterministic and stable across runs (golden values — a Bogus upgrade or a change
-/// to the seeding breaks these loudly), and vended identifiers are unique.
-/// </summary>
 public class TestWorldTests
 {
     [Fact]

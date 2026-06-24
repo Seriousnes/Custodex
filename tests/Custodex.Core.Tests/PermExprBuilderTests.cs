@@ -20,7 +20,6 @@ public class PermExprBuilderTests
             .Exclude(x => x.Relation(blocked))
             .Build();
 
-        // Expect: Exclude(Union(RelationRef grant, Arrow link->target), RelationRef blocked)
         var exclude = expr.ShouldBeOfType<Exclude>();
         exclude.Right.ShouldBeOfType<RelationRef>().Relation.ShouldBe(blocked);
         var union = exclude.Left.ShouldBeOfType<Union>();

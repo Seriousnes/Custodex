@@ -40,7 +40,7 @@ public class ArrowResolutionTests
         var edit = world.Permission();
 
         var schema = new SchemaBuilder(world.Version)
-            .Type(linkedType, t => t.Relation(canEdit, s => s.Type(world.UserType)))   // no 'edit' permission
+            .Type(linkedType, t => t.Relation(canEdit, s => s.Type(world.UserType)))
             .Type(childType, t => t
                 .Relation(link, s => s.Type(linkedType))
                 .Permission(edit, p => p.Arrow(link, edit)))
@@ -55,7 +55,6 @@ public class ArrowResolutionTests
     [Fact]
     public void Arrow_fails_when_one_of_several_target_types_lacks_the_permission()
     {
-        // 'parent' may be the first type (has edit) or the second (lacks edit).
         var world = TestWorld.New();
         var hasPermType = world.EntityType();
         var lacksPermType = world.EntityType();
@@ -68,7 +67,7 @@ public class ArrowResolutionTests
             .Type(hasPermType, t => t
                 .Relation(canEdit, s => s.Type(world.UserType))
                 .Permission(edit, p => p.Relation(canEdit)))
-            .Type(lacksPermType, t => t.Relation(canEdit, s => s.Type(world.UserType)))   // no 'edit' permission
+            .Type(lacksPermType, t => t.Relation(canEdit, s => s.Type(world.UserType)))
             .Type(childType, t => t
                 .Relation(parent, s => s.Type(hasPermType).Type(lacksPermType))
                 .Permission(edit, p => p.Arrow(parent, edit)))
@@ -93,7 +92,7 @@ public class ArrowResolutionTests
             [new EntityTypeDef(childType,
                 [new RelationDef(link, [new SubjectTypeRef(linkedType)])],
                 [new PermissionDef(edit, new Arrow(link, edit))])],
-            []);   // no linkedType declared at all
+            []);
 
         var result = SchemaValidator.Validate(schema);
 

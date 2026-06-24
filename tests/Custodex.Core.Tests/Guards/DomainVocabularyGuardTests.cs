@@ -4,15 +4,8 @@ using Shouldly;
 
 namespace Custodex.Core.Tests.Guards;
 
-/// <summary>
-/// Enforces that the test suite stays free of any specific industry's vocabulary:
-/// authorization identifiers must be generated via <c>Custodex.TestKit.TestWorld</c>,
-/// not hardcoded as domain literals. Scans every test source file (excluding this guard,
-/// build output, and untracked copy artifacts) for a curated set of domain terms.
-/// </summary>
 public class DomainVocabularyGuardTests
 {
-    // Word-bounded where a fragment could appear inside an innocent identifier (e.g. "vet" in "prevent").
     private static readonly string[] BannedPatterns =
     [
         @"\bzoo\b", @"\banimals?\b", @"\benclosures?\b", @"\bvets?\b", @"\bquarantine\b",

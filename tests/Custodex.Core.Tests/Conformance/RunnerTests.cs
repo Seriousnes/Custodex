@@ -27,7 +27,7 @@ public class RunnerTests
 
         var result = await ConformanceRunner.RunAsync(c);
         result.Allowed.ShouldBeTrue();
-        await ConformanceRunner.AssertAsync(c);   // should not throw
+        await ConformanceRunner.AssertAsync(c);
     }
 
     [Fact]

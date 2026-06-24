@@ -12,7 +12,7 @@ public class ContinuationCursorTests
         var world = TestWorld.New();
         var id = world.ObjectId();
         var token = ContinuationCursor.Encode(id);
-        token.ShouldNotBe(id);                 // opaque, not the raw id
+        token.ShouldNotBe(id);
         ContinuationCursor.DecodeAfter(token).ShouldBe(id);
     }
 

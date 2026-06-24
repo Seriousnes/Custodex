@@ -100,7 +100,7 @@ public class SubjectMembershipTests
     {
         var objType = _world.EntityType();
         var objId = _world.ObjectId();
-        var view = _world.Permission();   // serves as both the relation and the permission name
+        var view = _world.Permission();
         var granted = _world.SubjectId();
         var denied = _world.SubjectId();
         var schema = new SchemaBuilder(_world.Version)

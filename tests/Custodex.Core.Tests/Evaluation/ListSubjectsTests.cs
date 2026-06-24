@@ -64,7 +64,7 @@ public class ListSubjectsTests
             Tuple(_objType, _objId, _viewer, _world.Member(groupId)),
             Tuple(_world.GroupType, groupId, _world.MemberRelation, User(allowed)),
             Tuple(_world.GroupType, groupId, _world.MemberRelation, User(revoked)),
-            Tuple(_objType, _objId, _blocked, User(revoked)));      // revoked subject excluded
+            Tuple(_objType, _objId, _blocked, User(revoked)));
 
         var result = await auth.ListSubjectsAsync(Req());
         result.Subjects.Select(s => s.Id).ShouldBe(new[] { allowed });
@@ -93,17 +93,15 @@ public class ListSubjectsTests
     [Fact]
     public async Task Wildcard_grant_surfaces_as_star_and_respects_page_size()
     {
-        // A public grant (viewer@user:*) surfaces as the "*" subject and flows through
-        // the normal confirm + paginate loop — it must NOT push the page over PageSize.
-        var ids = SortedSubjects(2);   // both sort after "*" (ASCII 42)
+        var ids = SortedSubjects(2);
         var auth = await NewAsync(
             Tuple(_objType, _objId, _viewer, new SubjectRef(_world.UserType, "*")),
             Tuple(_objType, _objId, _viewer, User(ids[0])),
             Tuple(_objType, _objId, _viewer, User(ids[1])));
 
         var page1 = await auth.ListSubjectsAsync(Req(pageSize: 2));
-        page1.Subjects.Count.ShouldBe(2);                       // exactly PageSize, no bonus row
-        page1.Subjects.Select(s => s.Id).ShouldBe(new[] { "*", ids[0] });   // "*" sorts first ordinal
+        page1.Subjects.Count.ShouldBe(2);
+        page1.Subjects.Select(s => s.Id).ShouldBe(new[] { "*", ids[0] });
         page1.ContinuationToken.ShouldNotBeNull();
 
         var page2 = await auth.ListSubjectsAsync(Req(pageSize: 2, token: page1.ContinuationToken));
@@ -114,8 +112,6 @@ public class ListSubjectsTests
     [Fact]
     public async Task Lists_subjects_of_any_principal_type()
     {
-        // A relation that admits two distinct, non-"user" principal types. Both concrete
-        // subjects must be returned — ListSubjects must not assume the principal type is "user".
         var typeA = _world.UserType;
         var typeB = _world.EntityType();
         var idA = _world.SubjectId();
@@ -146,8 +142,6 @@ public class ListSubjectsTests
     [Fact]
     public async Task Cyclic_group_membership_does_not_hang_collection()
     {
-        // groupA <-> groupB membership cycle. Without a relation-level cycle guard in the
-        // leaf-user collector, this would recurse unbounded (stack overflow / hang).
         var groupA = _world.SubjectId();
         var groupB = _world.SubjectId();
         var subject = _world.SubjectId();

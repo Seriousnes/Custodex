@@ -27,7 +27,6 @@ public class ConditionExprNodesTests
     [Fact]
     public void Bounded_window_body_is_expressible_as_a_tree()
     {
-        // context.now.hour >= start && context.now.hour < end
         var start = _world.ParamName();
         var end = _world.ParamName();
         ConditionExpr body = new BoolOp(

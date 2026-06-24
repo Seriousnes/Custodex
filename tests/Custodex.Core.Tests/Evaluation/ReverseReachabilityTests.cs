@@ -51,7 +51,7 @@ public class ReverseReachabilityTests
             Tuple(_world.GroupType, groupId, _world.MemberRelation, _world.User(subject)));
 
         var candidates = await auth.CandidateObjectsForTest(T, _world.User(subject), _objType);
-        candidates.Select(c => c.Id).ShouldBe(ids);   // sorted, distinct, excludes the other-only object
+        candidates.Select(c => c.Id).ShouldBe(ids);
     }
 
     [Fact]
@@ -75,9 +75,6 @@ public class ReverseReachabilityTests
     [Fact]
     public async Task Gathers_objects_via_non_group_member_subject_sets()
     {
-        // Two arbitrary subject-sets that Check confirms but a member-only climb would have missed.
-        // (Candidate enumeration is pure tuple-graph BFS and does not consult the schema, so the
-        // type/relation names used here need not be declared in Build().)
         var teamType = _world.EntityType();
         var teamRel = _world.Relation();
         var altGroupRel = _world.Relation();

@@ -40,7 +40,7 @@ public class AttributeStoreTests
         var store = new InMemoryAttributeStore();
         var input = new Dictionary<string, object?> { [key] = 42 };
         await store.SetAsync(world.Tenant, obj, input, Uow);
-        input[key] = 99;   // mutate the caller's dictionary after the write
+        input[key] = 99;
 
         (await store.GetAsync(world.Tenant, obj))![key].ShouldBe(42);
     }

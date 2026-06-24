@@ -92,7 +92,6 @@ public class AlgebraTests
     [Fact]
     public async Task Exclude_self_is_always_deny()
     {
-        // a - a == deny for everyone.
         var objType = _world.EntityType();
         var viewer = _world.Relation();
         var access = _world.Permission();
@@ -111,7 +110,6 @@ public class AlgebraTests
     [Fact]
     public async Task Arrow_inherits_through_a_related_object_permission()
     {
-        // child.edit = link->edit ; parent.edit = editor
         var parentType = _world.EntityType();
         var childType = _world.EntityType();
         var editor = _world.Relation();
@@ -140,8 +138,6 @@ public class AlgebraTests
     [Fact]
     public async Task Arrow_sees_inner_exclusion_on_the_related_object()
     {
-        // The landmine: child.edit -> parent.edit, and parent.edit contains - blocked.
-        // A top-level post-filter could not see the inner exclusion; pointwise arrow recursion does.
         var parentType = _world.EntityType();
         var childType = _world.EntityType();
         var editor = _world.Relation();
@@ -171,7 +167,6 @@ public class AlgebraTests
     [Fact]
     public async Task Arrow_resolves_a_target_that_is_both_relation_and_permission()
     {
-        // link->gate where gate is a relation that is ALSO surfaced as a permission.
         var parentType = _world.EntityType();
         var childType = _world.EntityType();
         var gate = _world.Relation();
@@ -198,8 +193,6 @@ public class AlgebraTests
     [Fact]
     public async Task Arrow_relation_fallback_resolves_when_target_has_no_such_permission()
     {
-        // parent has a relation 'gate' but NO permission named 'gate'.
-        // child.guarded = link->gate must fall back to resolving the 'gate' relation on the parent.
         var parentType = _world.EntityType();
         var childType = _world.EntityType();
         var gate = _world.Relation();
@@ -240,7 +233,6 @@ public class AlgebraTests
             .Condition(condition, c => { })
             .Build();
         var auth = await NewAsync(schema, Tuple(objType, objId, viewer, _world.User(granted)));
-        // NullConditionEvaluator treats the condition as satisfied, so the viewer is allowed; the other is not.
         (await auth.CheckAsync(Req(new EntityRef(objType, objId), view, granted))).Allowed.ShouldBeTrue();
         (await auth.CheckAsync(Req(new EntityRef(objType, objId), view, denied))).Allowed.ShouldBeFalse();
     }

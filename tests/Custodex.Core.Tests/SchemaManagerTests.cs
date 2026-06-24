@@ -10,7 +10,7 @@ public class SchemaManagerTests
     private readonly string _objType;
     private readonly string _grant;
     private readonly string _edit;
-    private readonly string _missing;   // a relation name referenced but never declared
+    private readonly string _missing;
 
     public SchemaManagerTests()
     {

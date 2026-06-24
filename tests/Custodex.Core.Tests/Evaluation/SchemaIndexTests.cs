@@ -57,6 +57,6 @@ public class SchemaIndexTests
     {
         var idx = new SchemaIndex(Build());
         idx.TryPermission(_objType, _edit, out _).ShouldBeTrue();
-        idx.TryPermission(_objType, _linkRel, out _).ShouldBeFalse();   // a relation, not a permission
+        idx.TryPermission(_objType, _linkRel, out _).ShouldBeFalse();
     }
 }

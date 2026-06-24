@@ -25,7 +25,6 @@ public class CacheInvalidationTests
         after.ShouldNotBe(before);
 
         var entry = await cache.GetAsync("k");
-        // The entry still exists physically, but its epoch no longer matches => a reader treats it as a miss.
         entry.ShouldNotBeNull();
         (entry!.Epoch == after).ShouldBeFalse();
     }

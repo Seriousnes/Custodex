@@ -12,7 +12,7 @@ public class ListObjectsTests
     private readonly string _editor;
     private readonly string _blocked;
     private readonly string _edit;
-    private readonly string[] _sortedIds;   // five distinct object ids in ordinal order
+    private readonly string[] _sortedIds;
 
     public ListObjectsTests()
     {
@@ -57,11 +57,11 @@ public class ListObjectsTests
         var auth = await NewAsync(
             Tuple(_objType, allowedObj, _editor, _world.Member(groupId)),
             Tuple(_objType, revokedObj, _editor, _world.Member(groupId)),
-            Tuple(_objType, revokedObj, _blocked, _world.User(subjectId)),     // subject revoked on revokedObj
+            Tuple(_objType, revokedObj, _blocked, _world.User(subjectId)),
             Tuple(_world.GroupType, groupId, _world.MemberRelation, _world.User(subjectId)));
 
         var result = await auth.ListObjectsAsync(Req(subjectId));
-        result.ObjectIds.ShouldBe(new[] { allowedObj });   // revokedObj excluded
+        result.ObjectIds.ShouldBe(new[] { allowedObj });
         result.ContinuationToken.ShouldBeNull();
     }
 
@@ -76,7 +76,7 @@ public class ListObjectsTests
             Tuple(_objType, ids[2], _editor, new SubjectRef(_world.UserType, "*")));
 
         var result = await auth.ListObjectsAsync(Req(anyone));
-        result.ObjectIds.ShouldBe(ids);   // sorted, all three
+        result.ObjectIds.ShouldBe(ids);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class ListObjectsTests
 
         var page3 = await auth.ListObjectsAsync(Req(anyone, pageSize: 2, token: page2.ContinuationToken));
         page3.ObjectIds.ShouldBe(new[] { ids[4] });
-        page3.ContinuationToken.ShouldBeNull();   // true end of results
+        page3.ContinuationToken.ShouldBeNull();
     }
 
     [Fact]
@@ -123,6 +123,6 @@ public class ListObjectsTests
             token = page.ContinuationToken;
         } while (token is not null);
 
-        all.ShouldBe(ids);   // no dupes, no gaps
+        all.ShouldBe(ids);
     }
 }

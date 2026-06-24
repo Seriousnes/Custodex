@@ -5,27 +5,22 @@ using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
 
-/// <summary>
-/// Exercises the engine's hardest composite shape: a base grant revoked by an arrow-gated exclusion,
-/// unioned with an arrow-gated intersection of group memberships. Verifies that nested
-/// exclusion/intersection through arrows resolves pointwise.
-/// </summary>
 public class StructuralGateTests
 {
     private readonly TestWorld _world = TestWorld.New();
     private readonly string _groupType;
     private readonly string _childType;
     private readonly string _parentType;
-    private readonly string _gate;          // relation + permission on the parent (the arrow target)
-    private readonly string _baseRel;       // direct base grant on the child
-    private readonly string _link;          // child -> parent relation
-    private readonly string _setA;          // first intersection branch (union of A1/A2)
+    private readonly string _gate;
+    private readonly string _baseRel;
+    private readonly string _link;
+    private readonly string _setA;
     private readonly string _setA2;
-    private readonly string _setB;          // second intersection branch
+    private readonly string _setB;
     private readonly string _access;
-    private readonly string _groupA;        // members of setA and setB groups
+    private readonly string _groupA;
     private readonly string _groupB;
-    private readonly string _bothSubject;   // in setA and setB
+    private readonly string _bothSubject;
     private readonly string _setAOnlySubject;
 
     public StructuralGateTests()
@@ -69,7 +64,6 @@ public class StructuralGateTests
     private CheckRequest Access(string childId, string subjectId) =>
         _world.Check(_world.Object(_childType, childId), _access, _world.User(subjectId));
 
-    // Common membership wiring: _bothSubject is in setA and setB; _setAOnlySubject is in setA only.
     private RelationTuple[] Members(string childId) =>
     [
         _world.Tuple(_childType, childId, _setA, _world.Member(_groupA)),
@@ -106,14 +100,12 @@ public class StructuralGateTests
             _world.Tuple(_parentType, parentId, _gate, new SubjectRef(_world.UserType, "*")),
         };
         var auth = await _world.BuildAsync(Build(), tuples.ToArray());
-        // _setAOnlySubject has the base grant, but base is revoked inside the gate and it is missing setB.
         (await auth.CheckAsync(Access(childId, _setAOnlySubject))).Allowed.ShouldBeFalse();
     }
 
     [Fact]
     public async Task Outside_the_gate_base_access_passes_through()
     {
-        // The child is linked to a parent with NO gate wildcard tuple.
         var childId = _world.ObjectId();
         var parentId = _world.ObjectId();
         var tuples = new List<RelationTuple>(Members(childId))
@@ -121,7 +113,7 @@ public class StructuralGateTests
             _world.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
         };
         var auth = await _world.BuildAsync(Build(), tuples.ToArray());
-        (await auth.CheckAsync(Access(childId, _setAOnlySubject))).Allowed.ShouldBeTrue();   // base access intact
+        (await auth.CheckAsync(Access(childId, _setAOnlySubject))).Allowed.ShouldBeTrue();
         (await auth.CheckAsync(Access(childId, _bothSubject))).Allowed.ShouldBeTrue();
     }
 }

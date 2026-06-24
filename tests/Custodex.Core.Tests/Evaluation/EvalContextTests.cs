@@ -41,9 +41,9 @@ public class EvalContextTests
     {
         var ctx = new EvalContext(new EvaluationOptions());
         ctx.TryEnter(Frame(), out var scope).ShouldBeTrue();
-        ctx.TryEnter(Frame(), out _).ShouldBeFalse();   // cycle: already on path
+        ctx.TryEnter(Frame(), out _).ShouldBeFalse();
         scope.Dispose();
-        ctx.TryEnter(Frame(), out _).ShouldBeTrue();     // left path -> enterable again
+        ctx.TryEnter(Frame(), out _).ShouldBeTrue();
     }
 
     [Fact]

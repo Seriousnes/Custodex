@@ -46,7 +46,6 @@ public class RelationStoreTests
             new ConditionRef(conditionName, new Dictionary<string, object?> { [startParam] = 8, [endParam] = 18 }));
         await store.WriteAsync(tenant, [add], [], Uow);
 
-        // A logically-equal tuple with a *different dictionary instance* must still remove it.
         var remove = new RelationTuple(new EntityRef(objType, objId), relation,
             new SubjectRef(world.GroupType, groupId, world.MemberRelation),
             new ConditionRef(conditionName, new Dictionary<string, object?> { [startParam] = 8, [endParam] = 18 }));

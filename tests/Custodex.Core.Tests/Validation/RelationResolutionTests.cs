@@ -19,7 +19,7 @@ public class RelationResolutionTests
             .Type(objType, t => t
                 .Relation(grant, s => s.Type(world.UserType))
                 .Permission(edit, p => p.Relation(grant))
-                .Permission(manage, p => p.Relation(edit)))   // RelationRef naming a permission (nesting)
+                .Permission(manage, p => p.Relation(edit)))
             .Build();
 
         var result = SchemaValidator.Validate(schema);
