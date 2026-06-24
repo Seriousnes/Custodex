@@ -15,6 +15,7 @@
     <Project Path="tests/Custodex.Conformance/Custodex.Conformance.csproj" />
     <Project Path="tests/Custodex.Core.Tests/Custodex.Core.Tests.csproj" />
     <Project Path="tests/Custodex.Storage.InMemory.Tests/Custodex.Storage.InMemory.Tests.csproj" />
+    <Project Path="tests/Custodex.TestKit/Custodex.TestKit.csproj" />
     <Project Path="tests/Custodex.Storage.Postgres.Tests/Custodex.Storage.Postgres.Tests.csproj" />
   </Folder>
 </Solution>
