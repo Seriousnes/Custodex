@@ -49,10 +49,11 @@ public sealed partial class NpgsqlCteAuthorizer : IAuthorizer
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         var ctx = new EvalContext(_options);
+        var explainSink = request.Explain ? new List<ExplainNode>() : null;
         var allowed = await CheckPermissionAsync(
             conn, index, request.Tenant, request.Object, request.Permission, request.Subject,
-            request.Context, ctx, explain: null, ct);
-        return new CheckResult(allowed);
+            request.Context, ctx, explainSink, ct);
+        return new CheckResult(allowed, explainSink?.Count > 0 ? explainSink[0] : null);
     }
 
     /// <summary>Pointwise membership: does <paramref name="subject"/> hold <paramref name="permission"/> on <paramref name="obj"/>?</summary>
