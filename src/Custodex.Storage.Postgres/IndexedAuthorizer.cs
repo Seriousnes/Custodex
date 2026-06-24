@@ -36,8 +36,4 @@ public sealed partial class IndexedAuthorizer : IAuthorizer
     /// <inheritdoc />
     public Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
         => _inner.ListSubjectsAsync(request, ct);
-
-    /// <inheritdoc />
-    public Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
-        => _inner.ListObjectsAsync(request, ct);
 }
