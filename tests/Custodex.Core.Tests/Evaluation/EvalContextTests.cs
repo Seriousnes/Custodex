@@ -1,7 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
 using Shouldly;
-using Xunit;
 
 namespace Custodex.Core.Tests.Evaluation;
 

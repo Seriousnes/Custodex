@@ -1,6 +1,5 @@
 // tests/Custodex.Abstractions.Tests/ReferenceTypesTests.cs
 using Shouldly;
-using Xunit;
 
 namespace Custodex.Abstractions.Tests;
 

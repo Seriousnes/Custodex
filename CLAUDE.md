@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Custodex is a runtime-configurable **ReBAC (relationship-based) + ABAC (condition-based) authorization engine**, modelled on Google Zanzibar (the lineage behind SpiceDB / OpenFGA / Permify). It ships as a reusable .NET library and, later, a standalone gRPC/REST service. It contains **zero domain concepts** — a consuming app supplies its permission model as a *schema* (entity types, relations, permissions, conditions) and its authorization data as *tuples* + *attributes*. The first consumer is a multi-tenant zoo-management SaaS, but the engine knows nothing about zoos.
+Custodex is a runtime-configurable **ReBAC (relationship-based) + ABAC (condition-based) authorization engine**, modelled on Google Zanzibar (the lineage behind SpiceDB / OpenFGA / Permify). It ships as a reusable .NET library and, later, a standalone gRPC/REST service. It contains **zero domain concepts** — a consuming app supplies its permission model as a *schema* (entity types, relations, permissions, conditions) and its authorization data as *tuples* + *attributes*.
 
 The engine answers four questions: **Check** (point decision), **ListObjects** (which objects a subject may act on), **ListSubjects** (who may act on an object), and **BatchCheck**.
 
@@ -87,6 +87,19 @@ Declarative `ConformanceCase` records (`schema + tuples + attributes → expecte
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 - **Licensing:** Apache-2.0; no dependency under a non-permissive or paid license (explicitly **not** FluentAssertions v8+). No EF Core in any shipped package.
 
-## Current state
+## Coding Style and Conventions
 
-Branch `feat/m0-engine-core`. M0 (engine core: abstractions, schema model + builder + validation, in-memory providers, engine-driven traversal for all four ops, conditions, caching, conformance + property harness) is largely in place. `Storage.Postgres`, `Service`, and `Client` are scaffolded shells awaiting M1/M3.
+### Comment Style
+- Only XML documentation comments (`///`) are allowed. Do not use `//` line comments or `/* */` block comments.
+- This ships as a NuGet library, so the public API surface *is* the product. Every public type, record, and interface — and its public members (properties, methods) — must carry an XML doc comment, above all in `Custodex.Abstractions` (the consumer-facing contract), because consumers read them as IntelliSense and on the package docs. Document the contract and the *why*, not the obvious; private/internal members get a doc comment only where it carries real signal.
+
+### Public API & extensibility
+- This is a library others consume, extend, and test against — don't make it a closed box without good reason. Anything a consumer might implement, substitute, or mock must be exposed as an **interface**, and consumer-facing code depends on that interface, not the concrete type. Every seam already follows this: `IAuthorizer`, the storage providers (`IRelationStore` / `IAttributeStore` / `ISchemaStore` / `ICacheStore` / `IChangeLogStore`), `IConditionEvaluator`, and the `I*Manager` management seams.
+- `sealed` stays the default for concrete implementations and for the closed data/AST records (`Schema`, and the `PermExpr` / `ConditionExpr` node hierarchies). Sealing these does **not** close the box: extension flows through the interfaces above, and the AST is a deliberately closed set the engine switches over exhaustively — a third-party `PermExpr` node would break that. Reserve open inheritance (`abstract` / `virtual`, unsealed) for hierarchies genuinely meant to be subclassed.
+
+### Coding Style
+- Use the latest language features, such as collection initialization (e.g. `arr = []`) where possible. Don't use `Array.Empty<T>`, `new List<T>()`, etc when the target type is known and could be initialized by `[]`.
+- Use modern pattern matching
+  - `if (obj is not null)` instead of `if (obj != null)`
+  - `if (obj is { val: > 0 })` instead of `if (obj?.val > 0)`
+  - `if (obj is T objT)` instead of `if (obj != null && obj is T) { var objT = (T)obj; ... }`

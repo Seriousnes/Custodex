@@ -1,6 +1,5 @@
 using Custodex.Abstractions;
 using Shouldly;
-using Xunit;
 
 namespace Custodex.Core.Tests;
 

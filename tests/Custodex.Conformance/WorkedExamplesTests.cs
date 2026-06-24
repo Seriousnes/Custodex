@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace Custodex.Conformance;
 
 public class WorkedExamplesTests

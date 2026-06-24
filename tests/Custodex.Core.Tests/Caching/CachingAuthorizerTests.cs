@@ -1,12 +1,10 @@
 using System.Diagnostics.Metrics;
 using Custodex.Abstractions;
-using Custodex.Core;
 using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
 using Custodex.Storage.InMemory;
 using Shouldly;
-using Xunit;
 
 namespace Custodex.Core.Tests.Caching;
 

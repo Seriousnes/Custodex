@@ -1,7 +1,5 @@
 using Custodex.Abstractions;
-using Custodex.Storage.InMemory;
 using Shouldly;
-using Xunit;
 
 namespace Custodex.Storage.InMemory.Tests;
 

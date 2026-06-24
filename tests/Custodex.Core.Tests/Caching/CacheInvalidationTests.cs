@@ -2,7 +2,6 @@ using Custodex.Abstractions;
 using Custodex.Core.Caching;
 using Custodex.Storage.InMemory;
 using Shouldly;
-using Xunit;
 
 namespace Custodex.Core.Tests.Caching;
 
