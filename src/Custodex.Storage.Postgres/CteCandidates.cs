@@ -16,14 +16,13 @@ public static class CteCandidates
             -- base: the subject itself as a plain leaf principal
             SELECT @stype::text, @sid::text, @srel::text
           UNION
-            -- climb: any group whose `member` names a current principal becomes a group-as-member principal
-            SELECT rt.object_type, rt.object_id, 'member'
+            -- climb: any object whose tuple subject matches a current principal becomes the next principal
+            SELECT rt.object_type, rt.object_id, rt.relation
             FROM principals p
             JOIN relation_tuples rt
               ON rt.store_id = @store AND rt.tenant_id = @tenant
              AND rt.subject_type = p.ptype AND rt.subject_id = p.pid
              AND COALESCE(rt.subject_relation, '') = COALESCE(p.prelation, '')
-            WHERE rt.object_type = 'group' AND rt.relation = 'member'
         ),
         reached_objects (otype, oid) AS (
             -- objects any principal appears on
@@ -57,9 +56,11 @@ public static class CteCandidates
 
     /// <summary>
     /// Returns the distinct ordinal-sorted ids of objects of <paramref name="objectType"/> that are
-    /// reverse-reachable from <paramref name="subject"/>: the subject's inbound tuples, the inbound
-    /// tuples of every group it transitively belongs to, and objects reachable via structural edges.
-    /// This is a superset of the ListObjects answer; each id must be confirmed by a pointwise Check.
+    /// reverse-reachable from <paramref name="subject"/>: the subject's own inbound tuples, then
+    /// transitively climbing nested subject-set edges (any relation on any type) to collect all
+    /// ancestor principals, then collecting every object any ancestor appears on, and finally
+    /// following structural edges. This is a superset of the ListObjects answer; each id must be
+    /// confirmed by a pointwise Check.
     /// </summary>
     public static async Task<IReadOnlyList<string>> ReachableObjectIdsAsync(
         NpgsqlConnection conn, TenantContext t, SubjectRef subject, string objectType, CancellationToken ct = default)

@@ -15,12 +15,11 @@ public static class CustodexPostgresBuilderExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Condition evaluation:</b> the default <see cref="IConditionEvaluator"/> registered here
-    /// is a pass-through that always treats conditions as satisfied without evaluating them. If the
-    /// schema uses conditioned (ABAC) permissions, register a real <see cref="IConditionEvaluator"/>
-    /// (for example the engine's <c>ConditionEvaluator</c>) on the service collection
-    /// <i>before</i> calling <c>UsePostgres</c>, so that registration takes precedence.
-    /// Leaving the default in place means conditioned branches are never enforced.
+    /// <b>Condition evaluation:</b> conditions are evaluated by the engine's default
+    /// <see cref="CelConditionEvaluator"/>; a failing or missing-attribute condition is
+    /// default-deny. To substitute a custom evaluator, register an <see cref="IConditionEvaluator"/>
+    /// on the service collection <i>before</i> calling <c>UsePostgres</c> — that registration
+    /// takes precedence because this method uses <c>TryAddSingleton</c>.
     /// </para>
     /// <para>
     /// <b>Cross-request caching:</b> this registration does not enable cross-request result
@@ -50,7 +49,7 @@ public static class CustodexPostgresBuilderExtensions
         s.TryAddSingleton(new NpgsqlChangeLogStore(connectionString));
         s.TryAddSingleton<IChangeLogStore>(sp => sp.GetRequiredService<NpgsqlChangeLogStore>());
 
-        s.TryAddSingleton<IConditionEvaluator, NullConditionEvaluator>();
+        s.TryAddSingleton<IConditionEvaluator, CelConditionEvaluator>();
 
         s.TryAddSingleton<ICacheStore>(_ => new PostgresCacheStore(connectionString, default));
 

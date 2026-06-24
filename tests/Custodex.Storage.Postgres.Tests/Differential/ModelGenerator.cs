@@ -148,8 +148,39 @@ public static class ModelGenerator
                     Users.Select(u => new SubjectRef("user", u)).ToList());
             });
 
-    /// <summary>A <see cref="CsCheck.Gen{T}"/> that randomly selects one of the three curated
+    /// <summary>S4: subject-set nesting under non-group/member identifiers: type <c>team</c> with
+    /// relation <c>owner</c>, and type <c>repo</c> with relation <c>reader</c> (accepts user or
+    /// <c>team#owner</c>) and permission <c>read = reader</c>. A two-hop nest
+    /// (<c>team:t1#owner@team:t2#owner</c>, <c>team:t2#owner@user:leafU</c>) exercises the
+    /// generic subject-set climb with identifiers unrelated to groups or membership.</summary>
+    private static Schema S4Schema() => new SchemaBuilder("s4")
+        .Type("team", t => t.Relation("owner", s => s.User().SubjectSet("team", "owner")))
+        .Type("repo", t => t
+            .Relation("reader", s => s.User().SubjectSet("team", "owner"))
+            .Permission("read", p => p.Relation("reader")))
+        .Build();
+
+    private static readonly CsCheck.Gen<GeneratedModel> S4 =
+        CsCheck.Gen.Select(
+            UserGen,
+            UserGen,
+            (directU, leafU) =>
+            {
+                List<RelationTuple> tuples =
+                [
+                    T("repo", "r1", "reader", new SubjectRef("team", "t1", "owner")),
+                    T("repo", "r2", "reader", new SubjectRef("team", "t1", "owner")),
+                    T("repo", "r1", "reader", new SubjectRef("user", directU)),
+                    T("team", "t1", "owner", new SubjectRef("team", "t2", "owner")),
+                    T("team", "t2", "owner", new SubjectRef("user", leafU)),
+                ];
+                return new GeneratedModel(S4Schema(), tuples, [],
+                    [new EntityRef("repo", "r1"), new EntityRef("repo", "r2")],
+                    Users.Select(u => new SubjectRef("user", u)).ToList());
+            });
+
+    /// <summary>A <see cref="CsCheck.Gen{T}"/> that randomly selects one of the four curated
     /// skeleton schemas and randomizes its relation-tuple data.</summary>
     public static readonly CsCheck.Gen<GeneratedModel> Gen =
-        CsCheck.Gen.OneOf(S1, S2, S3);
+        CsCheck.Gen.OneOf(S1, S2, S3, S4);
 }
