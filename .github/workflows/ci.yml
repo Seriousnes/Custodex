@@ -30,16 +30,6 @@ jobs:
       - name: Build
         run: dotnet build Custodex.slnx --configuration Release --no-restore
 
-      - name: Upload build output
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          path: |
-            **/bin/Release/**
-            **/obj/**
-          include-hidden-files: true
-          retention-days: 1
-
   test:
     name: Test (${{ matrix.project }})
     needs: build
@@ -61,10 +51,12 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Download build output
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
-
       - name: Test
-        run: dotnet test tests/${{ matrix.project }}/${{ matrix.project }}.csproj --configuration Release --no-build --verbosity normal
+        run: |
+          set -o pipefail
+          dotnet test tests/${{ matrix.project }}/${{ matrix.project }}.csproj \
+            --configuration Release --verbosity normal | tee test-output.txt
+          if ! grep -qE 'Passed!|Total tests: [1-9]' test-output.txt; then
+            echo "::error::No tests were executed for ${{ matrix.project }}"
+            exit 1
+          fi
