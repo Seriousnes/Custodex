@@ -23,8 +23,8 @@ See `../README.md` → Global Constraints. Depends on `m0/01` (`ICacheStore`, `C
 ### Task 1: `PostgresCacheStore` epoch methods over `tenant_epochs`
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/PostgresCacheStore.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/EpochTests.cs`
+- Create: `src/Custodex.Storage.Postgres/PostgresCacheStore.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/EpochTests.cs`
 
 **Interfaces:**
 - Produces: `PostgresCacheStore(string connectionString, TenantContext scope) : ICacheStore`. This task implements `GetEpochAsync` and `BumpEpochAsync`; `GetAsync`/`SetAsync` arrive in Task 2 (a throwing temporary is replaced there — the wiring test below only exercises epochs).
@@ -32,12 +32,12 @@ See `../README.md` → Global Constraints. Depends on `m0/01` (`ICacheStore`, `C
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/EpochTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/EpochTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class EpochTests(PostgresFixture fx) : IAsyncLifetime
@@ -111,18 +111,18 @@ public class EpochTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter EpochTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter EpochTests`
 Expected: FAIL — `PostgresCacheStore` does not exist.
 
 - [ ] **Step 3: Implement the cache store's epoch methods**
 
 ```csharp
-// src/Relkit.Storage.Postgres/PostgresCacheStore.cs
+// src/Custodex.Storage.Postgres/PostgresCacheStore.cs
 using Dapper;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class PostgresCacheStore(string connectionString, TenantContext scope) : ICacheStore
 {
@@ -154,13 +154,13 @@ public sealed partial class PostgresCacheStore(string connectionString, TenantCo
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter EpochTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter EpochTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add Postgres cache-store epoch get/bump on tenant_epochs"
 ```
 
@@ -169,8 +169,8 @@ git commit -m "feat: add Postgres cache-store epoch get/bump on tenant_epochs"
 ### Task 2: `cache_entries` get/set with epoch stamp and lazy expiry
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/PostgresCacheStore.Entries.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/CacheEntriesTests.cs`
+- Create: `src/Custodex.Storage.Postgres/PostgresCacheStore.Entries.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/CacheEntriesTests.cs`
 
 **Interfaces:**
 - Produces: `PostgresCacheStore.GetAsync(key)` / `SetAsync(key, entry, ttl)` against `cache_entries` for the store's fixed `(store,tenant)` scope. `SetAsync` upserts value + epoch + `expires_at = now() + ttl`; `GetAsync` returns the stored `CacheEntry` (value + stamped epoch) and treats an expired row as a miss (lazy expiry).
@@ -180,12 +180,12 @@ git commit -m "feat: add Postgres cache-store epoch get/bump on tenant_epochs"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/CacheEntriesTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/CacheEntriesTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class CacheEntriesTests(PostgresFixture fx) : IAsyncLifetime
@@ -253,18 +253,18 @@ public class CacheEntriesTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CacheEntriesTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CacheEntriesTests`
 Expected: FAIL — `GetAsync`/`SetAsync` not defined.
 
 - [ ] **Step 3: Implement the entry methods**
 
 ```csharp
-// src/Relkit.Storage.Postgres/PostgresCacheStore.Entries.cs
+// src/Custodex.Storage.Postgres/PostgresCacheStore.Entries.cs
 using Dapper;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class PostgresCacheStore
 {
@@ -301,13 +301,13 @@ public sealed partial class PostgresCacheStore
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CacheEntriesTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CacheEntriesTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add cache_entries get/set with epoch stamp and lazy expiry"
 ```
 
@@ -316,8 +316,8 @@ git commit -m "feat: add cache_entries get/set with epoch stamp and lazy expiry"
 ### Task 3: `AuditedWritePath` — data write + change_log + epoch bump in one transaction
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/AuditedWritePath.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/AuditedWritePathTests.cs`
+- Create: `src/Custodex.Storage.Postgres/AuditedWritePath.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/AuditedWritePathTests.cs`
 
 **Interfaces:**
 - Produces: `AuditedWritePath(IRelationStore relations, IAttributeStore attributes, ISchemaStore schemas, IChangeLogStore changeLog, ICacheStore cache)` with:
@@ -332,12 +332,12 @@ git commit -m "feat: add cache_entries get/set with epoch stamp and lazy expiry"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/AuditedWritePathTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/AuditedWritePathTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class AuditedWritePathTests(PostgresFixture fx) : IAsyncLifetime
@@ -417,16 +417,16 @@ public class AuditedWritePathTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter AuditedWritePathTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter AuditedWritePathTests`
 Expected: FAIL — `AuditedWritePath` does not exist.
 
 - [ ] **Step 3: Implement the audited write path**
 
 ```csharp
-// src/Relkit.Storage.Postgres/AuditedWritePath.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.Postgres/AuditedWritePath.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Sequences a data write, its change_log entries, and the cache-epoch bump on a single
@@ -492,13 +492,13 @@ public sealed class AuditedWritePath(
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter AuditedWritePathTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter AuditedWritePathTests`
 Expected: PASS (2 tests) — commit persists all three, rollback discards all three, because they share one transaction.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: sequence data write, change_log, and epoch bump in one transaction"
 ```
 

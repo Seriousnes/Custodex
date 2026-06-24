@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up the `Relkit.Storage.Postgres` project (Dapper + Npgsql) and the full Postgres schema for spec §6.3 — `stores`, `schema_versions`, `tenants`, `relation_tuples`, `object_attributes`, `reverse_index` (stamped with `schema_version`), `cache_entries` (`UNLOGGED`), `change_log`, plus the two infrastructure tables the engine requires (`tenant_epochs` for the cache epoch counter, `schema_migrations` for the migration tracker) — delivered through an idempotent, ordered, embedded-SQL migration runner verified against a real Postgres via Testcontainers.
+**Goal:** Stand up the `Custodex.Storage.Postgres` project (Dapper + Npgsql) and the full Postgres schema for spec §6.3 — `stores`, `schema_versions`, `tenants`, `relation_tuples`, `object_attributes`, `reverse_index` (stamped with `schema_version`), `cache_entries` (`UNLOGGED`), `change_log`, plus the two infrastructure tables the engine requires (`tenant_epochs` for the cache epoch counter, `schema_migrations` for the migration tracker) — delivered through an idempotent, ordered, embedded-SQL migration runner verified against a real Postgres via Testcontainers.
 
 **Architecture:** Migrations are plain `.sql` scripts embedded as assembly resources and applied in lexical order by a small `MigrationRunner`. The runner records each applied script in a `schema_migrations` tracking table and skips already-applied scripts, so running it repeatedly is a no-op. No EF Core; no migration framework. Every engine table carries `store_id` and `tenant_id` (where tenant-scoped) so storage operations can hard-filter on both (spec §6.3). The forward index on `relation_tuples` serves Check; the reverse index serves traversal and ListSubjects.
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (the `Relkit.Abstractions` contract). **No EF Core.**
+See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata; all I/O methods `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (the `Custodex.Abstractions` contract). **No EF Core.**
 
 ## Shared decisions (locked — used verbatim by m1/03, m1/04, m1/07)
 
@@ -26,38 +26,38 @@ These four M1 plans share a database and types. Pin them once, here, and reuse t
 
 ---
 
-### Task 1: Create the `Relkit.Storage.Postgres` project and test project
+### Task 1: Create the `Custodex.Storage.Postgres` project and test project
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Relkit.Storage.Postgres.csproj`
-- Create: `tests/Relkit.Storage.Postgres.Tests/Relkit.Storage.Postgres.Tests.csproj`
-- Test: `tests/Relkit.Storage.Postgres.Tests/WiringTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Custodex.Storage.Postgres.csproj`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Custodex.Storage.Postgres.Tests.csproj`
+- Test: `tests/Custodex.Storage.Postgres.Tests/WiringTests.cs`
 
 **Interfaces:**
-- Produces: the `Relkit.Storage.Postgres` assembly referencing `Relkit.Abstractions`, with Npgsql + Dapper; a test project with Testcontainers.
+- Produces: the `Custodex.Storage.Postgres` assembly referencing `Custodex.Abstractions`, with Npgsql + Dapper; a test project with Testcontainers.
 
 - [ ] **Step 1: Create projects and references**
 
 Run:
 ```bash
-dotnet new classlib -n Relkit.Storage.Postgres -o src/Relkit.Storage.Postgres -f net10.0
-dotnet new xunit -n Relkit.Storage.Postgres.Tests -o tests/Relkit.Storage.Postgres.Tests -f net10.0
-rm src/Relkit.Storage.Postgres/Class1.cs tests/Relkit.Storage.Postgres.Tests/UnitTest1.cs
-dotnet sln add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
-dotnet add src/Relkit.Storage.Postgres reference src/Relkit.Abstractions
-dotnet add src/Relkit.Storage.Postgres package Npgsql
-dotnet add src/Relkit.Storage.Postgres package Dapper
-dotnet add tests/Relkit.Storage.Postgres.Tests reference src/Relkit.Storage.Postgres
-dotnet add tests/Relkit.Storage.Postgres.Tests reference src/Relkit.Abstractions
-dotnet add tests/Relkit.Storage.Postgres.Tests package Shouldly
-dotnet add tests/Relkit.Storage.Postgres.Tests package Testcontainers.PostgreSql
-dotnet add tests/Relkit.Storage.Postgres.Tests package Npgsql
-dotnet add tests/Relkit.Storage.Postgres.Tests package Dapper
+dotnet new classlib -n Custodex.Storage.Postgres -o src/Custodex.Storage.Postgres -f net10.0
+dotnet new xunit -n Custodex.Storage.Postgres.Tests -o tests/Custodex.Storage.Postgres.Tests -f net10.0
+rm src/Custodex.Storage.Postgres/Class1.cs tests/Custodex.Storage.Postgres.Tests/UnitTest1.cs
+dotnet sln add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
+dotnet add src/Custodex.Storage.Postgres reference src/Custodex.Abstractions
+dotnet add src/Custodex.Storage.Postgres package Npgsql
+dotnet add src/Custodex.Storage.Postgres package Dapper
+dotnet add tests/Custodex.Storage.Postgres.Tests reference src/Custodex.Storage.Postgres
+dotnet add tests/Custodex.Storage.Postgres.Tests reference src/Custodex.Abstractions
+dotnet add tests/Custodex.Storage.Postgres.Tests package Shouldly
+dotnet add tests/Custodex.Storage.Postgres.Tests package Testcontainers.PostgreSql
+dotnet add tests/Custodex.Storage.Postgres.Tests package Npgsql
+dotnet add tests/Custodex.Storage.Postgres.Tests package Dapper
 ```
 
 - [ ] **Step 2: Mark the SQL scripts as embedded resources**
 
-Add to `src/Relkit.Storage.Postgres/Relkit.Storage.Postgres.csproj` inside the `<Project>`:
+Add to `src/Custodex.Storage.Postgres/Custodex.Storage.Postgres.csproj` inside the `<Project>`:
 
 ```xml
   <ItemGroup>
@@ -68,47 +68,47 @@ Add to `src/Relkit.Storage.Postgres/Relkit.Storage.Postgres.csproj` inside the `
 - [ ] **Step 3: Write the wiring test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/WiringTests.cs
+// tests/Custodex.Storage.Postgres.Tests/WiringTests.cs
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 public class WiringTests
 {
     [Fact]
     public void Storage_assembly_is_referenced()
     {
-        typeof(Relkit.Storage.Postgres.MigrationRunner).Assembly.GetName().Name
-            .ShouldBe("Relkit.Storage.Postgres");
+        typeof(Custodex.Storage.Postgres.MigrationRunner).Assembly.GetName().Name
+            .ShouldBe("Custodex.Storage.Postgres");
     }
 }
 ```
 
 - [ ] **Step 4: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter WiringTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter WiringTests`
 Expected: FAIL — `MigrationRunner` does not exist yet.
 
 - [ ] **Step 5: Add a placeholder `MigrationRunner`** (filled in Task 3)
 
 ```csharp
-// src/Relkit.Storage.Postgres/MigrationRunner.cs
-namespace Relkit.Storage.Postgres;
+// src/Custodex.Storage.Postgres/MigrationRunner.cs
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class MigrationRunner { }
 ```
 
 - [ ] **Step 6: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter WiringTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter WiringTests`
 Expected: PASS (1 test).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
-git commit -m "chore: scaffold Relkit.Storage.Postgres project"
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
+git commit -m "chore: scaffold Custodex.Storage.Postgres project"
 ```
 
 ---
@@ -116,7 +116,7 @@ git commit -m "chore: scaffold Relkit.Storage.Postgres project"
 ### Task 2: The schema migration script (all §6.3 tables + infrastructure tables)
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Migrations/001_initial_schema.sql`
+- Create: `src/Custodex.Storage.Postgres/Migrations/001_initial_schema.sql`
 
 **Interfaces:**
 - Produces: every table and index in spec §6.3, plus `tenant_epochs` and `schema_migrations`. This script is the single source of DDL; Task 3 applies it.
@@ -126,7 +126,7 @@ git commit -m "chore: scaffold Relkit.Storage.Postgres project"
 > The whole script is wrapped so every statement is idempotent (`IF NOT EXISTS`), letting the runner re-apply safely and letting a partial run be re-run. `relation_tuples` is indexed forward (Check) and reverse (traversal / ListSubjects) exactly as spec §6.3 requires.
 
 ```sql
--- src/Relkit.Storage.Postgres/Migrations/001_initial_schema.sql
+-- src/Custodex.Storage.Postgres/Migrations/001_initial_schema.sql
 
 -- ── stores: one per consuming application (spec §6.1) ───────────────────────
 CREATE TABLE IF NOT EXISTS stores (
@@ -260,7 +260,7 @@ CREATE TABLE IF NOT EXISTS tenant_epochs (
 - [ ] **Step 2: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/Migrations/001_initial_schema.sql
+git add src/Custodex.Storage.Postgres/Migrations/001_initial_schema.sql
 git commit -m "feat: add initial Postgres schema for all engine tables"
 ```
 
@@ -269,9 +269,9 @@ git commit -m "feat: add initial Postgres schema for all engine tables"
 ### Task 3: The idempotent migration runner
 
 **Files:**
-- Modify: `src/Relkit.Storage.Postgres/MigrationRunner.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/PostgresFixture.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/MigrationRunnerTests.cs`
+- Modify: `src/Custodex.Storage.Postgres/MigrationRunner.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/PostgresFixture.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/MigrationRunnerTests.cs`
 
 **Interfaces:**
 - Produces: `MigrationRunner` with `static Task ApplyAsync(NpgsqlConnection connection, CancellationToken ct = default)` that creates `schema_migrations` if absent, loads embedded `Migrations/*.sql` resources in name order, applies any not yet recorded (each script + its tracking insert in one transaction), and records them. Re-running applies nothing.
@@ -279,12 +279,12 @@ git commit -m "feat: add initial Postgres schema for all engine tables"
 - [ ] **Step 1: Write the Testcontainers fixture** (shared by every integration test in this project)
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/PostgresFixture.cs
+// tests/Custodex.Storage.Postgres.Tests/PostgresFixture.cs
 using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 public sealed class PostgresFixture : IAsyncLifetime
 {
@@ -311,12 +311,12 @@ public sealed class PostgresCollection : ICollectionFixture<PostgresFixture> { }
 - [ ] **Step 2: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/MigrationRunnerTests.cs
+// tests/Custodex.Storage.Postgres.Tests/MigrationRunnerTests.cs
 using Dapper;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class MigrationRunnerTests(PostgresFixture fx)
@@ -386,21 +386,21 @@ public class MigrationRunnerTests(PostgresFixture fx)
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter MigrationRunnerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter MigrationRunnerTests`
 Expected: FAIL — `MigrationRunner.ApplyAsync` does not exist.
 
 - [ ] **Step 4: Implement the runner**
 
 ```csharp
-// src/Relkit.Storage.Postgres/MigrationRunner.cs
+// src/Custodex.Storage.Postgres/MigrationRunner.cs
 using System.Reflection;
 using Npgsql;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class MigrationRunner
 {
-    private const string ResourcePrefix = "Relkit.Storage.Postgres.Migrations.";
+    private const string ResourcePrefix = "Custodex.Storage.Postgres.Migrations.";
 
     public static async Task ApplyAsync(NpgsqlConnection connection, CancellationToken ct = default)
     {
@@ -480,13 +480,13 @@ public sealed partial class MigrationRunner
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter MigrationRunnerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter MigrationRunnerTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add idempotent embedded-SQL migration runner"
 ```
 

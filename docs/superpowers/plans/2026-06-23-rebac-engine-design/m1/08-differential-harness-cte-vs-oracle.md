@@ -6,7 +6,7 @@
 
 **Architecture:** One generator emits a `(Schema, tuples, attributes)` triple. The schema is built so it **always passes `m0/03` validation** (every relation/permission/arrow resolves, recursion terminates, conditions type-check) — otherwise both authorizers throw in lockstep and the case proves nothing. The harness seeds the *same* triple into (a) the in-memory provider behind `EngineDrivenAuthorizer` and (b) a fresh tenant in Testcontainers Postgres behind `NpgsqlCteAuthorizer`, then for randomly drawn `(object, permission, subject)` triples asserts `Check` agrees; for randomly drawn `(subject, type, permission)` asserts the **set** of `ListObjects` ids agrees; for `(object, permission)` asserts the **set** of `ListSubjects` subjects agrees (order-independent — pagination order is an internal detail, the *set* is the contract). Both authorizers use the **same `IConditionEvaluator`** so conditioned branches are compared on equal footing. A CsCheck counterexample is minimized and is a genuine CTE bug (the oracle is the spec).
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, **CsCheck** (MIT), Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Uses `Relkit.Core` (oracle), `Relkit.Storage.InMemory`, `Relkit.Storage.Postgres` (CTE path).
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, **CsCheck** (MIT), Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Uses `Custodex.Core` (oracle), `Custodex.Storage.InMemory`, `Custodex.Storage.Postgres` (CTE path).
 
 ## Global Constraints
 
@@ -19,41 +19,41 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 ### Task 1: Create the harness project and the shared Postgres fixture
 
 **Files:**
-- Create: `tests/Relkit.Differential/Relkit.Differential.csproj`
-- Create: `tests/Relkit.Differential/DifferentialFixture.cs`
-- Test: `tests/Relkit.Differential/WiringTests.cs`
+- Create: `tests/Custodex.Differential/Custodex.Differential.csproj`
+- Create: `tests/Custodex.Differential/DifferentialFixture.cs`
+- Test: `tests/Custodex.Differential/WiringTests.cs`
 
 **Interfaces:**
-- Produces: the `Relkit.Differential` project (referencing `Relkit.Abstractions`, `Relkit.Core`, `Relkit.Storage.InMemory`, `Relkit.Storage.Postgres`), and a `DifferentialFixture : IAsyncLifetime` that starts one Postgres container for the whole run and applies the migrations once. Each property iteration uses a **fresh `(store, tenant)`** so cases never cross-contaminate.
+- Produces: the `Custodex.Differential` project (referencing `Custodex.Abstractions`, `Custodex.Core`, `Custodex.Storage.InMemory`, `Custodex.Storage.Postgres`), and a `DifferentialFixture : IAsyncLifetime` that starts one Postgres container for the whole run and applies the migrations once. Each property iteration uses a **fresh `(store, tenant)`** so cases never cross-contaminate.
 
 - [ ] **Step 1: Create the project and references**
 
 Run:
 ```bash
-dotnet new xunit -n Relkit.Differential -o tests/Relkit.Differential -f net10.0
-rm tests/Relkit.Differential/UnitTest1.cs
-dotnet sln add tests/Relkit.Differential
-dotnet add tests/Relkit.Differential reference src/Relkit.Abstractions
-dotnet add tests/Relkit.Differential reference src/Relkit.Core
-dotnet add tests/Relkit.Differential reference src/Relkit.Storage.InMemory
-dotnet add tests/Relkit.Differential reference src/Relkit.Storage.Postgres
-dotnet add tests/Relkit.Differential package Shouldly
-dotnet add tests/Relkit.Differential package CsCheck
-dotnet add tests/Relkit.Differential package Npgsql
-dotnet add tests/Relkit.Differential package Dapper
-dotnet add tests/Relkit.Differential package Testcontainers.PostgreSql
+dotnet new xunit -n Custodex.Differential -o tests/Custodex.Differential -f net10.0
+rm tests/Custodex.Differential/UnitTest1.cs
+dotnet sln add tests/Custodex.Differential
+dotnet add tests/Custodex.Differential reference src/Custodex.Abstractions
+dotnet add tests/Custodex.Differential reference src/Custodex.Core
+dotnet add tests/Custodex.Differential reference src/Custodex.Storage.InMemory
+dotnet add tests/Custodex.Differential reference src/Custodex.Storage.Postgres
+dotnet add tests/Custodex.Differential package Shouldly
+dotnet add tests/Custodex.Differential package CsCheck
+dotnet add tests/Custodex.Differential package Npgsql
+dotnet add tests/Custodex.Differential package Dapper
+dotnet add tests/Custodex.Differential package Testcontainers.PostgreSql
 ```
 
 - [ ] **Step 2: Write the fixture and a wiring test**
 
 ```csharp
-// tests/Relkit.Differential/DifferentialFixture.cs
+// tests/Custodex.Differential/DifferentialFixture.cs
 using Npgsql;
-using Relkit.Storage.Postgres;
+using Custodex.Storage.Postgres;
 using Testcontainers.PostgreSql;
 using Xunit;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 public sealed class DifferentialFixture : IAsyncLifetime
 {
@@ -85,11 +85,11 @@ public sealed class DifferentialCollection : ICollectionFixture<DifferentialFixt
 ```
 
 ```csharp
-// tests/Relkit.Differential/WiringTests.cs
+// tests/Custodex.Differential/WiringTests.cs
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 [Collection("differential")]
 public class WiringTests(DifferentialFixture fx)
@@ -106,13 +106,13 @@ public class WiringTests(DifferentialFixture fx)
 
 - [ ] **Step 3: Run to verify**
 
-Run: `dotnet test tests/Relkit.Differential --filter WiringTests`
+Run: `dotnet test tests/Custodex.Differential --filter WiringTests`
 Expected: PASS (1 test) — the container starts and migrations apply.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add tests/Relkit.Differential
+git add tests/Custodex.Differential
 git commit -m "chore: scaffold differential harness project and Postgres fixture"
 ```
 
@@ -121,8 +121,8 @@ git commit -m "chore: scaffold differential harness project and Postgres fixture
 ### Task 2: The valid-schema + tuples + attributes generator
 
 **Files:**
-- Create: `tests/Relkit.Differential/ModelGenerator.cs`
-- Test: `tests/Relkit.Differential/ModelGeneratorTests.cs`
+- Create: `tests/Custodex.Differential/ModelGenerator.cs`
+- Test: `tests/Custodex.Differential/ModelGeneratorTests.cs`
 
 **Interfaces:**
 - Produces: `ModelGenerator` with a CsCheck `Gen<GeneratedModel>` where `GeneratedModel(Schema Schema, IReadOnlyList<RelationTuple> Tuples, IReadOnlyList<(EntityRef Obj, IReadOnlyDictionary<string,object?> Attrs)> Attributes, IReadOnlyList<EntityRef> ProbeObjects, IReadOnlyList<SubjectRef> ProbeSubjects)`. The schema is drawn from a **fixed family of shapes** that exercise the hard interactions (union, intersection, exclusion, arrow-into-permission, arrow-into-relation, nested groups, wildcard gates) and is **guaranteed to pass `m0/03` validation**. Tuples are drawn over a small id pool consistent with the schema's relations. Attributes are drawn for objects whose schema has a condition.
@@ -133,13 +133,13 @@ git commit -m "chore: scaffold differential harness project and Postgres fixture
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Differential/ModelGeneratorTests.cs
+// tests/Custodex.Differential/ModelGeneratorTests.cs
 using CsCheck;
-using Relkit.Core;
+using Custodex.Core;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 public class ModelGeneratorTests
 {
@@ -164,7 +164,7 @@ public class ModelGeneratorTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Differential --filter ModelGeneratorTests`
+Run: `dotnet test tests/Custodex.Differential --filter ModelGeneratorTests`
 Expected: FAIL — `ModelGenerator` does not exist.
 
 - [ ] **Step 3: Implement the generator**
@@ -172,12 +172,12 @@ Expected: FAIL — `ModelGenerator` does not exist.
 > The generator composes three curated skeletons (each valid): **(S1) nested-group viewer with exclusion** (`doc.view = viewer - blocked`, `viewer` allows user/group#member/wildcard), **(S2) arrow-with-inner-exclusion** (`animal.edit = enclosure->edit`, `enclosure.edit = editor - blocked` — the discriminator shape), and **(S3) the §12.5 quarantine gate** (intersection-through-arrow with a wildcard). For each, it randomizes the data graph over a small id pool. `ProbeObjects`/`ProbeSubjects` are the ids the harness will Check/List against.
 
 ```csharp
-// tests/Relkit.Differential/ModelGenerator.cs
+// tests/Custodex.Differential/ModelGenerator.cs
 using CsCheck;
-using Relkit.Abstractions;
-using Relkit.Core;
+using Custodex.Abstractions;
+using Custodex.Core;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 public sealed record GeneratedModel(
     Schema Schema,
@@ -305,13 +305,13 @@ public static class ModelGenerator
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Differential --filter ModelGeneratorTests`
+Run: `dotnet test tests/Custodex.Differential --filter ModelGeneratorTests`
 Expected: PASS (2 tests) — every generated schema validates; probes are present.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Differential
+git add tests/Custodex.Differential
 git commit -m "feat: add valid-schema model generator for the differential harness"
 ```
 
@@ -320,8 +320,8 @@ git commit -m "feat: add valid-schema model generator for the differential harne
 ### Task 3: The dual-seed harness — build both authorizers over one model
 
 **Files:**
-- Create: `tests/Relkit.Differential/DifferentialHarness.cs`
-- Test: `tests/Relkit.Differential/HarnessSmokeTests.cs`
+- Create: `tests/Custodex.Differential/DifferentialHarness.cs`
+- Test: `tests/Custodex.Differential/HarnessSmokeTests.cs`
 
 **Interfaces:**
 - Produces: `DifferentialHarness` with `static Task<(EngineDrivenAuthorizer Oracle, NpgsqlCteAuthorizer Cte)> BuildAsync(DifferentialFixture fx, GeneratedModel model, string store, CancellationToken ct)` — seeds the model into the in-memory stores (behind the oracle) and into a fresh `(store, tenant)` in Postgres (behind the CTE authorizer), using the **same `IConditionEvaluator`** for both. A fixed `RequestContext` (Unix epoch now) keeps conditions deterministic.
@@ -332,12 +332,12 @@ git commit -m "feat: add valid-schema model generator for the differential harne
 - [ ] **Step 1: Write the smoke test**
 
 ```csharp
-// tests/Relkit.Differential/HarnessSmokeTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Differential/HarnessSmokeTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 [Collection("differential")]
 public class HarnessSmokeTests(DifferentialFixture fx)
@@ -368,11 +368,11 @@ public class HarnessSmokeTests(DifferentialFixture fx)
 > A tiny `ModelGeneratorSamples` helper provides the hand-picked discriminator model used by the smoke test:
 
 ```csharp
-// tests/Relkit.Differential/ModelGeneratorSamples.cs
-using Relkit.Abstractions;
-using Relkit.Core;
+// tests/Custodex.Differential/ModelGeneratorSamples.cs
+using Custodex.Abstractions;
+using Custodex.Core;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 internal static class ModelGeneratorSamples
 {
@@ -397,21 +397,21 @@ internal static class ModelGeneratorSamples
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Differential --filter HarnessSmokeTests`
+Run: `dotnet test tests/Custodex.Differential --filter HarnessSmokeTests`
 Expected: FAIL — `DifferentialHarness` does not exist.
 
 - [ ] **Step 3: Implement the dual-seed harness**
 
 ```csharp
-// tests/Relkit.Differential/DifferentialHarness.cs
+// tests/Custodex.Differential/DifferentialHarness.cs
 using Dapper;
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
-using Relkit.Storage.InMemory;
-using Relkit.Storage.Postgres;
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
+using Custodex.Storage.InMemory;
+using Custodex.Storage.Postgres;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 public static class DifferentialHarness
 {
@@ -460,13 +460,13 @@ public static class DifferentialHarness
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Differential --filter HarnessSmokeTests`
+Run: `dotnet test tests/Custodex.Differential --filter HarnessSmokeTests`
 Expected: PASS — both authorizers deny carol on the discriminator model.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Differential
+git add tests/Custodex.Differential
 git commit -m "feat: add dual-seed differential harness building oracle + CTE over one model"
 ```
 
@@ -475,7 +475,7 @@ git commit -m "feat: add dual-seed differential harness building oracle + CTE ov
 ### Task 4: Differential Check property
 
 **Files:**
-- Create: `tests/Relkit.Differential/CheckEquivalenceTests.cs`
+- Create: `tests/Custodex.Differential/CheckEquivalenceTests.cs`
 
 **Interfaces:**
 - Consumes: `ModelGenerator.Gen`, `DifferentialHarness`. The property: for a generated model and each `(probeObject, permission, probeSubject)`, `oracle.CheckAsync(...).Allowed == cte.CheckAsync(...).Allowed`. A unique store id per iteration isolates Postgres state.
@@ -485,13 +485,13 @@ git commit -m "feat: add dual-seed differential harness building oracle + CTE ov
 - [ ] **Step 1: Write the property test**
 
 ```csharp
-// tests/Relkit.Differential/CheckEquivalenceTests.cs
+// tests/Custodex.Differential/CheckEquivalenceTests.cs
 using CsCheck;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 [Collection("differential")]
 public class CheckEquivalenceTests(DifferentialFixture fx)
@@ -538,13 +538,13 @@ public class CheckEquivalenceTests(DifferentialFixture fx)
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Differential --filter CheckEquivalenceTests`
+Run: `dotnet test tests/Custodex.Differential --filter CheckEquivalenceTests`
 Expected: PASS. A failure prints a minimized counterexample model — that is a real `NpgsqlCteAuthorizer` bug; fix the CTE path (`m1/05`), the oracle is the spec.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Differential/CheckEquivalenceTests.cs
+git add tests/Custodex.Differential/CheckEquivalenceTests.cs
 git commit -m "test: assert CTE check equals the oracle over random valid models"
 ```
 
@@ -553,7 +553,7 @@ git commit -m "test: assert CTE check equals the oracle over random valid models
 ### Task 5: Differential ListObjects and ListSubjects properties
 
 **Files:**
-- Create: `tests/Relkit.Differential/ListEquivalenceTests.cs`
+- Create: `tests/Custodex.Differential/ListEquivalenceTests.cs`
 
 **Interfaces:**
 - Consumes: `ModelGenerator.Gen`, `DifferentialHarness`. Two properties: (1) for each `(probeSubject, type, permission)`, the **set** of `ListObjects` ids agrees between oracle and CTE (drained across all pages); (2) for each `(probeObject, permission)`, the **set** of `ListSubjects` subjects agrees. Sets, not sequences — pagination order is internal; the contract is the membership set.
@@ -563,13 +563,13 @@ git commit -m "test: assert CTE check equals the oracle over random valid models
 - [ ] **Step 1: Write the property tests**
 
 ```csharp
-// tests/Relkit.Differential/ListEquivalenceTests.cs
+// tests/Custodex.Differential/ListEquivalenceTests.cs
 using CsCheck;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Differential;
+namespace Custodex.Differential;
 
 [Collection("differential")]
 public class ListEquivalenceTests(DifferentialFixture fx)
@@ -654,18 +654,18 @@ public class ListEquivalenceTests(DifferentialFixture fx)
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Differential --filter ListEquivalenceTests`
+Run: `dotnet test tests/Custodex.Differential --filter ListEquivalenceTests`
 Expected: PASS. A divergence is a CTE list-path bug (candidate miss or confirm error); fix `m1/06`, the oracle is the spec.
 
 - [ ] **Step 3: Run the whole harness**
 
-Run: `dotnet test tests/Relkit.Differential`
+Run: `dotnet test tests/Custodex.Differential`
 Expected: PASS (wiring + generator + smoke + check + list properties).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add tests/Relkit.Differential/ListEquivalenceTests.cs
+git add tests/Custodex.Differential/ListEquivalenceTests.cs
 git commit -m "test: assert CTE list-objects and list-subjects sets equal the oracle"
 ```
 
@@ -683,6 +683,6 @@ git commit -m "test: assert CTE list-objects and list-subjects sets equal the or
 
 ## Contract gaps (reported, not changed)
 
-- **None new.** This plan adds a test project only. It depends on the `Relkit.Storage.Postgres → Relkit.Core` reference decided in `m1/02`/`m1/05` and the reused `ContinuationCursor`/`SchemaValidator`/oracle from M0. If CsCheck's `SampleAsync`/`Gen` combinator surface differs from the pinned version, adapt the call sites — the properties (equivalence over valid random models) are the durable contract.
+- **None new.** This plan adds a test project only. It depends on the `Custodex.Storage.Postgres → Custodex.Core` reference decided in `m1/02`/`m1/05` and the reused `ContinuationCursor`/`SchemaValidator`/oracle from M0. If CsCheck's `SampleAsync`/`Gen` combinator surface differs from the pinned version, adapt the call sites — the properties (equivalence over valid random models) are the durable contract.
 ```
 

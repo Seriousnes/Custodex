@@ -2,37 +2,37 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement `NpgsqlCteAuthorizer.CheckAsync` (and `BatchCheckAsync`) in `Relkit.Storage.Postgres` — the Postgres recursive-CTE primary path for point Check (spec §7.1) — with the **same `IAuthorizer` Check semantics as the `m0/05` `EngineDrivenAuthorizer` oracle**. The CTE computes reachability (nested subject-set expansion, arrow edge-following); the boolean algebra (union / intersection / exclusion / conditioned / arrow-into-sub-permission) and condition evaluation are composed in C#, per the seam decided by the `m1/02` spike.
+**Goal:** Implement `NpgsqlCteAuthorizer.CheckAsync` (and `BatchCheckAsync`) in `Custodex.Storage.Postgres` — the Postgres recursive-CTE primary path for point Check (spec §7.1) — with the **same `IAuthorizer` Check semantics as the `m0/05` `EngineDrivenAuthorizer` oracle**. The CTE computes reachability (nested subject-set expansion, arrow edge-following); the boolean algebra (union / intersection / exclusion / conditioned / arrow-into-sub-permission) and condition evaluation are composed in C#, per the seam decided by the `m1/02` spike.
 
 **Architecture (the seam decided in `m1/02`, reproduced verbatim — `m1/06`/`m1/08` use the same text):**
 
-> **Relkit CTE/engine seam (decided by the `m1/02` spike, validated by the `m1/08` differential harness).**
+> **Custodex CTE/engine seam (decided by the `m1/02` spike, validated by the `m1/08` differential harness).**
 >
 > The recursive Postgres CTE computes **reachability only**: starting from an `(object, relation)` it expands nested subject-set membership (`group:G#member` → `G`'s `member` tuples, transitively) and follows structural-reference edges for arrows (`animal#enclosure@enclosure:KH1` → the related `enclosure:KH1`), producing the **leaf set of `(subject_type, subject_id)` rows reachable through a single relation or a single arrow hop's sub-permission**. It does **not** compute union/intersection/exclusion/conditioned across permission branches, and it does **not** post-filter at the top level.
 >
 > The **boolean algebra is composed in C#**, in `NpgsqlCteAuthorizer`, walking the `PermExpr` tree exactly as `EngineDrivenAuthorizer` does (`m0/05`): `Union`/`Intersect`/`Exclude` short-circuit over sub-results; `Arrow(rel, perm)` follows the `rel` edges (one CTE reachability query) and recurses into each related object's **full** `perm` expression — so an inner `- blocked` under an arrow is always seen, because the C# walk re-enters the related object's whole expression rather than post-filtering the top object. `Conditioned` and tuple-carried conditions are evaluated in C# via `IConditionEvaluator` against synced attributes + request context, identically to the oracle.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Relkit.Core` (`SchemaIndex`, `EvaluationOptions`, `EvalContext`/`EvalFrame`, `IConditionEvaluator`).
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Custodex.Core` (`SchemaIndex`, `EvaluationOptions`, `EvalContext`/`EvalFrame`, `IConditionEvaluator`).
 
 ## Global Constraints
 
 See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard; no `DateTime.Now`/`Guid.NewGuid()` in evaluation (ambient time enters only via `RequestContext.Now`). Depends on `m0/01` (Abstractions), `m0/05` (`SchemaIndex`, `EvalContext`, `EvaluationOptions`, `IConditionEvaluator`, the oracle's algebra it must match), `m1/01` (`relation_tuples` schema, `MigrationRunner`, `PostgresFixture`), `m1/02` (the decided seam + proven reachability CTE), `m1/03` (`NpgsqlUnitOfWorkFactory` for seeding), `m1/04` (`NpgsqlRelationStore`, `NpgsqlAttributeStore`, `NpgsqlSchemaStore` for seeding/reads).
 
-**Cycle vs depth — identical to the oracle (`m0/05`):** a cycle (the same `(object, permission, subject)` frame re-entered on the current DFS path) is pruned and contributes `false`, never an exception; the depth bound (default 64 nested frames) throws `EvaluationLimitException`. `NpgsqlCteAuthorizer` reuses `EvalContext` from `Relkit.Core` for exactly this, so the two paths guard identically.
+**Cycle vs depth — identical to the oracle (`m0/05`):** a cycle (the same `(object, permission, subject)` frame re-entered on the current DFS path) is pruned and contributes `false`, never an exception; the depth bound (default 64 nested frames) throws `EvaluationLimitException`. `NpgsqlCteAuthorizer` reuses `EvalContext` from `Custodex.Core` for exactly this, so the two paths guard identically.
 
 > **CALIBRATION (critical).** The recursive-CTE SQL here is the hardest, least-certain code in the project. The **tests are the rigorous spec**: every test in this plan pins behaviour the oracle already proves (`m0/05` `AlgebraTests`, `m0/09` worked examples). The SQL and the C# walk below are **the approach validated by the `m1/02` spike and the `m1/08` differential harness**, NOT guaranteed-correct copy-paste. `NpgsqlCteAuthorizer ≡ EngineDrivenAuthorizer` is the correctness claim and the `m1/08` harness is its only proof. If a test in `m1/08` finds a divergence, the SQL/walk is wrong and the oracle is right.
 
 ---
 
-### Task 1: Add the `Relkit.Core` reference and the reachability store primitive
+### Task 1: Add the `Custodex.Core` reference and the reachability store primitive
 
 **Files:**
-- Modify: `src/Relkit.Storage.Postgres/Relkit.Storage.Postgres.csproj`
-- Create: `src/Relkit.Storage.Postgres/CteReachability.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cte/CteReachabilityTests.cs`
+- Modify: `src/Custodex.Storage.Postgres/Custodex.Storage.Postgres.csproj`
+- Create: `src/Custodex.Storage.Postgres/CteReachability.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteReachabilityTests.cs`
 
 **Interfaces:**
-- Produces: a `Relkit.Storage.Postgres → Relkit.Core` project reference (decided in `m1/02`), and `CteReachability` — the production-grade recursive-CTE reachability primitive `NpgsqlCteAuthorizer` composes over. Methods:
+- Produces: a `Custodex.Storage.Postgres → Custodex.Core` project reference (decided in `m1/02`), and `CteReachability` — the production-grade recursive-CTE reachability primitive `NpgsqlCteAuthorizer` composes over. Methods:
   - `Task<IReadOnlyList<SubjectRef>> SubjectsThroughRelationAsync(NpgsqlConnection conn, NpgsqlTransaction? tx, TenantContext t, EntityRef obj, string relation, CancellationToken ct)` — distinct **leaf** subjects (concrete + wildcard) reachable through `obj#relation`, expanding nested subject-sets, returning each leaf's stored `Condition` so the C# layer can evaluate it.
   - `Task<IReadOnlyList<RelationTuple>> EdgesThroughRelationAsync(NpgsqlConnection conn, NpgsqlTransaction? tx, TenantContext t, EntityRef obj, string relation, CancellationToken ct)` — the direct (non-expanded) tuples on `obj#relation`, for arrow edge-following (the subject of each is the related object).
 - Consumes: `relation_tuples` schema (`m1/01`); `RelationTuple`/`SubjectRef`/`ConditionRef` (`m0/01`); `Json` helper (`m1/04`) for `condition_params`.
@@ -43,19 +43,19 @@ See `../README.md` → Global Constraints. Key points: `net10.0`; `Nullable`+`Im
 
 Run:
 ```bash
-dotnet add src/Relkit.Storage.Postgres reference src/Relkit.Core
+dotnet add src/Custodex.Storage.Postgres reference src/Custodex.Core
 ```
 
 - [ ] **Step 2: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cte/CteReachabilityTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Cte/CteReachabilityTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cte;
+namespace Custodex.Storage.Postgres.Tests.Cte;
 
 [Collection("postgres")]
 public class CteReachabilityTests(PostgresFixture fx) : IAsyncLifetime
@@ -118,7 +118,7 @@ public class CteReachabilityTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteReachabilityTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteReachabilityTests`
 Expected: FAIL — `CteReachability` does not exist.
 
 - [ ] **Step 4: Implement the reachability primitive**
@@ -126,12 +126,12 @@ Expected: FAIL — `CteReachability` does not exist.
 > **Calibration:** this recursive CTE is the spike's proven reachability shape (`m1/02` Task 2), hardened for production: it carries the leaf's stored condition through so the C# layer evaluates it, and hard-filters `store_id + tenant_id` (spec §6.3). Validated by `m1/08`.
 
 ```csharp
-// src/Relkit.Storage.Postgres/CteReachability.cs
+// src/Custodex.Storage.Postgres/CteReachability.cs
 using Dapper;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Recursive-CTE reachability primitives (the seam decided by m1/02, validated by m1/08).
@@ -222,13 +222,13 @@ public static class CteReachability
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteReachabilityTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteReachabilityTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add recursive-CTE reachability primitive and Core project reference"
 ```
 
@@ -237,28 +237,28 @@ git commit -m "feat: add recursive-CTE reachability primitive and Core project r
 ### Task 2: `NpgsqlCteAuthorizer` skeleton + relation resolution + bare-RelationRef Check
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.cs`
-- Create: `src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cte/CteMembershipTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteMembershipTests.cs`
 
 **Interfaces:**
 - Produces: `NpgsqlCteAuthorizer : IAuthorizer` with constructor `NpgsqlCteAuthorizer(string connectionString, ISchemaStore schemaStore, IAttributeStore attributes, IConditionEvaluator conditions, EvaluationOptions? options = null)`. This task lands the skeleton, `CheckAsync`, the relation-resolution primitive (`ResolveRelationAsync`: direct / wildcard / nested subject-set via the CTE, with per-tuple condition evaluation), a minimal `EvalExprAsync` handling `RelationRef` only, and `NotImplementedException` stubs for `BatchCheck`/`ListObjects`/`ListSubjects` (List/Batch filled in Task 4 and `m1/06`).
-- Consumes: `CteReachability` (Task 1); `SchemaIndex`, `EvalContext`, `EvalFrame`, `EvaluationOptions`, `IConditionEvaluator` from `Relkit.Core`; `ISchemaStore`/`IAttributeStore` (reads).
+- Consumes: `CteReachability` (Task 1); `SchemaIndex`, `EvalContext`, `EvalFrame`, `EvaluationOptions`, `IConditionEvaluator` from `Custodex.Core`; `ISchemaStore`/`IAttributeStore` (reads).
 
 > **Mirror the oracle.** This class is a near-line-for-line port of `EngineDrivenAuthorizer` (`m0/05`) with two substitutions: (1) "fetch tuples for `obj#relation` then loop in C# to expand subject-sets" becomes "call `CteReachability.SubjectsThroughRelationAsync` (expansion runs in SQL)"; (2) it opens its own `NpgsqlConnection` per Check (reads), reused across the whole recursive walk. Everything else — `CheckPermissionAsync`, `EvalExprAsync`, cycle/depth guards via `EvalContext`, condition evaluation — is identical to the oracle so the answers match.
 
 - [ ] **Step 1: Write the failing tests** (these mirror `m0/05` `SubjectMembershipTests`)
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cte/CteMembershipTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Cte/CteMembershipTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cte;
+namespace Custodex.Storage.Postgres.Tests.Cte;
 
 [Collection("postgres")]
 public class CteMembershipTests(PostgresFixture fx) : IAsyncLifetime
@@ -353,19 +353,19 @@ public class CteMembershipTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteMembershipTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteMembershipTests`
 Expected: FAIL — `NpgsqlCteAuthorizer` does not exist.
 
 - [ ] **Step 3: Implement the skeleton + relation resolution + minimal `EvalExprAsync`**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.cs
+// src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.cs
 using Npgsql;
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
-using Relkit.Core.Evaluation;
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Postgres recursive-CTE primary path for the four operations (spec §7.1). Reachability
@@ -490,12 +490,12 @@ public sealed partial class NpgsqlCteAuthorizer : IAuthorizer
 ```
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs  (temporary minimal form; Task 3 replaces)
+// src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs  (temporary minimal form; Task 3 replaces)
 using Npgsql;
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class NpgsqlCteAuthorizer
 {
@@ -527,13 +527,13 @@ public sealed partial class NpgsqlCteAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteMembershipTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteMembershipTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add NpgsqlCteAuthorizer with CTE relation resolution and bare-relation check"
 ```
 
@@ -542,8 +542,8 @@ git commit -m "feat: add NpgsqlCteAuthorizer with CTE relation resolution and ba
 ### Task 3: Full algebra — Union, Intersect, Exclude, Arrow, Conditioned (matching the oracle)
 
 **Files:**
-- Modify: `src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cte/CteAlgebraTests.cs`
+- Modify: `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteAlgebraTests.cs`
 
 **Interfaces:**
 - Produces: the complete `EvalExprAsync` handling all six `PermExpr` node kinds, plus `EvalArrowAsync` and `BranchConditionSatisfiedAsync`, identical in structure to the oracle's `m0/05` Task 5 implementation (same short-circuiting, same arrow-recurses-into-full-expression, same wildcard-falls-back-to-relation).
@@ -554,15 +554,15 @@ git commit -m "feat: add NpgsqlCteAuthorizer with CTE relation resolution and ba
 - [ ] **Step 1: Write the failing tests** (the algebra cases from `m0/05`, including the discriminator and §12.5 gate)
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cte/CteAlgebraTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Cte/CteAlgebraTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cte;
+namespace Custodex.Storage.Postgres.Tests.Cte;
 
 [Collection("postgres")]
 public class CteAlgebraTests(PostgresFixture fx) : IAsyncLifetime
@@ -690,18 +690,18 @@ public class CteAlgebraTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteAlgebraTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteAlgebraTests`
 Expected: FAIL — `NotImplementedException` from the temporary `EvalExprAsync`.
 
 - [ ] **Step 3: Replace `EvalExprAsync` with the full algebra**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs
+// src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs
 using Npgsql;
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class NpgsqlCteAuthorizer
 {
@@ -821,17 +821,17 @@ public sealed partial class NpgsqlCteAuthorizer
 }
 ```
 
-> Add `using Relkit.Core.Conditions;` is not needed here (`ConditionRef` is in `Relkit.Abstractions`). The `BranchConditionSatisfiedAsync` uses `ConditionRef` from Abstractions and `_conditions` (`IConditionEvaluator` from `Relkit.Core.Conditions`, already imported by the partial in `NpgsqlCteAuthorizer.cs`).
+> Add `using Custodex.Core.Conditions;` is not needed here (`ConditionRef` is in `Custodex.Abstractions`). The `BranchConditionSatisfiedAsync` uses `ConditionRef` from Abstractions and `_conditions` (`IConditionEvaluator` from `Custodex.Core.Conditions`, already imported by the partial in `NpgsqlCteAuthorizer.cs`).
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteAlgebraTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteAlgebraTests`
 Expected: PASS (5 tests). The `Arrow_sees_inner_exclusion` test is the discriminator the `m1/02` spike proved naive SQL fails.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs tests/Relkit.Storage.Postgres.Tests/Cte/CteAlgebraTests.cs
+git add src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.Expr.cs tests/Custodex.Storage.Postgres.Tests/Cte/CteAlgebraTests.cs
 git commit -m "feat: implement full CTE-path permission algebra matching the oracle"
 ```
 
@@ -840,8 +840,8 @@ git commit -m "feat: implement full CTE-path permission algebra matching the ora
 ### Task 4: `BatchCheckAsync` and an Explain trace
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.Batch.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cte/CteBatchAndExplainTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.Batch.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteBatchAndExplainTests.cs`
 
 **Interfaces:**
 - Produces: `BatchCheckAsync` (replaces the Task 3 stub) — one shared `EvalContext` memo across all items, one connection for the whole batch, results in request order; and an `Explain` path: `CheckAsync` with `Explain=true` returns a populated `ExplainNode` tree (built by passing a non-null `explain` sink through `CheckPermissionAsync`, already wired in Tasks 2–3).
@@ -850,15 +850,15 @@ git commit -m "feat: implement full CTE-path permission algebra matching the ora
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cte/CteBatchAndExplainTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Cte/CteBatchAndExplainTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cte;
+namespace Custodex.Storage.Postgres.Tests.Cte;
 
 [Collection("postgres")]
 public class CteBatchAndExplainTests(PostgresFixture fx) : IAsyncLifetime
@@ -935,7 +935,7 @@ public class CteBatchAndExplainTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteBatchAndExplainTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteBatchAndExplainTests`
 Expected: FAIL — `BatchCheckAsync` throws `NotImplementedException`, and `CheckAsync` does not yet build the explain trace.
 
 - [ ] **Step 3: Implement batch + wire explain into `CheckAsync`**
@@ -960,12 +960,12 @@ First, update `CheckAsync` in `NpgsqlCteAuthorizer.cs` to build the explain trac
 Then add the batch partial and remove the `BatchCheckAsync` stub from `NpgsqlCteAuthorizer.Expr.cs`:
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.Batch.cs
+// src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.Batch.cs
 using Npgsql;
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class NpgsqlCteAuthorizer
 {
@@ -992,13 +992,13 @@ public sealed partial class NpgsqlCteAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteBatchAndExplainTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteBatchAndExplainTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add CTE batch check and explain trace"
 ```
 
@@ -1007,7 +1007,7 @@ git commit -m "feat: add CTE batch check and explain trace"
 ### Task 5: Worked-example parity — §12.1 and §12.5 over Postgres
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cte/CteWorkedExampleParityTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteWorkedExampleParityTests.cs`
 
 **Interfaces:**
 - Consumes: `NpgsqlCteAuthorizer`, the stores, the schema builder. Encodes the §12.1 role-grant-over-category and §12.5 quarantine-gate worked examples (the same shapes `m0/09` proves against the oracle) directly over Postgres, asserting the CTE path returns the spec's truth. This is a *guard* that the CTE path agrees with the named acceptance cases before the `m1/08` harness generalises to random schemas.
@@ -1015,15 +1015,15 @@ git commit -m "feat: add CTE batch check and explain trace"
 - [ ] **Step 1: Write the parity tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cte/CteWorkedExampleParityTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Cte/CteWorkedExampleParityTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cte;
+namespace Custodex.Storage.Postgres.Tests.Cte;
 
 [Collection("postgres")]
 public class CteWorkedExampleParityTests(PostgresFixture fx) : IAsyncLifetime
@@ -1134,13 +1134,13 @@ public class CteWorkedExampleParityTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteWorkedExampleParityTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteWorkedExampleParityTests`
 Expected: PASS (2 tests). If §12.5 fails, the CTE walk diverges from the oracle on intersection-through-arrow-with-exclusion — fix the walk, not the test.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Cte/CteWorkedExampleParityTests.cs
+git add tests/Custodex.Storage.Postgres.Tests/Cte/CteWorkedExampleParityTests.cs
 git commit -m "test: prove CTE check path matches §12.1 and §12.5 worked examples"
 ```
 
@@ -1148,7 +1148,7 @@ git commit -m "test: prove CTE check path matches §12.1 and §12.5 worked examp
 
 ## Self-review checklist (run after all tasks)
 
-- [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`; `Relkit.Storage.Postgres` references `Relkit.Core` (Task 1).
+- [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`; `Custodex.Storage.Postgres` references `Custodex.Core` (Task 1).
 - [ ] The reachability CTE expands nested subject-sets in SQL and surfaces wildcard leaves; arrow edges are returned unexpanded (Task 1).
 - [ ] `NpgsqlCteAuthorizer.CheckAsync` matches the oracle on direct/wildcard/nested/cycle membership (Task 2) and full algebra (Task 3).
 - [ ] The discriminator (`Arrow_sees_inner_exclusion_on_the_related_object`) returns **false** for carol — the case the `m1/02` spike proved naive SQL gets wrong (Task 3).
@@ -1160,7 +1160,7 @@ git commit -m "test: prove CTE check path matches §12.1 and §12.5 worked examp
 
 ## Contract gaps (reported, not changed)
 
-- **`IConditionEvaluator` shape (same as `m0/05`).** `NpgsqlCteAuthorizer` consumes the `Relkit.Core.Conditions.IConditionEvaluator` seam (the `bool`-returning collaborator the oracle uses), not the static `ConditionEvaluator` from `m0/06`. Construction in production (`m1/09`) supplies the `CelConditionEvaluator` adapter `m0/06` authors. No `README.md` change; this is the same reconciliation `m0/05` already records.
-- **`Relkit.Storage.Postgres → Relkit.Core` reference.** Decided in `m1/02`; added here (Task 1). Not a contract type change — `Relkit.Core` is a non-DB engine assembly and spec §4 only forbids DB code *in Core*. Flagged for visibility in case the contract's package table should spell out the edge.
+- **`IConditionEvaluator` shape (same as `m0/05`).** `NpgsqlCteAuthorizer` consumes the `Custodex.Core.Conditions.IConditionEvaluator` seam (the `bool`-returning collaborator the oracle uses), not the static `ConditionEvaluator` from `m0/06`. Construction in production (`m1/09`) supplies the `CelConditionEvaluator` adapter `m0/06` authors. No `README.md` change; this is the same reconciliation `m0/05` already records.
+- **`Custodex.Storage.Postgres → Custodex.Core` reference.** Decided in `m1/02`; added here (Task 1). Not a contract type change — `Custodex.Core` is a non-DB engine assembly and spec §4 only forbids DB code *in Core*. Flagged for visibility in case the contract's package table should spell out the edge.
 ```
 

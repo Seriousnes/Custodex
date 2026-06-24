@@ -24,8 +24,8 @@ See `../README.md` → Global Constraints. Depends on `m0/01` (`IUnitOfWork`, `I
 ### Task 1: `NpgsqlUnitOfWork` with the ownership flag
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlUnitOfWork.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/NpgsqlUnitOfWorkTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlUnitOfWork.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/NpgsqlUnitOfWorkTests.cs`
 
 **Interfaces:**
 - Produces: `NpgsqlUnitOfWork : IUnitOfWork` exposing `NpgsqlConnection Connection`, `NpgsqlTransaction Transaction`, `Task CommitAsync(CancellationToken)`, `ValueTask DisposeAsync()`, and the static `NpgsqlUnitOfWork.From(IUnitOfWork)` accessor. Two internal constructors back the owned/supplied modes; the factory (Task 2) is the public door.
@@ -33,12 +33,12 @@ See `../README.md` → Global Constraints. Depends on `m0/01` (`IUnitOfWork`, `I
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/NpgsqlUnitOfWorkTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/NpgsqlUnitOfWorkTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 public class NpgsqlUnitOfWorkTests
 {
@@ -58,17 +58,17 @@ public class NpgsqlUnitOfWorkTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter NpgsqlUnitOfWorkTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter NpgsqlUnitOfWorkTests`
 Expected: FAIL — `NpgsqlUnitOfWork` does not exist.
 
 - [ ] **Step 3: Implement the unit of work**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlUnitOfWork.cs
+// src/Custodex.Storage.Postgres/NpgsqlUnitOfWork.cs
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// A Postgres unit of work. In <b>owned</b> mode it owns the connection and transaction and
@@ -134,13 +134,13 @@ public sealed class NpgsqlUnitOfWork : IUnitOfWork
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter NpgsqlUnitOfWorkTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter NpgsqlUnitOfWorkTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add NpgsqlUnitOfWork with owned/supplied ownership flag"
 ```
 
@@ -149,8 +149,8 @@ git commit -m "feat: add NpgsqlUnitOfWork with owned/supplied ownership flag"
 ### Task 2: `NpgsqlUnitOfWorkFactory` — owned `BeginAsync` and supplied `Enlist`
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlUnitOfWorkFactory.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/UnitOfWorkFactoryTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlUnitOfWorkFactory.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/UnitOfWorkFactoryTests.cs`
 
 **Interfaces:**
 - Produces: `NpgsqlUnitOfWorkFactory : IUnitOfWorkFactory` with `Task<IUnitOfWork> BeginAsync(CancellationToken)` (owned: opens a fresh `NpgsqlConnection` from the configured connection string and begins a transaction) and `IUnitOfWork Enlist(DbConnection connection, DbTransaction transaction)` (supplied: validates the handles are Npgsql and wraps them without owning them).
@@ -158,13 +158,13 @@ git commit -m "feat: add NpgsqlUnitOfWork with owned/supplied ownership flag"
 - [ ] **Step 1: Write the failing test** (uses a real container so `BeginAsync` can open a connection)
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/UnitOfWorkFactoryTests.cs
+// tests/Custodex.Storage.Postgres.Tests/UnitOfWorkFactoryTests.cs
 using System.Data.Common;
 using Npgsql;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class UnitOfWorkFactoryTests(PostgresFixture fx)
@@ -190,22 +190,22 @@ public class UnitOfWorkFactoryTests(PostgresFixture fx)
 }
 ```
 
-> The `System.Data.SqlClient` reference is only to construct a wrong-typed `DbConnection` for the negative test. Add it to the test project: `dotnet add tests/Relkit.Storage.Postgres.Tests package System.Data.SqlClient`.
+> The `System.Data.SqlClient` reference is only to construct a wrong-typed `DbConnection` for the negative test. Add it to the test project: `dotnet add tests/Custodex.Storage.Postgres.Tests package System.Data.SqlClient`.
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter UnitOfWorkFactoryTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter UnitOfWorkFactoryTests`
 Expected: FAIL — `NpgsqlUnitOfWorkFactory` does not exist.
 
 - [ ] **Step 3: Implement the factory**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlUnitOfWorkFactory.cs
+// src/Custodex.Storage.Postgres/NpgsqlUnitOfWorkFactory.cs
 using System.Data.Common;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed class NpgsqlUnitOfWorkFactory(string connectionString) : IUnitOfWorkFactory
 {
@@ -241,13 +241,13 @@ public sealed class NpgsqlUnitOfWorkFactory(string connectionString) : IUnitOfWo
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter UnitOfWorkFactoryTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter UnitOfWorkFactoryTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add NpgsqlUnitOfWorkFactory with owned BeginAsync and supplied Enlist"
 ```
 
@@ -256,7 +256,7 @@ git commit -m "feat: add NpgsqlUnitOfWorkFactory with owned BeginAsync and suppl
 ### Task 3: Atomic commit and rollback of an owned unit of work
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/OwnedTransactionTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/OwnedTransactionTests.cs`
 
 **Interfaces:**
 - Consumes: `NpgsqlUnitOfWorkFactory`, `MigrationRunner`, `PostgresFixture`. No production code changes — these tests pin the owned-mode commit/rollback semantics that m1/04 and m1/07 rely on.
@@ -266,12 +266,12 @@ git commit -m "feat: add NpgsqlUnitOfWorkFactory with owned BeginAsync and suppl
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/OwnedTransactionTests.cs
+// tests/Custodex.Storage.Postgres.Tests/OwnedTransactionTests.cs
 using Dapper;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class OwnedTransactionTests(PostgresFixture fx)
@@ -355,13 +355,13 @@ public class OwnedTransactionTests(PostgresFixture fx)
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter OwnedTransactionTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter OwnedTransactionTests`
 Expected: PASS — `NpgsqlUnitOfWork` from Task 1 already implements owned commit/rollback. (If a test fails, fix `NpgsqlUnitOfWork`, not the test — the test is the spec.)
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests
+git add tests/Custodex.Storage.Postgres.Tests
 git commit -m "test: prove owned unit of work commits and rolls back atomically"
 ```
 
@@ -370,7 +370,7 @@ git commit -m "test: prove owned unit of work commits and rolls back atomically"
 ### Task 4: Enlistment in an external transaction (supplied mode)
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/EnlistmentTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/EnlistmentTests.cs`
 
 **Interfaces:**
 - Consumes: `NpgsqlUnitOfWorkFactory.Enlist`. Proves the engine write is invisible to a second connection until the **external** owner commits, visible after, gone if the external owner rolls back — and that the external connection stays open and usable after the supplied unit of work is disposed.
@@ -378,13 +378,13 @@ git commit -m "test: prove owned unit of work commits and rolls back atomically"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/EnlistmentTests.cs
+// tests/Custodex.Storage.Postgres.Tests/EnlistmentTests.cs
 using Dapper;
 using Npgsql;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class EnlistmentTests(PostgresFixture fx)
@@ -487,13 +487,13 @@ public class EnlistmentTests(PostgresFixture fx)
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter EnlistmentTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter EnlistmentTests`
 Expected: PASS — supplied mode commits nothing of its own and disposes nothing of the external owner's. (If a test fails, the bug is in `NpgsqlUnitOfWork` supplied-mode handling, not in the test.)
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests
+git add tests/Custodex.Storage.Postgres.Tests
 git commit -m "test: prove engine enlists in an external transaction without owning it"
 ```
 

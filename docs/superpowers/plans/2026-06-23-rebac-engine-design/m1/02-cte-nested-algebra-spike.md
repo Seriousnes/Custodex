@@ -4,7 +4,7 @@
 
 **Goal:** A deliberately small, throwaway spike that **proves** how much of the permission algebra a recursive Postgres CTE can absorb when nested exclusion / intersection interleave *with* arrow traversal (spec §7.1), and **decides the CTE/engine seam** that `m1/05` (CTE Check) and `m1/06` (CTE ListObjects) build on. The spike pins one concrete throwaway schema where an inner `Exclude` lives under an `Arrow`, hand-computes the truth, writes the candidate recursive-CTE SQL, and asserts against the hand-computed truth via Testcontainers. The output is the **decided seam paragraph** reproduced verbatim in `m1/05`/`m1/06`/`m1/08`.
 
-**Architecture:** This is a spike, not a shipped component. Its code lives entirely in the test project (`tests/Relkit.Storage.Postgres.Tests/Spike/`) and is deleted-or-kept-as-documentation once the decision is recorded. It loads tuples into the real `relation_tuples` schema (`m1/01`), runs a candidate recursive CTE that expands **reachability only** (nested subject-set membership + arrow edge-following), and proves that the conservative seam — **CTE for reachability, C# for the boolean algebra** — returns the correct answer on the discriminating case while a naive **all-in-SQL top-level post-filter** returns the *wrong* answer. That divergence is the whole point: it is exactly the bug the `m1/08` differential harness exists to catch, demonstrated in week one on a single hand-checked case.
+**Architecture:** This is a spike, not a shipped component. Its code lives entirely in the test project (`tests/Custodex.Storage.Postgres.Tests/Spike/`) and is deleted-or-kept-as-documentation once the decision is recorded. It loads tuples into the real `relation_tuples` schema (`m1/01`), runs a candidate recursive CTE that expands **reachability only** (nested subject-set membership + arrow edge-following), and proves that the conservative seam — **CTE for reachability, C# for the boolean algebra** — returns the correct answer on the discriminating case while a naive **all-in-SQL top-level post-filter** returns the *wrong* answer. That divergence is the whole point: it is exactly the bug the `m1/08` differential harness exists to catch, demonstrated in week one on a single hand-checked case.
 
 **Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`.
 
@@ -14,7 +14,7 @@ See `../README.md` → Global Constraints. Key points repeated for convenience: 
 
 ## THE DECIDED SEAM (this plan's primary output — copied verbatim into m1/05, m1/06, m1/08)
 
-> **Relkit CTE/engine seam (decided by this spike, validated by the m1/08 differential harness).**
+> **Custodex CTE/engine seam (decided by this spike, validated by the m1/08 differential harness).**
 >
 > The recursive Postgres CTE computes **reachability only**: starting from an `(object, relation)` it expands nested subject-set membership (`group:G#member` → `G`'s `member` tuples, transitively) and follows structural-reference edges for arrows (`animal#enclosure@enclosure:KH1` → the related `enclosure:KH1`), producing the **leaf set of `(subject_type, subject_id)` rows reachable through a single relation or a single arrow hop's sub-permission**. It does **not** compute union/intersection/exclusion/conditioned across permission branches, and it does **not** post-filter at the top level.
 >
@@ -22,15 +22,15 @@ See `../README.md` → Global Constraints. Key points repeated for convenience: 
 >
 > The CTE's job is therefore to make the **two storage primitives the oracle already depends on** fast and recursive on Postgres: "the subjects reachable through `object#relation` including nested groups" and "the related objects reachable through `object#arrow-relation`". `NpgsqlCteAuthorizer` is a Postgres-native reimplementation of the oracle's traversal whose **only** divergence from `EngineDrivenAuthorizer` is *where the recursion runs* (SQL vs C# loops); the algebra layer is identical. `NpgsqlCteAuthorizer ≡ EngineDrivenAuthorizer` is the correctness claim, and the `m1/08` differential harness is its only proof.
 >
-> **Project reference (decided here):** `Relkit.Storage.Postgres` takes a project reference on `Relkit.Core`, because `NpgsqlCteAuthorizer` reuses `SchemaIndex`, `EvaluationOptions`, `EvalContext`/`EvalFrame`, `ContinuationCursor`, and the `IConditionEvaluator` seam from `Relkit.Core`. (Spec §4 forbids *database code in Core*; it does not forbid the Postgres provider depending on Core. The reverse dependency — Core on Postgres — remains forbidden.) `m1/05` adds this reference in its first task.
+> **Project reference (decided here):** `Custodex.Storage.Postgres` takes a project reference on `Custodex.Core`, because `NpgsqlCteAuthorizer` reuses `SchemaIndex`, `EvaluationOptions`, `EvalContext`/`EvalFrame`, `ContinuationCursor`, and the `IConditionEvaluator` seam from `Custodex.Core`. (Spec §4 forbids *database code in Core*; it does not forbid the Postgres provider depending on Core. The reverse dependency — Core on Postgres — remains forbidden.) `m1/05` adds this reference in its first task.
 
 ---
 
 ### Task 1: The throwaway spike schemas and the discriminating tuple set
 
 **Files:**
-- Create: `tests/Relkit.Storage.Postgres.Tests/Spike/SpikeData.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Spike/SpikeTruthTableTests.cs`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Spike/SpikeData.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Spike/SpikeTruthTableTests.cs`
 
 **Interfaces:**
 - Produces: `SpikeData` holding the concrete throwaway tuples for two cases — **(A) inner exclusion through an arrow** and **(B) intersection-through-arrow with a wildcard gate (spec §12.5)** — plus the hand-computed expected answers per `(object, subject)`. A pure (no-DB) test asserts the hand-computed truth table is internally consistent with the documented schema, so the SQL tasks have a fixed target.
@@ -67,11 +67,11 @@ See `../README.md` → Global Constraints. Key points repeated for convenience: 
 - [ ] **Step 1: Write the failing truth-table sanity test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Spike/SpikeTruthTableTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Spike/SpikeTruthTableTests.cs
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Spike;
+namespace Custodex.Storage.Postgres.Tests.Spike;
 
 public class SpikeTruthTableTests
 {
@@ -96,14 +96,14 @@ public class SpikeTruthTableTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter SpikeTruthTableTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter SpikeTruthTableTests`
 Expected: FAIL — `SpikeData` does not exist.
 
 - [ ] **Step 3: Write the spike data**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Spike/SpikeData.cs
-namespace Relkit.Storage.Postgres.Tests.Spike;
+// tests/Custodex.Storage.Postgres.Tests/Spike/SpikeData.cs
+namespace Custodex.Storage.Postgres.Tests.Spike;
 
 /// <summary>
 /// Throwaway spike fixtures. Two cases interleave algebra WITH arrow traversal — the shape
@@ -161,13 +161,13 @@ internal static class SpikeData
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter SpikeTruthTableTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter SpikeTruthTableTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Spike
+git add tests/Custodex.Storage.Postgres.Tests/Spike
 git commit -m "test: pin the CTE-spike throwaway schemas and hand-computed truth"
 ```
 
@@ -176,8 +176,8 @@ git commit -m "test: pin the CTE-spike throwaway schemas and hand-computed truth
 ### Task 2: The reachability CTE — prove a single relation expands nested subject-sets
 
 **Files:**
-- Create: `tests/Relkit.Storage.Postgres.Tests/Spike/ReachabilityCte.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Spike/ReachabilityCteTests.cs`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Spike/ReachabilityCte.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Spike/ReachabilityCteTests.cs`
 
 **Interfaces:**
 - Produces: `ReachabilityCte` with `static Task<IReadOnlyList<(string Type, string Id)>> SubjectsThroughRelationAsync(NpgsqlConnection conn, string store, string tenant, string objectType, string objectId, string relation, CancellationToken ct)` — runs the candidate recursive CTE that, given one `(object, relation)`, returns the **distinct leaf subjects** reachable by transitively expanding `group:G#member` (and any subject-set) tuples. This is the reachability primitive the decided seam runs in SQL; the C# algebra layer composes over it.
@@ -188,11 +188,11 @@ git commit -m "test: pin the CTE-spike throwaway schemas and hand-computed truth
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Spike/ReachabilityCteTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Spike/ReachabilityCteTests.cs
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Spike;
+namespace Custodex.Storage.Postgres.Tests.Spike;
 
 [Collection("postgres")]
 public class ReachabilityCteTests(PostgresFixture fx) : IAsyncLifetime
@@ -235,11 +235,11 @@ public class ReachabilityCteTests(PostgresFixture fx) : IAsyncLifetime
 > Add the seed helper used by Tasks 2–4 (writes raw rows; the relation store arrives in `m1/04`):
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Spike/SpikeSeed.cs
+// tests/Custodex.Storage.Postgres.Tests/Spike/SpikeSeed.cs
 using Dapper;
 using Npgsql;
 
-namespace Relkit.Storage.Postgres.Tests.Spike;
+namespace Custodex.Storage.Postgres.Tests.Spike;
 
 internal static class SpikeSeed
 {
@@ -271,17 +271,17 @@ internal static class SpikeSeed
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ReachabilityCteTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ReachabilityCteTests`
 Expected: FAIL — `ReachabilityCte` / `SpikeSeed` do not exist.
 
 - [ ] **Step 3: Write the candidate reachability CTE**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Spike/ReachabilityCte.cs
+// tests/Custodex.Storage.Postgres.Tests/Spike/ReachabilityCte.cs
 using Dapper;
 using Npgsql;
 
-namespace Relkit.Storage.Postgres.Tests.Spike;
+namespace Custodex.Storage.Postgres.Tests.Spike;
 
 /// <summary>
 /// Candidate recursive-CTE reachability primitive (validated by this spike + the m1/08 harness).
@@ -335,13 +335,13 @@ internal static class ReachabilityCte
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ReachabilityCteTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ReachabilityCteTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Spike
+git add tests/Custodex.Storage.Postgres.Tests/Spike
 git commit -m "test: prove the reachability CTE expands nested subject-sets to leaf users"
 ```
 
@@ -350,7 +350,7 @@ git commit -m "test: prove the reachability CTE expands nested subject-sets to l
 ### Task 3: The discriminator — prove naive all-in-SQL is WRONG and the seam is RIGHT (Case A)
 
 **Files:**
-- Create: `tests/Relkit.Storage.Postgres.Tests/Spike/SeamVsNaiveTests.cs`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Spike/SeamVsNaiveTests.cs`
 
 **Interfaces:**
 - Consumes: `ReachabilityCte` (Task 2), `SpikeData`/`SpikeSeed` (Tasks 1–2). No new production code — this task is the heart of the spike: it demonstrates, on Case A, that the **naive top-level post-filter** CTE returns `carol → true` (WRONG) while the **decided seam** (reachability CTE + C# algebra recursing into the related object's full `edit = editor - blocked`) returns `carol → false` (RIGHT, matching the hand-computed truth and the oracle).
@@ -364,13 +364,13 @@ git commit -m "test: prove the reachability CTE expands nested subject-sets to l
 - [ ] **Step 1: Write the discriminating test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Spike/SeamVsNaiveTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Spike/SeamVsNaiveTests.cs
 using Dapper;
 using Npgsql;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Spike;
+namespace Custodex.Storage.Postgres.Tests.Spike;
 
 [Collection("postgres")]
 public class SeamVsNaiveTests(PostgresFixture fx) : IAsyncLifetime
@@ -459,13 +459,13 @@ public class SeamVsNaiveTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter SeamVsNaiveTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter SeamVsNaiveTests`
 Expected: PASS (2 tests). The first test *documents* that the naive all-in-SQL approach is wrong (it asserts the wrong answer to capture the divergence); the second proves the decided seam is right.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Spike/SeamVsNaiveTests.cs
+git add tests/Custodex.Storage.Postgres.Tests/Spike/SeamVsNaiveTests.cs
 git commit -m "test: prove naive all-in-SQL fails the inner-exclusion case and the seam passes"
 ```
 
@@ -474,7 +474,7 @@ git commit -m "test: prove naive all-in-SQL fails the inner-exclusion case and t
 ### Task 4: Prove the seam also handles intersection-through-arrow with a wildcard gate (Case B)
 
 **Files:**
-- Create: `tests/Relkit.Storage.Postgres.Tests/Spike/SeamIntersectionGateTests.cs`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Spike/SeamIntersectionGateTests.cs`
 
 **Interfaces:**
 - Consumes: `ReachabilityCte`, `SpikeData`/`SpikeSeed`. Proves the decided seam returns the §12.5 truth for `animal.access = enclosure->is_quarantine & vet_member & trained_member`, including the wildcard `user:*` gate (which makes `enclosure->is_quarantine` the universal set, so the intersection reduces to vet ∧ trained).
@@ -484,12 +484,12 @@ git commit -m "test: prove naive all-in-SQL fails the inner-exclusion case and t
 - [ ] **Step 1: Write the test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Spike/SeamIntersectionGateTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Spike/SeamIntersectionGateTests.cs
 using Npgsql;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Spike;
+namespace Custodex.Storage.Postgres.Tests.Spike;
 
 [Collection("postgres")]
 public class SeamIntersectionGateTests(PostgresFixture fx) : IAsyncLifetime
@@ -544,13 +544,13 @@ public class SeamIntersectionGateTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter SeamIntersectionGateTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter SeamIntersectionGateTests`
 Expected: PASS (3 cases). The seam matches §12.5 truth: quarantine-trained vet allowed, untrained vet denied, non-vet denied.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Spike/SeamIntersectionGateTests.cs
+git add tests/Custodex.Storage.Postgres.Tests/Spike/SeamIntersectionGateTests.cs
 git commit -m "test: prove the seam handles §12.5 intersection-through-arrow with a wildcard gate"
 ```
 
@@ -559,7 +559,7 @@ git commit -m "test: prove the seam handles §12.5 intersection-through-arrow wi
 ### Task 5: Record the decision — the seam document `m1/05`/`m1/06` consume
 
 **Files:**
-- Create: `tests/Relkit.Storage.Postgres.Tests/Spike/SEAM_DECISION.md`
+- Create: `tests/Custodex.Storage.Postgres.Tests/Spike/SEAM_DECISION.md`
 
 **Interfaces:**
 - Produces: a short markdown note, committed alongside the spike, recording the decided seam (the boxed paragraph at the top of this plan) and the two proven facts: (1) reachability is expressible and cycle-safe in a recursive CTE; (2) the boolean algebra must stay in C# — a top-level SQL post-filter is provably wrong on inner exclusion through an arrow. This is the artefact `m1/05`/`m1/06` point at when they say "the seam validated by the spike."
@@ -567,7 +567,7 @@ git commit -m "test: prove the seam handles §12.5 intersection-through-arrow wi
 - [ ] **Step 1: Write the decision note**
 
 ```markdown
-<!-- tests/Relkit.Storage.Postgres.Tests/Spike/SEAM_DECISION.md -->
+<!-- tests/Custodex.Storage.Postgres.Tests/Spike/SEAM_DECISION.md -->
 # CTE/engine seam — decided by the M1/02 spike
 
 ## Decision
@@ -577,7 +577,7 @@ git commit -m "test: prove the seam handles §12.5 intersection-through-arrow wi
 - **Algebra = C#.** `Union`/`Intersect`/`Exclude`/`Conditioned` and arrow-into-sub-permission are
   composed in `NpgsqlCteAuthorizer`, walking the `PermExpr` tree exactly like `EngineDrivenAuthorizer`.
   Arrow recurses into the related object's FULL expression, so inner exclusions/intersections are seen.
-- **`Relkit.Storage.Postgres` references `Relkit.Core`** (for `SchemaIndex`, `EvaluationOptions`,
+- **`Custodex.Storage.Postgres` references `Custodex.Core`** (for `SchemaIndex`, `EvaluationOptions`,
   `ContinuationCursor`, `IConditionEvaluator`). Core never references Postgres.
 
 ## Proven by this spike
@@ -600,7 +600,7 @@ m1/05 and m1/06 is "validated by this spike and the m1/08 harness," not guarante
 - [ ] **Step 2: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Spike/SEAM_DECISION.md
+git add tests/Custodex.Storage.Postgres.Tests/Spike/SEAM_DECISION.md
 git commit -m "docs: record the decided CTE/engine seam from the spike"
 ```
 
@@ -617,6 +617,6 @@ git commit -m "docs: record the decided CTE/engine seam from the spike"
 
 ## Contract gaps (reported, not changed)
 
-- **None new.** This plan introduces no shared types. It establishes the `Relkit.Storage.Postgres → Relkit.Core` project reference as a *decision* (not a contract change): `Relkit.Core` already holds `SchemaIndex`/`EvaluationOptions`/`ContinuationCursor`/`IConditionEvaluator` and is a non-DB engine assembly, so referencing it from the Postgres provider respects spec §4 ("no database code in Core"). If a future reader expects the contract's package table to spell out this edge explicitly, that is a documentation nicety, not a missing type — flagged here for visibility.
+- **None new.** This plan introduces no shared types. It establishes the `Custodex.Storage.Postgres → Custodex.Core` project reference as a *decision* (not a contract change): `Custodex.Core` already holds `SchemaIndex`/`EvaluationOptions`/`ContinuationCursor`/`IConditionEvaluator` and is a non-DB engine assembly, so referencing it from the Postgres provider respects spec §4 ("no database code in Core"). If a future reader expects the contract's package table to spell out this edge explicitly, that is a documentation nicety, not a missing type — flagged here for visibility.
 ```
 
