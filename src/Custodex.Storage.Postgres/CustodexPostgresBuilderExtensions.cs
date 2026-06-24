@@ -12,10 +12,22 @@ public static class CustodexPostgresBuilderExtensions
 {
     /// <summary>
     /// Registers all Postgres-backed stores, the CTE authorizer, the managers, and the cache store.
-    /// The <see cref="IAuthorizer"/> is registered directly as the CTE primary path; a cross-request
-    /// caching wrapper requires a shared cacheability seam that is not yet available and will be
-    /// added in a follow-up once that seam lands.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Condition evaluation:</b> the default <see cref="IConditionEvaluator"/> registered here
+    /// is a pass-through that always treats conditions as satisfied without evaluating them. If the
+    /// schema uses conditioned (ABAC) permissions, register a real <see cref="IConditionEvaluator"/>
+    /// (for example the engine's <c>ConditionEvaluator</c>) on the service collection
+    /// <i>before</i> calling <c>UsePostgres</c>, so that registration takes precedence.
+    /// Leaving the default in place means conditioned branches are never enforced.
+    /// </para>
+    /// <para>
+    /// <b>Cross-request caching:</b> this registration does not enable cross-request result
+    /// caching. Per-request memoization and read-your-writes consistency still apply, but
+    /// previously computed authorization results are not reused across separate requests.
+    /// </para>
+    /// </remarks>
     /// <param name="builder">The Custodex builder returned by <c>AddCustodex()</c>.</param>
     /// <param name="connectionString">Npgsql connection string for the Postgres database.</param>
     /// <returns>The same <paramref name="builder"/>, for chaining.</returns>

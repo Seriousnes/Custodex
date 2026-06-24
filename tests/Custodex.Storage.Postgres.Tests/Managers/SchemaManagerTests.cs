@@ -31,22 +31,20 @@ public class SchemaManagerTests(PostgresFixture fx) : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    private static async Task SeedStoreAndTenantAsync(NpgsqlUnitOfWorkFactory factory, string store)
+    private static async Task SeedStoreOnlyAsync(NpgsqlUnitOfWorkFactory factory, string store)
     {
         await using var u = await factory.BeginAsync();
         var uow = NpgsqlUnitOfWork.From(u);
         await uow.Connection.ExecuteAsync("INSERT INTO stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
             new { s = store }, uow.Transaction);
-        await uow.Connection.ExecuteAsync("INSERT INTO tenants (store_id, tenant_id) VALUES (@s, @s) ON CONFLICT DO NOTHING",
-            new { s = store }, uow.Transaction);
         await u.CommitAsync();
     }
 
     [Fact]
-    public async Task Valid_schema_activates_and_is_readable()
+    public async Task Valid_schema_activates_without_pre_existing_tenant()
     {
         const string store = "sm-valid";
-        await SeedStoreAndTenantAsync(_factory, store);
+        await SeedStoreOnlyAsync(_factory, store);
         var schema = new SchemaBuilder("v1")
             .Type("doc", t => t.Relation("viewer", s => s.User()).Permission("view", p => p.Relation("viewer")))
             .Build();
@@ -59,7 +57,7 @@ public class SchemaManagerTests(PostgresFixture fx) : IAsyncLifetime
     public async Task Invalid_schema_throws_and_writes_nothing()
     {
         const string store = "sm-invalid";
-        await SeedStoreAndTenantAsync(_factory, store);
+        await SeedStoreOnlyAsync(_factory, store);
         var bad = new Schema("v1",
             [new EntityTypeDef("doc", [], [new PermissionDef("view", new RelationRef("ghost"))])],
             []);

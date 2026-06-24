@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core.Validation;
+using Dapper;
 
 namespace Custodex.Storage.Postgres.Managers;
 
@@ -7,7 +8,9 @@ namespace Custodex.Storage.Postgres.Managers;
 /// Concrete <see cref="ISchemaManager"/> backed by Postgres. Validates the schema before any
 /// database write; throws <see cref="SchemaValidationException"/> when validation fails so the
 /// caller can surface the errors without leaving a partial write. A valid schema activates and
-/// its change log entry and epoch bump commit atomically in one owned unit of work.
+/// its change log entry and epoch bump commit atomically in one owned unit of work. The
+/// bookkeeping store and tenant rows are upserted in the same transaction so schema activation
+/// succeeds on the natural first-use path without requiring a prior <c>CreateTenantAsync</c> call.
 /// </summary>
 public sealed class CustodexSchemaManager(
     NpgsqlUnitOfWorkFactory uowFactory,
@@ -26,6 +29,13 @@ public sealed class CustodexSchemaManager(
 
         var tenant = new TenantContext(store, store);
         await using var uow = await uowFactory.BeginAsync(ct);
+        var w = NpgsqlUnitOfWork.From(uow);
+        await w.Connection.ExecuteAsync(
+            "INSERT INTO stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
+            new { s = store }, w.Transaction);
+        await w.Connection.ExecuteAsync(
+            "INSERT INTO tenants (store_id, tenant_id) VALUES (@s, @s) ON CONFLICT DO NOTHING",
+            new { s = store }, w.Transaction);
         await audited.SetSchemaAsync(store, tenant, actor: "schema-author", schema, uow, ct);
         await uow.CommitAsync(ct);
     }

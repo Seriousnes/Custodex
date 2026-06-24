@@ -88,4 +88,40 @@ public class RelationManagerTests(PostgresFixture fx) : IAsyncLifetime
         var read = await manager.ReadTuplesAsync(t, new TupleFilter(ObjectType: "category"));
         read.ShouldContain(x => x.Object.Id == "cat1");
     }
+
+    [Fact]
+    public async Task WriteAttributes_persists_attrs_audits_actor_epoch_and_captures_before_after_on_repeat_write()
+    {
+        var (t, manager, cache) = await BuildAsync("mgr-attrs");
+        var attrStore = new NpgsqlAttributeStore(fx.ConnectionString);
+        var obj = new EntityRef("asset", "r1");
+
+        Dictionary<string, object?> firstAttrs = new() { ["is_flagged"] = true, ["weight"] = 12.5 };
+        await manager.WriteAttributesAsync(t, "admin-a", obj, firstAttrs);
+
+        var stored = await attrStore.GetAsync(t, obj);
+        stored.ShouldNotBeNull();
+        stored!["is_flagged"]!.ToString().ShouldBe("True");
+
+        var log1 = await _changeLog.ReadAsync(t, new ChangeLogFilter());
+        log1.ShouldHaveSingleItem();
+        log1[0].Actor.ShouldBe("admin-a");
+        log1[0].Operation.ShouldBe("write");
+
+        (await cache.GetEpochAsync(t)).ShouldBe(1);
+
+        Dictionary<string, object?> secondAttrs = new() { ["is_flagged"] = false, ["weight"] = 9.0 };
+        await manager.WriteAttributesAsync(t, "admin-a", obj, secondAttrs);
+
+        var storedAfter = await attrStore.GetAsync(t, obj);
+        storedAfter.ShouldNotBeNull();
+        storedAfter!["is_flagged"]!.ToString().ShouldBe("False");
+
+        var log2 = await _changeLog.ReadAsync(t, new ChangeLogFilter());
+        log2.Count.ShouldBe(2);
+        log2[1].Actor.ShouldBe("admin-a");
+        log2[1].Operation.ShouldBe("write");
+
+        (await cache.GetEpochAsync(t)).ShouldBe(2);
+    }
 }

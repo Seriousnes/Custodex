@@ -21,8 +21,14 @@ public sealed class CustodexBuilder
     /// </summary>
     public Schema? StartupSchema { get; private set; }
 
-    /// <summary>Registers a pre-built <see cref="Schema"/> for validation and activation at startup.</summary>
-    /// <param name="schema">The schema to activate.</param>
+    /// <summary>
+    /// Captures <paramref name="schema"/> on <see cref="StartupSchema"/> so the consuming host can
+    /// validate and activate it via <see cref="ISchemaManager.SetActiveSchemaAsync"/>. The DI
+    /// registration itself does not validate or activate the schema; the host reads
+    /// <see cref="StartupSchema"/> and calls the manager at an appropriate point in the startup
+    /// sequence.
+    /// </summary>
+    /// <param name="schema">The schema to capture for host-driven activation.</param>
     /// <returns>This builder, for chaining.</returns>
     public CustodexBuilder UseSchema(Schema schema)
     {
@@ -31,9 +37,12 @@ public sealed class CustodexBuilder
     }
 
     /// <summary>
-    /// Builds the schema from <paramref name="builder"/> and registers it for activation at startup.
+    /// Builds the schema from <paramref name="builder"/> and captures it on
+    /// <see cref="StartupSchema"/> so the consuming host can validate and activate it via
+    /// <see cref="ISchemaManager.SetActiveSchemaAsync"/>. The DI registration itself does not
+    /// validate or activate the schema.
     /// </summary>
-    /// <param name="builder">The schema builder to build and activate.</param>
+    /// <param name="builder">The schema builder whose result is captured for host-driven activation.</param>
     /// <returns>This builder, for chaining.</returns>
     public CustodexBuilder UseSchema(SchemaBuilder builder) => UseSchema(builder.Build());
 }

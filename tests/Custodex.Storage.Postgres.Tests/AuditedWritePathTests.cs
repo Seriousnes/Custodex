@@ -9,22 +9,16 @@ namespace Custodex.Storage.Postgres.Tests;
 public class AuditedWritePathTests(PostgresFixture fx) : IAsyncLifetime
 {
     private NpgsqlUnitOfWorkFactory _factory = null!;
-    private AuditedWritePath _path = null!;
     private NpgsqlRelationStore _relations = null!;
     private NpgsqlChangeLogStore _changeLog = null!;
-    private PostgresCacheStore _cache = null!;
 
     public async Task InitializeAsync()
     {
         await using var conn = await fx.OpenAsync();
         await MigrationRunner.ApplyAsync(conn);
         _factory = new NpgsqlUnitOfWorkFactory(fx.ConnectionString);
-
         _relations = new NpgsqlRelationStore(fx.ConnectionString);
-        var attributes = new NpgsqlAttributeStore(fx.ConnectionString);
-        var schemas = new NpgsqlSchemaStore(fx.ConnectionString);
         _changeLog = new NpgsqlChangeLogStore(fx.ConnectionString);
-        _path = new AuditedWritePath(_relations, attributes, schemas, _changeLog, _cache!);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
