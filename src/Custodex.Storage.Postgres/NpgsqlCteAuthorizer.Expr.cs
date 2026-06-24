@@ -113,7 +113,4 @@ public sealed partial class NpgsqlCteAuthorizer
         return _conditions.Evaluate(def, invocation, attrs, context);
     }
 
-    /// <inheritdoc />
-    public Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
-        => throw new NotImplementedException();
 }
