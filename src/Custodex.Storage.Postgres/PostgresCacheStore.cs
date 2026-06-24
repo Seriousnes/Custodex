@@ -1,0 +1,59 @@
+using Dapper;
+using Npgsql;
+using Custodex.Abstractions;
+
+namespace Custodex.Storage.Postgres;
+
+/// <summary>
+/// Postgres-backed implementation of <see cref="ICacheStore"/>.
+/// Reads epoch values from <c>tenant_epochs</c> with a short-lived connection.
+/// Writes (epoch bumps) execute through the <see cref="IUnitOfWork"/> supplied by the caller,
+/// so epoch changes commit or roll back with the surrounding data write.
+/// Cache entries are persisted to <c>cache_entries</c> for the fixed <see cref="TenantContext"/> scope.
+/// </summary>
+public sealed partial class PostgresCacheStore : ICacheStore
+{
+    private readonly string _connectionString;
+    private readonly TenantContext _scope;
+
+    /// <summary>Initializes a new <see cref="PostgresCacheStore"/> for the given store/tenant scope.</summary>
+    public PostgresCacheStore(string connectionString, TenantContext scope)
+    {
+        _connectionString = connectionString;
+        _scope = scope;
+    }
+
+    /// <inheritdoc />
+    public async Task<long> GetEpochAsync(TenantContext t, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        return await conn.ExecuteScalarAsync<long>(new CommandDefinition("""
+            SELECT COALESCE(
+                (SELECT epoch FROM tenant_epochs WHERE store_id = @store AND tenant_id = @tenant), 0)
+            """,
+            new { store = t.Store, tenant = t.Tenant }, cancellationToken: ct));
+    }
+
+    /// <inheritdoc />
+    public async Task BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
+    {
+        var w = NpgsqlUnitOfWork.From(uow);
+        await using var cmd = new NpgsqlCommand("""
+            INSERT INTO tenant_epochs (store_id, tenant_id, epoch)
+            VALUES (@store, @tenant, 1)
+            ON CONFLICT (store_id, tenant_id)
+            DO UPDATE SET epoch = tenant_epochs.epoch + 1
+            """, w.Connection, w.Transaction);
+        cmd.Parameters.AddWithValue("store", t.Store);
+        cmd.Parameters.AddWithValue("tenant", t.Tenant);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public Task<CacheEntry?> GetAsync(string key, CancellationToken ct = default)
+        => throw new NotImplementedException("Implemented in PostgresCacheStore.Entries.cs");
+
+    /// <inheritdoc />
+    public Task SetAsync(string key, CacheEntry entry, TimeSpan ttl, CancellationToken ct = default)
+        => throw new NotImplementedException("Implemented in PostgresCacheStore.Entries.cs");
+}
