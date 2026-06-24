@@ -20,11 +20,11 @@ public class ReachabilityCteTests(PostgresFixture fx) : IAsyncLifetime
     {
         await using var conn = await fx.OpenAsync();
         var subjects = await ReachabilityCte.SubjectsThroughRelationAsync(
-            conn, SpikeData.Store, SpikeData.Tenant, "animal", "EL-001", "vet_member");
+            conn, SpikeData.Store, SpikeData.Tenant, "doc", "D1", "vet_member");
 
-        subjects.ShouldContain(("user", "dr-smith"));
+        subjects.ShouldContain(("user", "pat"));
         subjects.ShouldContain(("user", "jones"));
-        subjects.ShouldNotContain(("group", "vets"));
+        subjects.ShouldNotContain(("group", "reds"));
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public class ReachabilityCteTests(PostgresFixture fx) : IAsyncLifetime
     {
         await using var conn = await fx.OpenAsync();
         var subjects = await ReachabilityCte.SubjectsThroughRelationAsync(
-            conn, SpikeData.Store, SpikeData.Tenant, "enclosure", "Q1", "is_quarantine");
+            conn, SpikeData.Store, SpikeData.Tenant, "folder", "Q1", "is_quarantine");
 
         subjects.ShouldContain(("user", "*"));
     }

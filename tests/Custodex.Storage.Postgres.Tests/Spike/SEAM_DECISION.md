@@ -14,12 +14,12 @@
 ## Proven by this spike
 1. **Reachability is CTE-expressible and cycle-safe**: a subject-set expands to its leaf
    users; the wildcard `user:*` surfaces as a leaf; nested-group cycles terminate.
-2. **All-in-SQL post-filtering is WRONG** (Case A): `animal.edit = enclosure->edit`,
-   `enclosure.edit = editor - blocked`, carol editor+blocked on the enclosure. The naive top-level
-   post-filter returns carol→true (no `animal#blocked` tuple exists); the decided seam returns
+2. **All-in-SQL post-filtering is WRONG** (Case A): `doc.edit = folder->edit`,
+   `folder.edit = editor - blocked`, carol editor+blocked on the folder. The naive top-level
+   post-filter returns carol→true (no `doc#blocked` tuple exists); the decided seam returns
    carol→false, matching the hand-computed truth and the EngineDrivenAuthorizer oracle.
 3. **The seam handles intersection-through-arrow with a wildcard gate** (Case B):
-   quarantine-trained vet allowed, untrained vet denied, non-vet denied.
+   flagged-trained vet allowed, untrained vet denied, non-vet denied.
 
 ## Consequence for the build
 `NpgsqlCteAuthorizer` is a Postgres-native reimplementation of the oracle's traversal whose only

@@ -19,7 +19,6 @@ public class SeamVsNaiveTests(PostgresFixture fx) : IAsyncLifetime
 
     private const string NaiveSql = """
         WITH editors AS (
-            -- everyone reachable via animal -> enclosure -> editor
             SELECT e.subject_type, e.subject_id
             FROM relation_tuples a
             JOIN relation_tuples e
@@ -27,18 +26,17 @@ public class SeamVsNaiveTests(PostgresFixture fx) : IAsyncLifetime
              AND e.object_type = a.subject_type AND e.object_id = a.subject_id
              AND e.relation = 'editor'
             WHERE a.store_id = @store AND a.tenant_id = @tenant
-              AND a.object_type = 'animal' AND a.object_id = @oid AND a.relation = 'enclosure'
+              AND a.object_type = 'doc' AND a.object_id = @oid AND a.relation = 'folder'
         ),
-        blocked_on_animal AS (
-            -- the post-filter looks for a block ON THE ANIMAL; there is none
+        blocked_on_doc AS (
             SELECT subject_type, subject_id FROM relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
-              AND object_type = 'animal' AND object_id = @oid AND relation = 'blocked'
+              AND object_type = 'doc' AND object_id = @oid AND relation = 'blocked'
         )
         SELECT EXISTS (
             SELECT 1 FROM editors x
             WHERE x.subject_type = 'user' AND x.subject_id = @sid
-              AND NOT EXISTS (SELECT 1 FROM blocked_on_animal b
+              AND NOT EXISTS (SELECT 1 FROM blocked_on_doc b
                               WHERE b.subject_type = x.subject_type AND b.subject_id = x.subject_id)
         )
         """;
@@ -47,12 +45,12 @@ public class SeamVsNaiveTests(PostgresFixture fx) : IAsyncLifetime
         await conn.ExecuteScalarAsync<bool>(NaiveSql,
             new { store = SpikeData.Store, tenant = SpikeData.Tenant, oid, sid });
 
-    private async Task<bool> SeamAllowsAsync(NpgsqlConnection conn, string animalId, string sid)
+    private async Task<bool> SeamAllowsAsync(NpgsqlConnection conn, string docId, string sid)
     {
-        var enclosures = await ReachabilityCte.SubjectsThroughRelationAsync(
-            conn, SpikeData.Store, SpikeData.Tenant, "animal", animalId, "enclosure");
+        var folders = await ReachabilityCte.SubjectsThroughRelationAsync(
+            conn, SpikeData.Store, SpikeData.Tenant, "doc", docId, "folder");
 
-        foreach (var (etype, eid) in enclosures)
+        foreach (var (etype, eid) in folders)
         {
             var editors = await ReachabilityCte.SubjectsThroughRelationAsync(
                 conn, SpikeData.Store, SpikeData.Tenant, etype, eid, "editor");
@@ -70,16 +68,16 @@ public class SeamVsNaiveTests(PostgresFixture fx) : IAsyncLifetime
     public async Task Naive_all_in_sql_returns_the_WRONG_answer_for_the_inner_exclusion()
     {
         await using var conn = await fx.OpenAsync();
-        (await NaiveAllowsAsync(conn, "EL-001", "carol")).ShouldBeTrue();
+        (await NaiveAllowsAsync(conn, "D1", "carol")).ShouldBeTrue();
     }
 
     [Fact]
     public async Task Decided_seam_matches_the_hand_computed_truth_for_case_A()
     {
         await using var conn = await fx.OpenAsync();
-        (await SeamAllowsAsync(conn, "EL-001", "carol"))
-            .ShouldBe(SpikeData.CaseA_Expected[("EL-001", "carol")]);
-        (await SeamAllowsAsync(conn, "EL-001", "dana"))
-            .ShouldBe(SpikeData.CaseA_Expected[("EL-001", "dana")]);
+        (await SeamAllowsAsync(conn, "D1", "carol"))
+            .ShouldBe(SpikeData.CaseA_Expected[("D1", "carol")]);
+        (await SeamAllowsAsync(conn, "D1", "dana"))
+            .ShouldBe(SpikeData.CaseA_Expected[("D1", "dana")]);
     }
 }
