@@ -158,4 +158,15 @@ public class IndexedListObjectsTests(PostgresFixture fx) : IAsyncLifetime
         p2.ObjectIds.ShouldBe(["e"]);
         p2.ContinuationToken.ShouldBeNull();
     }
+
+    [Fact]
+    public async Task Wildcard_grant_surfaces_for_a_concrete_user_not_otherwise_granted()
+    {
+        var (auth, _, t) = await SetupAsync("ilo-wild",
+            [Tup("doc", "gamma", "editor", new SubjectRef("user", "*"))],
+            [("user:*", "edit", "doc", "gamma", false)]);
+
+        var result = await auth.ListObjectsAsync(Req(t, "nobody"));
+        result.ObjectIds.ShouldBe(["gamma"]);
+    }
 }
