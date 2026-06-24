@@ -97,8 +97,8 @@ public static class ModelGenerator
                     Users.Select(u => new SubjectRef("user", u)).ToList());
             });
 
-    /// <summary>S3: intersection-through-arrow wildcard gate; access requires either direct grant outside
-    /// a flagged crate, or vet+trained membership when inside a flagged crate.</summary>
+    /// <summary>S3: intersection-through-arrow wildcard gate; access requires either a direct grant outside
+    /// a flagged crate, or both group memberships when inside a flagged crate.</summary>
     private static Schema S3Schema() => new SchemaBuilder("s3")
         .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
         .Type("crate", t => t
