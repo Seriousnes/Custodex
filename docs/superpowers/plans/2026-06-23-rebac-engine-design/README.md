@@ -216,7 +216,19 @@ public interface IRelationStore
 }
 public interface ISchemaStore { Task<Schema?> GetActiveAsync(string store, CancellationToken ct = default); Task SetActiveAsync(string store, Schema schema, IUnitOfWork uow, CancellationToken ct = default); }
 public interface IAttributeStore { Task<IReadOnlyDictionary<string, object?>?> GetAsync(TenantContext t, EntityRef obj, CancellationToken ct = default); Task SetAsync(TenantContext t, EntityRef obj, IReadOnlyDictionary<string, object?> attrs, IUnitOfWork uow, CancellationToken ct = default); }
-public interface IIndexStore { /* M2 */ }
+// One maintained reverse-index row; the (store, tenant, schema_version) scope is supplied alongside, not stored on it.
+public sealed record ReverseIndexRow(string Subject, string Permission, string ObjectType, string ObjectId, bool Conditioned);
+public interface IIndexStore   // populated by m2/01
+{
+    Task UpsertAsync(TenantContext t, string schemaVersion, IReadOnlyList<ReverseIndexRow> rows, IUnitOfWork uow, CancellationToken ct = default);
+    Task DeleteForObjectAsync(TenantContext t, string schemaVersion, string objectType, string objectId, IUnitOfWork uow, CancellationToken ct = default);
+    Task DeleteRowsAsync(TenantContext t, string schemaVersion, IReadOnlyList<ReverseIndexRow> rows, IUnitOfWork uow, CancellationToken ct = default);
+    Task<IReadOnlyList<ReverseIndexRow>> QueryObjectsAsync(TenantContext t, string schemaVersion, string subject, string permission, string objectType, int limit, string? afterObjectId, CancellationToken ct = default);
+    Task<IReadOnlyList<ReverseIndexRow>> ReadForObjectAsync(TenantContext t, string schemaVersion, string objectType, string objectId, CancellationToken ct = default);
+    Task ClearAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default);
+    Task<bool> IsBuiltAsync(TenantContext t, string schemaVersion, CancellationToken ct = default);
+    Task MarkBuiltAsync(TenantContext t, string schemaVersion, IUnitOfWork uow, CancellationToken ct = default);
+}
 public sealed record CacheEntry(byte[] Value, long Epoch);
 // GetAsync returns the stored entry with the epoch it was written at; the caching layer (M0/08)
 // compares CacheEntry.Epoch to the current tenant epoch and treats a mismatch as a miss.
@@ -247,7 +259,7 @@ Decisions made after the milestone plans were drafted in parallel; these are aut
 1. **Condition evaluator seam (Custodex.Core).** A single interface `IConditionEvaluator { ConditionResult Evaluate(ConditionDef def, IReadOnlyDictionary<string,object?> tupleParams, IReadOnlyDictionary<string,object?> resourceAttributes, RequestContext context); }` where `ConditionResult(bool Passed, string? Diagnostic)`. `ConditionEvaluator` (m0/06) implements it; `NullConditionEvaluator` returns `Passed=true`. A missing attribute or type mismatch is `Passed=false` with a diagnostic — never an exception. `EngineDrivenAuthorizer` (m0/05) and `NpgsqlCteAuthorizer` (m1/05) depend on the interface.
 2. **Cacheability seam (Custodex.Core).** Both authorizers expose `internal Task<(bool Allowed, bool ConditionTouched)> CheckInternalAsync(...)` via an internal interface `ICacheableAuthorizer`. `CachingAuthorizer` (m0/08) depends on `ICacheableAuthorizer`, so it wraps either the engine-driven or the CTE authorizer. Only `ConditionTouched == false` results are cached.
 3. **`reverse_index` and `tenant_epochs`.** `reverse_index` carries `schema_version` (already in §6.3 DDL, m1/01). `ICacheStore.GetEpochAsync`/`BumpEpochAsync` are backed by a provider-internal `tenant_epochs(store_id, tenant_id, epoch bigint, PK(store_id,tenant_id))` table (m1/07) — distinct from the per-row `cache_entries.epoch` stamp.
-4. **`IIndexStore` members (m2/01).** Defined in `Custodex.Abstractions` by m2/01: `UpsertAsync` / `DeleteForObjectAsync` / `QueryObjectsAsync(subject, permission, objectType, paging)` / rebuild markers, all `(store, tenant, schema_version)`-scoped.
+4. **`IIndexStore` members + `ReverseIndexRow` (m2/01).** Populated in `Custodex.Abstractions` by m2/01 with eight `(store, tenant, schema_version)`-scoped members — `UpsertAsync`, `DeleteForObjectAsync`, `DeleteRowsAsync`, `QueryObjectsAsync(subject, permission, objectType, limit, afterObjectId)`, `ReadForObjectAsync`, `ClearAsync`, `IsBuiltAsync`, `MarkBuiltAsync` — and the `ReverseIndexRow(Subject, Permission, ObjectType, ObjectId, Conditioned)` record. The `reverse_index` natural-key unique index `ux_reverse_index_natural` (conditioned excluded) and the `index_build_markers(store_id, tenant_id, schema_version, built_at, PK(store_id, tenant_id, schema_version))` table backing `IsBuiltAsync`/`MarkBuiltAsync` are added by m2/01 migrations. `NpgsqlIndexStore` is the Postgres implementation.
 5. **Provider references Core.** `Custodex.Storage.Postgres` takes a project reference on `Custodex.Core` (for `SchemaIndex`, `EvalContext`, `ContinuationCursor`, `IConditionEvaluator`). Spec §4 forbids DB code *inside* Core, not Core being referenced by a provider.
 6. **Manager registration.** The concrete `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` implementations are registered from `Custodex.Storage.Postgres` (they call the provider's in-transaction `AuditedWritePath`); they implement the `Custodex.Abstractions` interfaces, so consumers are unaffected.
 7. **Project structure (resolves cross-plan drift).** The milestone plans were drafted in parallel and reference some project names that are not the canonical layout above. When executing a plan, map them as follows — the layout above is authoritative:
