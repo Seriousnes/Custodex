@@ -7,12 +7,6 @@ namespace Custodex.Core.Tests.Evaluation;
 
 public class ListSubjectsTests
 {
-    // The ListSubjects engine path (src/.../EngineDrivenAuthorizer.ListSubjects.cs) reserves the
-    // literal principal type "user" when collecting and confirming leaf subjects, so — like the
-    // reserved wildcard id "*" — the principal type stays literal here. Every other identifier
-    // (object type, relations, permission, group/member, all ids) is de-domained through the world.
-    private const string UserType = "user";
-
     private readonly TestWorld _world = TestWorld.New();
     private readonly string _objType;
     private readonly string _viewer;
@@ -31,14 +25,14 @@ public class ListSubjectsTests
         _actor = _world.SubjectId();
     }
 
-    private SubjectRef User(string id) => new(UserType, id);
+    private SubjectRef User(string id) => _world.User(id);
 
     private Schema Build() => new SchemaBuilder(_world.Version)
         .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
-            s => s.Type(UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
+            s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
         .Type(_objType, t => t
-            .Relation(_viewer, s => s.Type(UserType).SubjectSet(_world.GroupType, _world.MemberRelation))
-            .Relation(_blocked, s => s.Type(UserType))
+            .Relation(_viewer, s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation))
+            .Relation(_blocked, s => s.Type(_world.UserType))
             .Permission(_view, p => p.Relation(_viewer).Exclude(x => x.Relation(_blocked))))
         .Build();
 
@@ -103,7 +97,7 @@ public class ListSubjectsTests
         // the normal confirm + paginate loop — it must NOT push the page over PageSize.
         var ids = SortedSubjects(2);   // both sort after "*" (ASCII 42)
         var auth = await NewAsync(
-            Tuple(_objType, _objId, _viewer, new SubjectRef(UserType, "*")),
+            Tuple(_objType, _objId, _viewer, new SubjectRef(_world.UserType, "*")),
             Tuple(_objType, _objId, _viewer, User(ids[0])),
             Tuple(_objType, _objId, _viewer, User(ids[1])));
 
@@ -115,6 +109,38 @@ public class ListSubjectsTests
         var page2 = await auth.ListSubjectsAsync(Req(pageSize: 2, token: page1.ContinuationToken));
         page2.Subjects.Select(s => s.Id).ShouldBe(new[] { ids[1] });
         page2.ContinuationToken.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Lists_subjects_of_any_principal_type()
+    {
+        // A relation that admits two distinct, non-"user" principal types. Both concrete
+        // subjects must be returned — ListSubjects must not assume the principal type is "user".
+        var typeA = _world.UserType;
+        var typeB = _world.EntityType();
+        var idA = _world.SubjectId();
+        var idB = _world.SubjectId();
+        var grant = _world.Relation();
+        var perm = _world.Permission();
+        var objType = _world.EntityType();
+        var objId = _world.ObjectId();
+
+        var schema = new SchemaBuilder(_world.Version)
+            .Type(objType, t => t
+                .Relation(grant, s => s.Type(typeA).Type(typeB))
+                .Permission(perm, p => p.Relation(grant)))
+            .Build();
+        var auth = await _world.BuildAsync(schema,
+            _world.Tuple(objType, objId, grant, _world.Subject(typeA, idA)),
+            _world.Tuple(objType, objId, grant, _world.Subject(typeB, idB)));
+
+        var result = await auth.ListSubjectsAsync(new ListSubjectsRequest(
+            _world.Tenant, new EntityRef(objType, objId), perm,
+            new RequestContext(DateTimeOffset.UnixEpoch, _world.Subject(typeA, idA),
+                new Dictionary<string, object?>())));
+
+        result.Subjects.ShouldBe(
+            new[] { _world.Subject(typeA, idA), _world.Subject(typeB, idB) }, ignoreOrder: true);
     }
 
     [Fact]
