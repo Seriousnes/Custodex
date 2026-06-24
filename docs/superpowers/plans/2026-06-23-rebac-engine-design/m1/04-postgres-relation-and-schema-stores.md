@@ -14,7 +14,7 @@ See `../README.md` → Global Constraints. Depends on `m0/01` (contracts), `m1/0
 
 ## Shared decisions (locked — used verbatim by m1/07)
 
-- **jsonb helper** `Relkit.Storage.Postgres.Json` exposes `string Serialize(object? value)` and `T? Deserialize<T>(string? json)` over `System.Text.Json` with default options. `jsonb` columns are written as `string` parameters typed `NpgsqlDbType.Jsonb`; null dictionaries serialize to SQL `NULL`.
+- **jsonb helper** `Custodex.Storage.Postgres.Json` exposes `string Serialize(object? value)` and `T? Deserialize<T>(string? json)` over `System.Text.Json` with default options. `jsonb` columns are written as `string` parameters typed `NpgsqlDbType.Jsonb`; null dictionaries serialize to SQL `NULL`.
 - **Tuple natural key** (matches `m1/01`'s `ux_relation_tuples_natural`):
   `(store_id, tenant_id, object_type, object_id, relation, subject_type, subject_id, COALESCE(subject_relation, ''))`.
 - **Every** read and write filters `store_id` **and** `tenant_id`. There is no overload that omits either.
@@ -25,10 +25,10 @@ See `../README.md` → Global Constraints. Depends on `m0/01` (contracts), `m1/0
 ### Task 1: The `Json` jsonb helper, polymorphic `PermExpr` converter, and Dapper config
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Json.cs`
-- Create: `src/Relkit.Storage.Postgres/PermExprJsonConverter.cs`
-- Create: `src/Relkit.Storage.Postgres/DapperConfig.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/JsonTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Json.cs`
+- Create: `src/Custodex.Storage.Postgres/PermExprJsonConverter.cs`
+- Create: `src/Custodex.Storage.Postgres/DapperConfig.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/JsonTests.cs`
 
 **Interfaces:**
 - Produces: `static class Json` with `Serialize(object?)` and `Deserialize<T>(string?)`; a `JsonConverterFactory` (`PermExprJsonConverter`, also covering `ConditionExpr`) that round-trips the abstract `PermExpr`/`ConditionExpr` AST via a `$type` discriminator (required because `System.Text.Json` cannot deserialize abstract records by default, and the contract's `PermExpr`/`ConditionExpr` carry no `[JsonPolymorphic]` attributes — see Contract gaps); and a `DapperConfig` module initializer enabling underscore name matching so snake_case columns map to PascalCase record fields. Every store depends on `DapperConfig`.
@@ -40,13 +40,13 @@ See `../README.md` → Global Constraints. Depends on `m0/01` (contracts), `m1/0
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/JsonTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/JsonTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 public class JsonTests
 {
@@ -101,7 +101,7 @@ public class JsonTests
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter JsonTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter JsonTests`
 Expected: FAIL — `Json` does not exist (and, once it does, the polymorphic cases fail until the converter is registered).
 
 - [ ] **Step 3: Implement the polymorphic converter**
@@ -109,13 +109,13 @@ Expected: FAIL — `Json` does not exist (and, once it does, the polymorphic cas
 > The factory writes a `$type` discriminator and re-reads it. It covers both abstract bases. Buffering the node into a `JsonObject` keeps the read simple and order-independent.
 
 ```csharp
-// src/Relkit.Storage.Postgres/PermExprJsonConverter.cs
+// src/Custodex.Storage.Postgres/PermExprJsonConverter.cs
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Polymorphic (de)serialization for the abstract <see cref="PermExpr"/> and
@@ -190,10 +190,10 @@ public sealed class PermExprJsonConverter : JsonConverterFactory
 - [ ] **Step 4: Implement the `Json` helper wired to the converter**
 
 ```csharp
-// src/Relkit.Storage.Postgres/Json.cs
+// src/Custodex.Storage.Postgres/Json.cs
 using System.Text.Json;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public static class Json
 {
@@ -216,10 +216,10 @@ public static class Json
 - [ ] **Step 5: Implement the Dapper module initializer**
 
 ```csharp
-// src/Relkit.Storage.Postgres/DapperConfig.cs
+// src/Custodex.Storage.Postgres/DapperConfig.cs
 using System.Runtime.CompilerServices;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 internal static class DapperConfig
 {
@@ -232,13 +232,13 @@ internal static class DapperConfig
 
 - [ ] **Step 6: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter JsonTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter JsonTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add jsonb helper, polymorphic PermExpr converter, and Dapper underscore matching"
 ```
 
@@ -247,8 +247,8 @@ git commit -m "feat: add jsonb helper, polymorphic PermExpr converter, and Dappe
 ### Task 2: `NpgsqlRelationStore` — write, get-by-object, get-by-subject
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlRelationStore.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/RelationStoreTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlRelationStore.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/RelationStoreTests.cs`
 
 **Interfaces:**
 - Produces: `NpgsqlRelationStore : IRelationStore` with `GetByObjectAsync`, `GetBySubjectAsync`, `WriteAsync(add, remove, uow)`. Constructor takes the connection string for reads; writes use the supplied `IUnitOfWork`. Maps `condition_name`/`condition_params` ⇄ `ConditionRef`.
@@ -256,12 +256,12 @@ git commit -m "feat: add jsonb helper, polymorphic PermExpr converter, and Dappe
 - [ ] **Step 1: Write the failing tests** (round-trip a conditioned tuple; delete; subject lookup)
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/RelationStoreTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/RelationStoreTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class RelationStoreTests(PostgresFixture fx) : IAsyncLifetime
@@ -364,19 +364,19 @@ public class RelationStoreTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter RelationStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter RelationStoreTests`
 Expected: FAIL — `NpgsqlRelationStore` does not exist.
 
 - [ ] **Step 3: Implement the relation store**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlRelationStore.cs
+// src/Custodex.Storage.Postgres/NpgsqlRelationStore.cs
 using Dapper;
 using Npgsql;
 using NpgsqlTypes;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed class NpgsqlRelationStore(string connectionString) : IRelationStore
 {
@@ -490,13 +490,13 @@ public sealed class NpgsqlRelationStore(string connectionString) : IRelationStor
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter RelationStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter RelationStoreTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add Dapper relation store with condition jsonb mapping"
 ```
 
@@ -505,7 +505,7 @@ git commit -m "feat: add Dapper relation store with condition jsonb mapping"
 ### Task 3: Cross-tenant isolation test for the relation store
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/CrossTenantIsolationTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/CrossTenantIsolationTests.cs`
 
 **Interfaces:**
 - Consumes: `NpgsqlRelationStore`. Proves that writing into tenant A and reading from tenant B (same store) returns nothing — the `store_id + tenant_id` hard filter at work.
@@ -513,12 +513,12 @@ git commit -m "feat: add Dapper relation store with condition jsonb mapping"
 - [ ] **Step 1: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/CrossTenantIsolationTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/CrossTenantIsolationTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class CrossTenantIsolationTests(PostgresFixture fx) : IAsyncLifetime
@@ -577,13 +577,13 @@ public class CrossTenantIsolationTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CrossTenantIsolationTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CrossTenantIsolationTests`
 Expected: PASS — the `tenant_id` predicate isolates the read. (If it fails, a query is missing the tenant filter; fix the store, not the test.)
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests
+git add tests/Custodex.Storage.Postgres.Tests
 git commit -m "test: prove cross-tenant isolation on the relation store"
 ```
 
@@ -592,8 +592,8 @@ git commit -m "test: prove cross-tenant isolation on the relation store"
 ### Task 4: `NpgsqlAttributeStore` — attribute dictionary ⇄ jsonb
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlAttributeStore.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/AttributeStoreTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlAttributeStore.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/AttributeStoreTests.cs`
 
 **Interfaces:**
 - Produces: `NpgsqlAttributeStore : IAttributeStore` with `GetAsync` (null when absent) and `SetAsync(uow)` (upsert on the object PK), mapping the attribute dictionary to/from the `attributes` jsonb column. Hard-filters `store_id + tenant_id`.
@@ -601,12 +601,12 @@ git commit -m "test: prove cross-tenant isolation on the relation store"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/AttributeStoreTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/AttributeStoreTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class AttributeStoreTests(PostgresFixture fx) : IAsyncLifetime
@@ -691,19 +691,19 @@ public class AttributeStoreTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter AttributeStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter AttributeStoreTests`
 Expected: FAIL — `NpgsqlAttributeStore` does not exist.
 
 - [ ] **Step 3: Implement the attribute store**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlAttributeStore.cs
+// src/Custodex.Storage.Postgres/NpgsqlAttributeStore.cs
 using Dapper;
 using Npgsql;
 using NpgsqlTypes;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed class NpgsqlAttributeStore(string connectionString) : IAttributeStore
 {
@@ -745,13 +745,13 @@ public sealed class NpgsqlAttributeStore(string connectionString) : IAttributeSt
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter AttributeStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter AttributeStoreTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add Dapper attribute store with jsonb mapping"
 ```
 
@@ -760,8 +760,8 @@ git commit -m "feat: add Dapper attribute store with jsonb mapping"
 ### Task 5: `NpgsqlSchemaStore` — active schema persistence
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlSchemaStore.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/SchemaStoreTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlSchemaStore.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/SchemaStoreTests.cs`
 
 **Interfaces:**
 - Produces: `NpgsqlSchemaStore : ISchemaStore` with `GetActiveAsync(store)` and `SetActiveAsync(store, schema, uow)`. The `Schema` AST is serialized to the `definition` jsonb column; setting active deactivates any previously active version for that store, then upserts the new one as active. Schema is per-store (not tenant-scoped), matching the contract signatures.
@@ -769,12 +769,12 @@ git commit -m "feat: add Dapper attribute store with jsonb mapping"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/SchemaStoreTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/SchemaStoreTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class SchemaStoreTests(PostgresFixture fx) : IAsyncLifetime
@@ -856,19 +856,19 @@ public class SchemaStoreTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter SchemaStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter SchemaStoreTests`
 Expected: FAIL — `NpgsqlSchemaStore` does not exist.
 
 - [ ] **Step 3: Implement the schema store**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlSchemaStore.cs
+// src/Custodex.Storage.Postgres/NpgsqlSchemaStore.cs
 using Dapper;
 using Npgsql;
 using NpgsqlTypes;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed class NpgsqlSchemaStore(string connectionString) : ISchemaStore
 {
@@ -910,17 +910,17 @@ public sealed class NpgsqlSchemaStore(string connectionString) : ISchemaStore
 }
 ```
 
-> The `Schema` AST contains the `PermExpr` polymorphic hierarchy, which `System.Text.Json` cannot round-trip by default. The `PermExprJsonConverter` registered into the `Json` helper in Task 1 handles this via a `$type` discriminator, so `SetActiveAsync`/`GetActiveAsync` round-trip the schema through `jsonb` here. The underlying need for `[JsonPolymorphic]`/`[JsonDerivedType]` on the contract's `PermExpr`/`ConditionExpr` records is a Contract gap (m0's conformance/DSL serialization hits the same wall); the converter is the provider-side workaround until those attributes land in `Relkit.Abstractions`.
+> The `Schema` AST contains the `PermExpr` polymorphic hierarchy, which `System.Text.Json` cannot round-trip by default. The `PermExprJsonConverter` registered into the `Json` helper in Task 1 handles this via a `$type` discriminator, so `SetActiveAsync`/`GetActiveAsync` round-trip the schema through `jsonb` here. The underlying need for `[JsonPolymorphic]`/`[JsonDerivedType]` on the contract's `PermExpr`/`ConditionExpr` records is a Contract gap (m0's conformance/DSL serialization hits the same wall); the converter is the provider-side workaround until those attributes land in `Custodex.Abstractions`.
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter SchemaStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter SchemaStoreTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add Dapper schema store with active-version upsert"
 ```
 
@@ -929,8 +929,8 @@ git commit -m "feat: add Dapper schema store with active-version upsert"
 ### Task 6: `NpgsqlChangeLogStore` — append-only audit read/write
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlChangeLogStore.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/ChangeLogStoreTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlChangeLogStore.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/ChangeLogStoreTests.cs`
 
 **Interfaces:**
 - Produces: `NpgsqlChangeLogStore : IChangeLogStore` with `AppendAsync(uow)` (insert; DB generates `id` via `bigserial` and `occurred_at` via `default now()`, so the passed `Id`/`OccurredAt` are ignored) and `ReadAsync(filter)` (newest-first, filtered by `Since`/`Actor`, capped at `Limit`). Maps `before`/`after` to/from `jsonb`.
@@ -938,12 +938,12 @@ git commit -m "feat: add Dapper schema store with active-version upsert"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/ChangeLogStoreTests.cs
-using Relkit.Abstractions;
+// tests/Custodex.Storage.Postgres.Tests/ChangeLogStoreTests.cs
+using Custodex.Abstractions;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests;
+namespace Custodex.Storage.Postgres.Tests;
 
 [Collection("postgres")]
 public class ChangeLogStoreTests(PostgresFixture fx) : IAsyncLifetime
@@ -1024,19 +1024,19 @@ public class ChangeLogStoreTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ChangeLogStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ChangeLogStoreTests`
 Expected: FAIL — `NpgsqlChangeLogStore` does not exist.
 
 - [ ] **Step 3: Implement the change-log store**
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlChangeLogStore.cs
+// src/Custodex.Storage.Postgres/NpgsqlChangeLogStore.cs
 using Dapper;
 using Npgsql;
 using NpgsqlTypes;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogStore
 {
@@ -1089,13 +1089,13 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter ChangeLogStoreTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter ChangeLogStoreTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add Dapper change-log store with jsonb before/after"
 ```
 

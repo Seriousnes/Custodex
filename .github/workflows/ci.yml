@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Build & Test
+  build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,5 +30,41 @@ jobs:
       - name: Build
         run: dotnet build Custodex.slnx --configuration Release --no-restore
 
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            **/bin/Release/**
+            **/obj/**
+          include-hidden-files: true
+          retention-days: 1
+
+  test:
+    name: Test (${{ matrix.project }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - Custodex.Abstractions.Tests
+          - Custodex.Core.Tests
+          - Custodex.Storage.InMemory.Tests
+          - Custodex.Storage.Postgres.Tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
       - name: Test
-        run: dotnet test Custodex.slnx --configuration Release --no-build --verbosity normal
+        run: dotnet test tests/${{ matrix.project }}/${{ matrix.project }}.csproj --configuration Release --no-build --verbosity normal

@@ -2,78 +2,78 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Relkit a usable library: concrete `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` implementations that (a) supply the `actor` and compute before/after diffs, calling `m1/07`'s `AuditedWritePath` so the data write, `change_log` entry, and cache-epoch bump all commit in **one** unit of work (spec §6.5 / §9.2); the `services.AddRelkit().UsePostgres(connString).UseSchema(builder)` DI surface (spec §10.1); `AddRelkitInstrumentation()` wiring the `"Relkit"` `ActivitySource` + `Meter` into OpenTelemetry (spec §11.4); and an end-to-end Testcontainers sample (define schema → write tuples → Check/ListObjects) proving the wired-up engine works against real Postgres.
+**Goal:** Make Custodex a usable library: concrete `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` implementations that (a) supply the `actor` and compute before/after diffs, calling `m1/07`'s `AuditedWritePath` so the data write, `change_log` entry, and cache-epoch bump all commit in **one** unit of work (spec §6.5 / §9.2); the `services.AddCustodex().UsePostgres(connString).UseSchema(builder)` DI surface (spec §10.1); `AddCustodexInstrumentation()` wiring the `"Custodex"` `ActivitySource` + `Meter` into OpenTelemetry (spec §11.4); and an end-to-end Testcontainers sample (define schema → write tuples → Check/ListObjects) proving the wired-up engine works against real Postgres.
 
-**Architecture:** The managers own **actor + diff orchestration**: each write carries an `actor` (supplied by the consuming application — the engine never invents identity, spec §6.5), the manager assembles before/after images, opens one `IUnitOfWork`, and delegates the in-transaction sequencing to `AuditedWritePath` (`m1/07`), then commits. Because `AuditedWritePath` already lives in `Relkit.Storage.Postgres` and depends only on `Relkit.Abstractions` interfaces, the concrete managers live in `Relkit.Storage.Postgres` too (they need `NpgsqlUnitOfWorkFactory` to begin the transaction and `AuditedWritePath` to sequence the writes). `AddRelkit()` returns a builder; `.UsePostgres(conn)` registers the Postgres stores, `NpgsqlCteAuthorizer` as the primary `IAuthorizer` (wrapped by `m0/08`'s `CachingAuthorizer` for the cross-request cache), the managers, and `PostgresCacheStore`; `.UseSchema(builder)` registers a startup schema to validate + activate. `AddRelkitInstrumentation()` is an OpenTelemetry extension that enables the `"Relkit"` activity source and meter (`RelkitDiagnostics`, `m0/01`).
+**Architecture:** The managers own **actor + diff orchestration**: each write carries an `actor` (supplied by the consuming application — the engine never invents identity, spec §6.5), the manager assembles before/after images, opens one `IUnitOfWork`, and delegates the in-transaction sequencing to `AuditedWritePath` (`m1/07`), then commits. Because `AuditedWritePath` already lives in `Custodex.Storage.Postgres` and depends only on `Custodex.Abstractions` interfaces, the concrete managers live in `Custodex.Storage.Postgres` too (they need `NpgsqlUnitOfWorkFactory` to begin the transaction and `AuditedWritePath` to sequence the writes). `AddCustodex()` returns a builder; `.UsePostgres(conn)` registers the Postgres stores, `NpgsqlCteAuthorizer` as the primary `IAuthorizer` (wrapped by `m0/08`'s `CachingAuthorizer` for the cross-request cache), the managers, and `PostgresCacheStore`; `.UseSchema(builder)` registers a startup schema to validate + activate. `AddCustodexInstrumentation()` is an OpenTelemetry extension that enables the `"Custodex"` activity source and meter (`CustodexDiagnostics`, `m0/01`).
 
 **Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, `Microsoft.Extensions.DependencyInjection.Abstractions`, `OpenTelemetry` (extension registration only), xUnit, Shouldly, `Testcontainers.PostgreSql`.
 
 ## Global Constraints
 
-See `../README.md` → Global Constraints. All I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (contracts + `RelkitDiagnostics`), `m0/02`/`m0/03` (`SchemaBuilder`, `SchemaValidator`), `m0/08` (`CachingAuthorizer`), `m1/01`–`m1/05`/`m1/07` (Postgres schema, UoW, stores, `NpgsqlCteAuthorizer`, `AuditedWritePath`, `PostgresCacheStore`). **No EF Core.**
+See `../README.md` → Global Constraints. All I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard. Depends on `m0/01` (contracts + `CustodexDiagnostics`), `m0/02`/`m0/03` (`SchemaBuilder`, `SchemaValidator`), `m0/08` (`CachingAuthorizer`), `m1/01`–`m1/05`/`m1/07` (Postgres schema, UoW, stores, `NpgsqlCteAuthorizer`, `AuditedWritePath`, `PostgresCacheStore`). **No EF Core.**
 
-> **Aspire alignment** (see `../README.md` → Aspire integration): implement `AddRelkitInstrumentation()` as OpenTelemetry builder extensions — `tracing.AddSource("Relkit")` and `metrics.AddMeter("Relkit")` — that `Relkit.Service` calls *after* `AddServiceDefaults()`. It registers the library's source/meter into the existing ServiceDefaults OTel pipeline; it must not stand up its own.
+> **Aspire alignment** (see `../README.md` → Aspire integration): implement `AddCustodexInstrumentation()` as OpenTelemetry builder extensions — `tracing.AddSource("Custodex")` and `metrics.AddMeter("Custodex")` — that `Custodex.Service` calls *after* `AddServiceDefaults()`. It registers the library's source/meter into the existing ServiceDefaults OTel pipeline; it must not stand up its own.
 
 ## Shared decisions (locked)
 
-- **Managers live in `Relkit.Storage.Postgres`** (they orchestrate `AuditedWritePath` + `NpgsqlUnitOfWorkFactory`, both provider-side). They implement the `Relkit.Abstractions` manager interfaces, so a consumer depends only on the interface.
+- **Managers live in `Custodex.Storage.Postgres`** (they orchestrate `AuditedWritePath` + `NpgsqlUnitOfWorkFactory`, both provider-side). They implement the `Custodex.Abstractions` manager interfaces, so a consumer depends only on the interface.
 - **Actor is caller-supplied** on every write (`IRelationManager.WriteTuplesAsync(tenant, actor, …)`); the manager never invents it.
 - **Before/after diffs:** `WriteTuplesAsync` → adds audit as `after: tuple` (op `write`), deletes as `before: tuple` (op `delete`); `WriteAttributesAsync` → reads current attributes as `before`, new as `after`; `SetActiveSchema` → `after: version`.
 - **One unit of work per manager call:** the manager begins an owned `IUnitOfWork` (or, for atomic co-commit with the consuming app's domain write, an `Enlist`-ed supplied one — exposed via an overload), passes it to `AuditedWritePath`, and commits.
 
 ---
 
-### Task 1: Create `Relkit.Extensions.DependencyInjection` wiring project and `RelkitBuilder`
+### Task 1: Create `Custodex.Extensions.DependencyInjection` wiring project and `CustodexBuilder`
 
 **Files:**
-- Create: `src/Relkit.Extensions.DependencyInjection/Relkit.Extensions.DependencyInjection.csproj`
-- Create: `src/Relkit.Extensions.DependencyInjection/RelkitBuilder.cs`
-- Create: `src/Relkit.Extensions.DependencyInjection/RelkitServiceCollectionExtensions.cs`
-- Create: `tests/Relkit.Extensions.DependencyInjection.Tests/Relkit.Extensions.DependencyInjection.Tests.csproj`
-- Test: `tests/Relkit.Extensions.DependencyInjection.Tests/RelkitBuilderTests.cs`
+- Create: `src/Custodex.Extensions.DependencyInjection/Custodex.Extensions.DependencyInjection.csproj`
+- Create: `src/Custodex.Extensions.DependencyInjection/CustodexBuilder.cs`
+- Create: `src/Custodex.Extensions.DependencyInjection/CustodexServiceCollectionExtensions.cs`
+- Create: `tests/Custodex.Extensions.DependencyInjection.Tests/Custodex.Extensions.DependencyInjection.Tests.csproj`
+- Test: `tests/Custodex.Extensions.DependencyInjection.Tests/CustodexBuilderTests.cs`
 
 **Interfaces:**
-- Produces: `IServiceCollection.AddRelkit() -> RelkitBuilder`; `RelkitBuilder` exposing `IServiceCollection Services { get; }` and a place to hold the chosen schema builder; `RelkitBuilder UseSchema(SchemaBuilder builder)` (stores the schema to activate at startup) and `UseSchema(Schema schema)`. `UsePostgres` is added in Task 4 (it lives in the Postgres package to avoid a DI→Postgres reference cycle; this project references `Relkit.Abstractions` + `Microsoft.Extensions.DependencyInjection.Abstractions` only).
+- Produces: `IServiceCollection.AddCustodex() -> CustodexBuilder`; `CustodexBuilder` exposing `IServiceCollection Services { get; }` and a place to hold the chosen schema builder; `CustodexBuilder UseSchema(SchemaBuilder builder)` (stores the schema to activate at startup) and `UseSchema(Schema schema)`. `UsePostgres` is added in Task 4 (it lives in the Postgres package to avoid a DI→Postgres reference cycle; this project references `Custodex.Abstractions` + `Microsoft.Extensions.DependencyInjection.Abstractions` only).
 - Consumes: `Schema` (`m0/01`), `SchemaBuilder` (`m0/02`).
 
-> **Why a separate DI project.** `AddRelkit()` must be callable without forcing a Postgres dependency on consumers who use the in-memory provider in tests. The base builder lives in `Relkit.Extensions.DependencyInjection` (Abstractions only); `UsePostgres` is an extension method shipped in `Relkit.Storage.Postgres` (Task 4) that the consumer references when they want Postgres. This matches spec §10.1 ("switching to the remote service is one registration change").
+> **Why a separate DI project.** `AddCustodex()` must be callable without forcing a Postgres dependency on consumers who use the in-memory provider in tests. The base builder lives in `Custodex.Extensions.DependencyInjection` (Abstractions only); `UsePostgres` is an extension method shipped in `Custodex.Storage.Postgres` (Task 4) that the consumer references when they want Postgres. This matches spec §10.1 ("switching to the remote service is one registration change").
 
 - [ ] **Step 1: Create the projects and references**
 
 Run:
 ```bash
-dotnet new classlib -n Relkit.Extensions.DependencyInjection -o src/Relkit.Extensions.DependencyInjection -f net10.0
-dotnet new xunit -n Relkit.Extensions.DependencyInjection.Tests -o tests/Relkit.Extensions.DependencyInjection.Tests -f net10.0
-rm src/Relkit.Extensions.DependencyInjection/Class1.cs tests/Relkit.Extensions.DependencyInjection.Tests/UnitTest1.cs
-dotnet sln add src/Relkit.Extensions.DependencyInjection tests/Relkit.Extensions.DependencyInjection.Tests
-dotnet add src/Relkit.Extensions.DependencyInjection reference src/Relkit.Abstractions
-dotnet add src/Relkit.Extensions.DependencyInjection reference src/Relkit.Core
-dotnet add src/Relkit.Extensions.DependencyInjection package Microsoft.Extensions.DependencyInjection.Abstractions
-dotnet add tests/Relkit.Extensions.DependencyInjection.Tests reference src/Relkit.Extensions.DependencyInjection
-dotnet add tests/Relkit.Extensions.DependencyInjection.Tests reference src/Relkit.Core
-dotnet add tests/Relkit.Extensions.DependencyInjection.Tests package Shouldly
-dotnet add tests/Relkit.Extensions.DependencyInjection.Tests package Microsoft.Extensions.DependencyInjection
+dotnet new classlib -n Custodex.Extensions.DependencyInjection -o src/Custodex.Extensions.DependencyInjection -f net10.0
+dotnet new xunit -n Custodex.Extensions.DependencyInjection.Tests -o tests/Custodex.Extensions.DependencyInjection.Tests -f net10.0
+rm src/Custodex.Extensions.DependencyInjection/Class1.cs tests/Custodex.Extensions.DependencyInjection.Tests/UnitTest1.cs
+dotnet sln add src/Custodex.Extensions.DependencyInjection tests/Custodex.Extensions.DependencyInjection.Tests
+dotnet add src/Custodex.Extensions.DependencyInjection reference src/Custodex.Abstractions
+dotnet add src/Custodex.Extensions.DependencyInjection reference src/Custodex.Core
+dotnet add src/Custodex.Extensions.DependencyInjection package Microsoft.Extensions.DependencyInjection.Abstractions
+dotnet add tests/Custodex.Extensions.DependencyInjection.Tests reference src/Custodex.Extensions.DependencyInjection
+dotnet add tests/Custodex.Extensions.DependencyInjection.Tests reference src/Custodex.Core
+dotnet add tests/Custodex.Extensions.DependencyInjection.Tests package Shouldly
+dotnet add tests/Custodex.Extensions.DependencyInjection.Tests package Microsoft.Extensions.DependencyInjection
 ```
 
 - [ ] **Step 2: Write the failing test**
 
 ```csharp
-// tests/Relkit.Extensions.DependencyInjection.Tests/RelkitBuilderTests.cs
+// tests/Custodex.Extensions.DependencyInjection.Tests/CustodexBuilderTests.cs
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Core;
-using Relkit.Extensions.DependencyInjection;
+using Custodex.Core;
+using Custodex.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Extensions.DependencyInjection.Tests;
+namespace Custodex.Extensions.DependencyInjection.Tests;
 
-public class RelkitBuilderTests
+public class CustodexBuilderTests
 {
     [Fact]
-    public void AddRelkit_returns_a_builder_over_the_same_services()
+    public void AddCustodex_returns_a_builder_over_the_same_services()
     {
         var services = new ServiceCollection();
-        var builder = services.AddRelkit();
+        var builder = services.AddCustodex();
         builder.Services.ShouldBeSameAs(services);
     }
 
@@ -81,7 +81,7 @@ public class RelkitBuilderTests
     public void UseSchema_captures_the_built_schema_for_startup_activation()
     {
         var services = new ServiceCollection();
-        var builder = services.AddRelkit()
+        var builder = services.AddCustodex()
             .UseSchema(new SchemaBuilder("v1")
                 .Type("doc", t => t.Relation("viewer", s => s.User()).Permission("view", p => p.Relation("viewer"))));
         builder.StartupSchema.ShouldNotBeNull();
@@ -92,62 +92,62 @@ public class RelkitBuilderTests
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Extensions.DependencyInjection.Tests --filter RelkitBuilderTests`
-Expected: FAIL — `AddRelkit` / `RelkitBuilder` do not exist.
+Run: `dotnet test tests/Custodex.Extensions.DependencyInjection.Tests --filter CustodexBuilderTests`
+Expected: FAIL — `AddCustodex` / `CustodexBuilder` do not exist.
 
 - [ ] **Step 4: Implement the builder and entry point**
 
 ```csharp
-// src/Relkit.Extensions.DependencyInjection/RelkitBuilder.cs
+// src/Custodex.Extensions.DependencyInjection/CustodexBuilder.cs
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
-using Relkit.Core;
+using Custodex.Abstractions;
+using Custodex.Core;
 
-namespace Relkit.Extensions.DependencyInjection;
+namespace Custodex.Extensions.DependencyInjection;
 
-/// <summary>Fluent registration surface for Relkit (spec §10.1). Provider packages add extension methods (e.g. UsePostgres).</summary>
-public sealed class RelkitBuilder
+/// <summary>Fluent registration surface for Custodex (spec §10.1). Provider packages add extension methods (e.g. UsePostgres).</summary>
+public sealed class CustodexBuilder
 {
-    public RelkitBuilder(IServiceCollection services) => Services = services;
+    public CustodexBuilder(IServiceCollection services) => Services = services;
 
     public IServiceCollection Services { get; }
 
     /// <summary>The schema to validate and activate at startup, if configured via UseSchema.</summary>
     public Schema? StartupSchema { get; private set; }
 
-    public RelkitBuilder UseSchema(Schema schema)
+    public CustodexBuilder UseSchema(Schema schema)
     {
         StartupSchema = schema;
         return this;
     }
 
-    public RelkitBuilder UseSchema(SchemaBuilder builder) => UseSchema(builder.Build());
+    public CustodexBuilder UseSchema(SchemaBuilder builder) => UseSchema(builder.Build());
 }
 ```
 
 ```csharp
-// src/Relkit.Extensions.DependencyInjection/RelkitServiceCollectionExtensions.cs
+// src/Custodex.Extensions.DependencyInjection/CustodexServiceCollectionExtensions.cs
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Relkit.Extensions.DependencyInjection;
+namespace Custodex.Extensions.DependencyInjection;
 
-public static class RelkitServiceCollectionExtensions
+public static class CustodexServiceCollectionExtensions
 {
-    /// <summary>Begin Relkit registration. Chain a provider (e.g. <c>.UsePostgres(conn)</c>) and <c>.UseSchema(builder)</c>.</summary>
-    public static RelkitBuilder AddRelkit(this IServiceCollection services) => new(services);
+    /// <summary>Begin Custodex registration. Chain a provider (e.g. <c>.UsePostgres(conn)</c>) and <c>.UseSchema(builder)</c>.</summary>
+    public static CustodexBuilder AddCustodex(this IServiceCollection services) => new(services);
 }
 ```
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Extensions.DependencyInjection.Tests --filter RelkitBuilderTests`
+Run: `dotnet test tests/Custodex.Extensions.DependencyInjection.Tests --filter CustodexBuilderTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Extensions.DependencyInjection tests/Relkit.Extensions.DependencyInjection.Tests
-git commit -m "feat: add AddRelkit builder entry point"
+git add src/Custodex.Extensions.DependencyInjection tests/Custodex.Extensions.DependencyInjection.Tests
+git commit -m "feat: add AddCustodex builder entry point"
 ```
 
 ---
@@ -155,16 +155,16 @@ git commit -m "feat: add AddRelkit builder entry point"
 ### Task 2: The concrete managers — actor + diff orchestration over `AuditedWritePath`
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/Managers/RelkitRelationManager.cs`
-- Create: `src/Relkit.Storage.Postgres/Managers/RelkitSchemaManager.cs`
-- Create: `src/Relkit.Storage.Postgres/Managers/RelkitStoreTenantManager.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Managers/RelationManagerTests.cs`
+- Create: `src/Custodex.Storage.Postgres/Managers/CustodexRelationManager.cs`
+- Create: `src/Custodex.Storage.Postgres/Managers/CustodexSchemaManager.cs`
+- Create: `src/Custodex.Storage.Postgres/Managers/CustodexStoreTenantManager.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Managers/RelationManagerTests.cs`
 
 **Interfaces:**
 - Produces:
-  - `RelkitRelationManager : IRelationManager` — `WriteTuplesAsync`/`DeleteTuplesAsync`/`WriteAttributesAsync` begin an owned `IUnitOfWork`, compute before/after, call `AuditedWritePath`, and commit; `ReadTuplesAsync` (via `NpgsqlRelationStore` + a filtered read) and `ReadChangeLogAsync` (via `NpgsqlChangeLogStore`).
-  - `RelkitSchemaManager : ISchemaManager` — `ValidateSchema` (delegates to `m0/03` `SchemaValidator`), `SetActiveSchemaAsync` (validates then calls `AuditedWritePath.SetSchemaAsync` in one UoW; throws `SchemaValidationException` on invalid), `GetActiveSchemaAsync`.
-  - `RelkitStoreManager : IStoreManager` and `RelkitTenantManager : ITenantManager` — insert the `stores` / `tenants` rows.
+  - `CustodexRelationManager : IRelationManager` — `WriteTuplesAsync`/`DeleteTuplesAsync`/`WriteAttributesAsync` begin an owned `IUnitOfWork`, compute before/after, call `AuditedWritePath`, and commit; `ReadTuplesAsync` (via `NpgsqlRelationStore` + a filtered read) and `ReadChangeLogAsync` (via `NpgsqlChangeLogStore`).
+  - `CustodexSchemaManager : ISchemaManager` — `ValidateSchema` (delegates to `m0/03` `SchemaValidator`), `SetActiveSchemaAsync` (validates then calls `AuditedWritePath.SetSchemaAsync` in one UoW; throws `SchemaValidationException` on invalid), `GetActiveSchemaAsync`.
+  - `CustodexStoreManager : IStoreManager` and `CustodexTenantManager : ITenantManager` — insert the `stores` / `tenants` rows.
 - Consumes: `AuditedWritePath`, `NpgsqlUnitOfWorkFactory`, the Npgsql stores (`m1/03`/`m1/04`/`m1/07`); `SchemaValidator` (`m0/03`); the manager interfaces + `SchemaValidationException` (`m0/01`).
 
 > **Diff assembly (the m1/07 hand-off).** `m1/07`'s `AuditedWritePath` is the in-transaction sequencer; it does **not** invent the actor or compute the diff (its plan flags this as `m1/09`'s job). Here the manager supplies them: tuple writes pass `after: tuple`, deletes pass `before: tuple`; attribute writes read the current bag first (`IAttributeStore.GetAsync`) as `before`. The manager owns the `IUnitOfWork` lifetime; `AuditedWritePath` runs the data write + `change_log` + epoch bump on it; the manager commits — so all four effects are atomic (spec §9.2).
@@ -172,20 +172,20 @@ git commit -m "feat: add AddRelkit builder entry point"
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Managers/RelationManagerTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Managers;
+// tests/Custodex.Storage.Postgres.Tests/Managers/RelationManagerTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Managers;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Managers;
+namespace Custodex.Storage.Postgres.Tests.Managers;
 
 [Collection("postgres")]
 public class RelationManagerTests(PostgresFixture fx) : IAsyncLifetime
 {
     private NpgsqlUnitOfWorkFactory _factory = null!;
-    private RelkitRelationManager _manager = null!;
+    private CustodexRelationManager _manager = null!;
     private NpgsqlRelationStore _relations = null!;
     private NpgsqlChangeLogStore _changeLog = null!;
     private PostgresCacheStore _cache = null!;
@@ -202,7 +202,7 @@ public class RelationManagerTests(PostgresFixture fx) : IAsyncLifetime
         _changeLog = new NpgsqlChangeLogStore(fx.ConnectionString);
         _cache = new PostgresCacheStore(fx.ConnectionString, _t);
         var auditedPath = new AuditedWritePath(_relations, attributes, schemas, _changeLog, _cache);
-        _manager = new RelkitRelationManager(_factory, _relations, attributes, _changeLog, auditedPath);
+        _manager = new CustodexRelationManager(_factory, _relations, attributes, _changeLog, auditedPath);
 
         await using var u = await _factory.BeginAsync();
         var uow = NpgsqlUnitOfWork.From(u);
@@ -259,7 +259,7 @@ public class RelationManagerTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter RelationManagerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter RelationManagerTests`
 Expected: FAIL — the managers do not exist.
 
 - [ ] **Step 3: Implement the managers**
@@ -267,7 +267,7 @@ Expected: FAIL — the managers do not exist.
 First, the relation store needs a filtered read for `ReadTuplesAsync`. Add it to `NpgsqlRelationStore` (provider convenience, not on the portable `IRelationStore`):
 
 ```csharp
-// Add to src/Relkit.Storage.Postgres/NpgsqlRelationStore.cs (alongside the existing members)
+// Add to src/Custodex.Storage.Postgres/NpgsqlRelationStore.cs (alongside the existing members)
 
     /// <summary>Admin/audit read: tuples matching a partial filter, tenant-scoped.</summary>
     public async Task<IReadOnlyList<RelationTuple>> QueryAsync(
@@ -295,17 +295,17 @@ First, the relation store needs a filtered read for `ReadTuplesAsync`. Add it to
 ```
 
 ```csharp
-// src/Relkit.Storage.Postgres/Managers/RelkitRelationManager.cs
-using Relkit.Abstractions;
+// src/Custodex.Storage.Postgres/Managers/CustodexRelationManager.cs
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres.Managers;
+namespace Custodex.Storage.Postgres.Managers;
 
 /// <summary>
 /// Concrete <see cref="IRelationManager"/>. Each write supplies the caller's actor and before/after
 /// images, then sequences the data write + change_log + epoch bump on ONE unit of work via
 /// <see cref="AuditedWritePath"/> (spec §6.5 / §9.2). The engine never invents the actor.
 /// </summary>
-public sealed class RelkitRelationManager(
+public sealed class CustodexRelationManager(
     NpgsqlUnitOfWorkFactory uowFactory,
     NpgsqlRelationStore relations,
     IAttributeStore attributes,
@@ -349,18 +349,18 @@ public sealed class RelkitRelationManager(
 ```
 
 ```csharp
-// src/Relkit.Storage.Postgres/Managers/RelkitSchemaManager.cs
-using Relkit.Abstractions;
-using Relkit.Core;
+// src/Custodex.Storage.Postgres/Managers/CustodexSchemaManager.cs
+using Custodex.Abstractions;
+using Custodex.Core;
 
-namespace Relkit.Storage.Postgres.Managers;
+namespace Custodex.Storage.Postgres.Managers;
 
 /// <summary>
 /// Concrete <see cref="ISchemaManager"/>. Validates via the m0/03 SchemaValidator, then activates
 /// the schema and audits the change in one unit of work. Schema is per-store; the audit tenant is
 /// the store's default tenant carried in the call. An invalid schema throws SchemaValidationException.
 /// </summary>
-public sealed class RelkitSchemaManager(
+public sealed class CustodexSchemaManager(
     NpgsqlUnitOfWorkFactory uowFactory,
     NpgsqlSchemaStore schemas,
     AuditedWritePath audited) : ISchemaManager
@@ -387,14 +387,14 @@ public sealed class RelkitSchemaManager(
 > **Schema-audit tenant note.** A schema is per-store (not per-tenant), but `change_log` is tenant-scoped (FK to `tenants`). The manager audits the schema change against a per-store bookkeeping tenant `(store, store)` so the FK is satisfied; the consuming app may seed that tenant via `ITenantManager`. The audit actor for schema changes defaults to `"schema-author"`; an overload taking an explicit actor is added if a consumer needs it.
 
 ```csharp
-// src/Relkit.Storage.Postgres/Managers/RelkitStoreTenantManager.cs
+// src/Custodex.Storage.Postgres/Managers/CustodexStoreTenantManager.cs
 using Dapper;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres.Managers;
+namespace Custodex.Storage.Postgres.Managers;
 
-public sealed class RelkitStoreManager(string connectionString) : IStoreManager
+public sealed class CustodexStoreManager(string connectionString) : IStoreManager
 {
     public async Task CreateStoreAsync(string store, CancellationToken ct = default)
     {
@@ -405,7 +405,7 @@ public sealed class RelkitStoreManager(string connectionString) : IStoreManager
     }
 }
 
-public sealed class RelkitTenantManager(string connectionString) : ITenantManager
+public sealed class CustodexTenantManager(string connectionString) : ITenantManager
 {
     public async Task CreateTenantAsync(TenantContext tenant, CancellationToken ct = default)
     {
@@ -420,13 +420,13 @@ public sealed class RelkitTenantManager(string connectionString) : ITenantManage
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter RelationManagerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter RelationManagerTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add concrete managers with actor + diff orchestration over AuditedWritePath"
 ```
 
@@ -435,29 +435,29 @@ git commit -m "feat: add concrete managers with actor + diff orchestration over 
 ### Task 3: Schema-manager validation + atomic activation tests
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/Managers/SchemaManagerTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Managers/SchemaManagerTests.cs`
 
 **Interfaces:**
-- Consumes: `RelkitSchemaManager`. Proves an invalid schema throws `SchemaValidationException` (no DB write), and a valid schema activates + audits atomically.
+- Consumes: `CustodexSchemaManager`. Proves an invalid schema throws `SchemaValidationException` (no DB write), and a valid schema activates + audits atomically.
 
 - [ ] **Step 1: Write the tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Managers/SchemaManagerTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Storage.Postgres;
-using Relkit.Storage.Postgres.Managers;
+// tests/Custodex.Storage.Postgres.Tests/Managers/SchemaManagerTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Managers;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Managers;
+namespace Custodex.Storage.Postgres.Tests.Managers;
 
 [Collection("postgres")]
 public class SchemaManagerTests(PostgresFixture fx) : IAsyncLifetime
 {
     private NpgsqlUnitOfWorkFactory _factory = null!;
-    private RelkitSchemaManager _manager = null!;
+    private CustodexSchemaManager _manager = null!;
     private NpgsqlSchemaStore _schemas = null!;
 
     public async ValueTask InitializeAsync()
@@ -471,7 +471,7 @@ public class SchemaManagerTests(PostgresFixture fx) : IAsyncLifetime
         var changeLog = new NpgsqlChangeLogStore(fx.ConnectionString);
         var cache = new PostgresCacheStore(fx.ConnectionString, new TenantContext("sm", "sm"));
         var audited = new AuditedWritePath(relations, attributes, _schemas, changeLog, cache);
-        _manager = new RelkitSchemaManager(_factory, _schemas, audited);
+        _manager = new CustodexSchemaManager(_factory, _schemas, audited);
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -518,13 +518,13 @@ public class SchemaManagerTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter SchemaManagerTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter SchemaManagerTests`
 Expected: PASS (2 tests). If the invalid case does not throw, `SchemaValidator` integration is wrong — fix the manager, not the test.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Managers/SchemaManagerTests.cs
+git add tests/Custodex.Storage.Postgres.Tests/Managers/SchemaManagerTests.cs
 git commit -m "test: prove schema manager validates and activates atomically"
 ```
 
@@ -533,39 +533,39 @@ git commit -m "test: prove schema manager validates and activates atomically"
 ### Task 4: `UsePostgres` registration in the Postgres package
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/RelkitPostgresBuilderExtensions.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Di/UsePostgresTests.cs`
+- Create: `src/Custodex.Storage.Postgres/CustodexPostgresBuilderExtensions.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Di/UsePostgresTests.cs`
 
 **Interfaces:**
-- Produces: `RelkitBuilder UsePostgres(this RelkitBuilder builder, string connectionString)` registering: `NpgsqlUnitOfWorkFactory` (and as `IUnitOfWorkFactory`), the four Npgsql stores (and as their interfaces), `PostgresCacheStore` as `ICacheStore`, `AuditedWritePath`, the four managers (and as their interfaces), and `NpgsqlCteAuthorizer` as `IAuthorizer` (the CTE primary path). The `IConditionEvaluator` is resolved from DI (the consumer registers `m0/06`'s adapter or a `NullConditionEvaluator`); a `NullConditionEvaluator` is registered as the default if none is present.
-- Consumes: `RelkitBuilder` (`m1/09` Task 1, `Relkit.Extensions.DependencyInjection`); the Postgres stores/managers; `IConditionEvaluator`/`NullConditionEvaluator` (`m0/05`).
+- Produces: `CustodexBuilder UsePostgres(this CustodexBuilder builder, string connectionString)` registering: `NpgsqlUnitOfWorkFactory` (and as `IUnitOfWorkFactory`), the four Npgsql stores (and as their interfaces), `PostgresCacheStore` as `ICacheStore`, `AuditedWritePath`, the four managers (and as their interfaces), and `NpgsqlCteAuthorizer` as `IAuthorizer` (the CTE primary path). The `IConditionEvaluator` is resolved from DI (the consumer registers `m0/06`'s adapter or a `NullConditionEvaluator`); a `NullConditionEvaluator` is registered as the default if none is present.
+- Consumes: `CustodexBuilder` (`m1/09` Task 1, `Custodex.Extensions.DependencyInjection`); the Postgres stores/managers; `IConditionEvaluator`/`NullConditionEvaluator` (`m0/05`).
 
 > **Caching is deferred to the contract-gap resolution.** `m0/08`'s `CachingAuthorizer` constructor takes a concrete `EngineDrivenAuthorizer` (verified: `CachingAuthorizer(EngineDrivenAuthorizer inner, ISchemaStore, ICacheStore, TimeSpan?)`) and calls its internal `CheckInternalAsync` for the unconditioned-only cache rule. `NpgsqlCteAuthorizer` is a different concrete type with no such public/internal seam yet, so it **cannot** be passed to `CachingAuthorizer` today — wrapping it would not compile. Therefore `UsePostgres` registers `NpgsqlCteAuthorizer` **directly** as `IAuthorizer` (correct, just uncached cross-request). The caching wrap is gated on the contract-gap resolution below (surface a shared cacheability seam both authorizers implement); once that lands, change the `IAuthorizer` registration to wrap the CTE authorizer in `CachingAuthorizer`. Read-your-writes and per-request memoization still hold; only the cross-request `ICacheStore` cache is deferred.
 
-> **Reference direction.** `UsePostgres` lives in `Relkit.Storage.Postgres`, which references `Relkit.Extensions.DependencyInjection` (for `RelkitBuilder`) and `Microsoft.Extensions.DependencyInjection.Abstractions`. The DI base project does **not** reference Postgres — so a consumer adds the Postgres package only when calling `.UsePostgres(...)`. No cycle.
+> **Reference direction.** `UsePostgres` lives in `Custodex.Storage.Postgres`, which references `Custodex.Extensions.DependencyInjection` (for `CustodexBuilder`) and `Microsoft.Extensions.DependencyInjection.Abstractions`. The DI base project does **not** reference Postgres — so a consumer adds the Postgres package only when calling `.UsePostgres(...)`. No cycle.
 
 - [ ] **Step 1: Add the DI references to the Postgres project**
 
 Run:
 ```bash
-dotnet add src/Relkit.Storage.Postgres reference src/Relkit.Extensions.DependencyInjection
-dotnet add src/Relkit.Storage.Postgres package Microsoft.Extensions.DependencyInjection.Abstractions
-dotnet add tests/Relkit.Storage.Postgres.Tests package Microsoft.Extensions.DependencyInjection
+dotnet add src/Custodex.Storage.Postgres reference src/Custodex.Extensions.DependencyInjection
+dotnet add src/Custodex.Storage.Postgres package Microsoft.Extensions.DependencyInjection.Abstractions
+dotnet add tests/Custodex.Storage.Postgres.Tests package Microsoft.Extensions.DependencyInjection
 ```
 
 - [ ] **Step 2: Write the failing test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Di/UsePostgresTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Di/UsePostgresTests.cs
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Extensions.DependencyInjection;
-using Relkit.Storage.Postgres;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Extensions.DependencyInjection;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Di;
+namespace Custodex.Storage.Postgres.Tests.Di;
 
 [Collection("postgres")]
 public class UsePostgresTests(PostgresFixture fx)
@@ -574,7 +574,7 @@ public class UsePostgresTests(PostgresFixture fx)
     public void UsePostgres_registers_authorizer_and_managers()
     {
         var services = new ServiceCollection();
-        services.AddRelkit()
+        services.AddCustodex()
             .UsePostgres(fx.ConnectionString)
             .UseSchema(new SchemaBuilder("v1")
                 .Type("doc", t => t.Relation("viewer", s => s.User()).Permission("view", p => p.Relation("viewer"))));
@@ -591,7 +591,7 @@ public class UsePostgresTests(PostgresFixture fx)
     public void UsePostgres_authorizer_is_the_cte_primary_path()
     {
         var services = new ServiceCollection();
-        services.AddRelkit().UsePostgres(fx.ConnectionString);
+        services.AddCustodex().UsePostgres(fx.ConnectionString);
         var provider = services.BuildServiceProvider();
         // The CTE path is registered directly as IAuthorizer; the cross-request cache wrap is deferred
         // to the contract-gap resolution (CachingAuthorizer requires a cacheability seam, see below).
@@ -602,26 +602,26 @@ public class UsePostgresTests(PostgresFixture fx)
 
 - [ ] **Step 3: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter UsePostgresTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter UsePostgresTests`
 Expected: FAIL — `UsePostgres` does not exist.
 
 - [ ] **Step 4: Implement `UsePostgres`**
 
 ```csharp
-// src/Relkit.Storage.Postgres/RelkitPostgresBuilderExtensions.cs
+// src/Custodex.Storage.Postgres/CustodexPostgresBuilderExtensions.cs
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Relkit.Abstractions;
-using Relkit.Core.Conditions;
-using Relkit.Extensions.DependencyInjection;
-using Relkit.Storage.Postgres.Managers;
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
+using Custodex.Extensions.DependencyInjection;
+using Custodex.Storage.Postgres.Managers;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
-public static class RelkitPostgresBuilderExtensions
+public static class CustodexPostgresBuilderExtensions
 {
     /// <summary>Register the Postgres provider: stores, CTE authorizer, managers, and cache.</summary>
-    public static RelkitBuilder UsePostgres(this RelkitBuilder builder, string connectionString)
+    public static CustodexBuilder UsePostgres(this CustodexBuilder builder, string connectionString)
     {
         var s = builder.Services;
 
@@ -656,18 +656,18 @@ public static class RelkitPostgresBuilderExtensions
             sp.GetRequiredService<NpgsqlChangeLogStore>(),
             sp.GetRequiredService<ICacheStore>()));
 
-        s.TryAddSingleton<IRelationManager>(sp => new RelkitRelationManager(
+        s.TryAddSingleton<IRelationManager>(sp => new CustodexRelationManager(
             sp.GetRequiredService<NpgsqlUnitOfWorkFactory>(),
             sp.GetRequiredService<NpgsqlRelationStore>(),
             sp.GetRequiredService<NpgsqlAttributeStore>(),
             sp.GetRequiredService<NpgsqlChangeLogStore>(),
             sp.GetRequiredService<AuditedWritePath>()));
-        s.TryAddSingleton<ISchemaManager>(sp => new RelkitSchemaManager(
+        s.TryAddSingleton<ISchemaManager>(sp => new CustodexSchemaManager(
             sp.GetRequiredService<NpgsqlUnitOfWorkFactory>(),
             sp.GetRequiredService<NpgsqlSchemaStore>(),
             sp.GetRequiredService<AuditedWritePath>()));
-        s.TryAddSingleton<IStoreManager>(_ => new RelkitStoreManager(connectionString));
-        s.TryAddSingleton<ITenantManager>(_ => new RelkitTenantManager(connectionString));
+        s.TryAddSingleton<IStoreManager>(_ => new CustodexStoreManager(connectionString));
+        s.TryAddSingleton<ITenantManager>(_ => new CustodexTenantManager(connectionString));
 
         // Authorizer: the CTE primary path, registered directly as IAuthorizer. The cross-request
         // CachingAuthorizer wrap is deferred to the contract-gap resolution (it needs a cacheability
@@ -690,106 +690,106 @@ public static class RelkitPostgresBuilderExtensions
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter UsePostgresTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter UsePostgresTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add UsePostgres DI registration for stores, managers, and cached authorizer"
 ```
 
 ---
 
-### Task 5: `AddRelkitInstrumentation()` OpenTelemetry wiring
+### Task 5: `AddCustodexInstrumentation()` OpenTelemetry wiring
 
 **Files:**
-- Create: `src/Relkit.Extensions.DependencyInjection/RelkitInstrumentationExtensions.cs`
-- Test: `tests/Relkit.Extensions.DependencyInjection.Tests/InstrumentationTests.cs`
+- Create: `src/Custodex.Extensions.DependencyInjection/CustodexInstrumentationExtensions.cs`
+- Test: `tests/Custodex.Extensions.DependencyInjection.Tests/InstrumentationTests.cs`
 
 **Interfaces:**
-- Produces: `TracerProviderBuilder AddRelkitInstrumentation(this TracerProviderBuilder builder)` enabling the `"Relkit"` `ActivitySource`, and `MeterProviderBuilder AddRelkitInstrumentation(this MeterProviderBuilder builder)` enabling the `"Relkit"` `Meter` (both from `RelkitDiagnostics`, `m0/01`). A consumer chains these into their existing `AddOpenTelemetry().WithTracing(...)`/`WithMetrics(...)`.
-- Consumes: `RelkitDiagnostics.Name` (`m0/01`); the OpenTelemetry builder types.
+- Produces: `TracerProviderBuilder AddCustodexInstrumentation(this TracerProviderBuilder builder)` enabling the `"Custodex"` `ActivitySource`, and `MeterProviderBuilder AddCustodexInstrumentation(this MeterProviderBuilder builder)` enabling the `"Custodex"` `Meter` (both from `CustodexDiagnostics`, `m0/01`). A consumer chains these into their existing `AddOpenTelemetry().WithTracing(...)`/`WithMetrics(...)`.
+- Consumes: `CustodexDiagnostics.Name` (`m0/01`); the OpenTelemetry builder types.
 
 - [ ] **Step 1: Add the OpenTelemetry package and write the failing test**
 
 Run:
 ```bash
-dotnet add src/Relkit.Extensions.DependencyInjection package OpenTelemetry
-dotnet add tests/Relkit.Extensions.DependencyInjection.Tests package OpenTelemetry
+dotnet add src/Custodex.Extensions.DependencyInjection package OpenTelemetry
+dotnet add tests/Custodex.Extensions.DependencyInjection.Tests package OpenTelemetry
 ```
 
 ```csharp
-// tests/Relkit.Extensions.DependencyInjection.Tests/InstrumentationTests.cs
+// tests/Custodex.Extensions.DependencyInjection.Tests/InstrumentationTests.cs
 using System.Diagnostics;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
-using Relkit.Abstractions;
-using Relkit.Extensions.DependencyInjection;
+using Custodex.Abstractions;
+using Custodex.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Extensions.DependencyInjection.Tests;
+namespace Custodex.Extensions.DependencyInjection.Tests;
 
 public class InstrumentationTests
 {
     [Fact]
-    public void AddRelkitInstrumentation_subscribes_the_relkit_activity_source()
+    public void AddCustodexInstrumentation_subscribes_the_Custodex_activity_source()
     {
         var exported = new List<Activity>();
         using var tracer = Sdk.CreateTracerProviderBuilder()
-            .AddRelkitInstrumentation()
+            .AddCustodexInstrumentation()
             .AddInMemoryExporter(exported)
             .Build();
 
-        using (var activity = RelkitDiagnostics.ActivitySource.StartActivity("relkit.check"))
+        using (var activity = CustodexDiagnostics.ActivitySource.StartActivity("Custodex.check"))
             activity?.SetTag("test", "1");
 
-        exported.ShouldContain(a => a.DisplayName == "relkit.check");
+        exported.ShouldContain(a => a.DisplayName == "Custodex.check");
     }
 }
 ```
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Extensions.DependencyInjection.Tests --filter InstrumentationTests`
-Expected: FAIL — `AddRelkitInstrumentation` does not exist.
+Run: `dotnet test tests/Custodex.Extensions.DependencyInjection.Tests --filter InstrumentationTests`
+Expected: FAIL — `AddCustodexInstrumentation` does not exist.
 
 - [ ] **Step 3: Implement the instrumentation extensions**
 
 ```csharp
-// src/Relkit.Extensions.DependencyInjection/RelkitInstrumentationExtensions.cs
+// src/Custodex.Extensions.DependencyInjection/CustodexInstrumentationExtensions.cs
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Extensions.DependencyInjection;
+namespace Custodex.Extensions.DependencyInjection;
 
 /// <summary>
-/// Wires Relkit's <c>"Relkit"</c> ActivitySource and Meter (from <see cref="RelkitDiagnostics"/>,
+/// Wires Custodex's <c>"Custodex"</c> ActivitySource and Meter (from <see cref="CustodexDiagnostics"/>,
 /// m0/01) into OpenTelemetry (spec §11.4). Chain into AddOpenTelemetry().WithTracing/WithMetrics.
 /// </summary>
-public static class RelkitInstrumentationExtensions
+public static class CustodexInstrumentationExtensions
 {
-    public static TracerProviderBuilder AddRelkitInstrumentation(this TracerProviderBuilder builder)
-        => builder.AddSource(RelkitDiagnostics.Name);
+    public static TracerProviderBuilder AddCustodexInstrumentation(this TracerProviderBuilder builder)
+        => builder.AddSource(CustodexDiagnostics.Name);
 
-    public static MeterProviderBuilder AddRelkitInstrumentation(this MeterProviderBuilder builder)
-        => builder.AddMeter(RelkitDiagnostics.Name);
+    public static MeterProviderBuilder AddCustodexInstrumentation(this MeterProviderBuilder builder)
+        => builder.AddMeter(CustodexDiagnostics.Name);
 }
 ```
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Extensions.DependencyInjection.Tests --filter InstrumentationTests`
+Run: `dotnet test tests/Custodex.Extensions.DependencyInjection.Tests --filter InstrumentationTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Extensions.DependencyInjection tests/Relkit.Extensions.DependencyInjection.Tests
-git commit -m "feat: add AddRelkitInstrumentation OpenTelemetry wiring"
+git add src/Custodex.Extensions.DependencyInjection tests/Custodex.Extensions.DependencyInjection.Tests
+git commit -m "feat: add AddCustodexInstrumentation OpenTelemetry wiring"
 ```
 
 ---
@@ -797,24 +797,24 @@ git commit -m "feat: add AddRelkitInstrumentation OpenTelemetry wiring"
 ### Task 6: End-to-end sample — define schema → write tuples → Check/ListObjects
 
 **Files:**
-- Test: `tests/Relkit.Storage.Postgres.Tests/Di/EndToEndSampleTests.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Di/EndToEndSampleTests.cs`
 
 **Interfaces:**
-- Consumes: the full DI surface (`AddRelkit().UsePostgres().UseSchema()`), the managers, and `IAuthorizer`. Proves the wired-up library works against real Postgres: provision store + tenant, activate a schema, write tuples through `IRelationManager` (audited + epoch-bumped), then `Check` and `ListObjects` through `IAuthorizer` return the expected answers. This is the acceptance test that the Blazor app's adoption path (spec §11.2 "the Blazor application adopts the engine here") rests on.
+- Consumes: the full DI surface (`AddCustodex().UsePostgres().UseSchema()`), the managers, and `IAuthorizer`. Proves the wired-up library works against real Postgres: provision store + tenant, activate a schema, write tuples through `IRelationManager` (audited + epoch-bumped), then `Check` and `ListObjects` through `IAuthorizer` return the expected answers. This is the acceptance test that the Blazor app's adoption path (spec §11.2 "the Blazor application adopts the engine here") rests on.
 
 - [ ] **Step 1: Write the end-to-end test**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Di/EndToEndSampleTests.cs
+// tests/Custodex.Storage.Postgres.Tests/Di/EndToEndSampleTests.cs
 using Microsoft.Extensions.DependencyInjection;
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Extensions.DependencyInjection;
-using Relkit.Storage.Postgres;
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Extensions.DependencyInjection;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Di;
+namespace Custodex.Storage.Postgres.Tests.Di;
 
 [Collection("postgres")]
 public class EndToEndSampleTests(PostgresFixture fx) : IAsyncLifetime
@@ -838,7 +838,7 @@ public class EndToEndSampleTests(PostgresFixture fx) : IAsyncLifetime
                 .Permission("edit", p => p.Relation("editor")));
 
         var services = new ServiceCollection();
-        services.AddRelkit().UsePostgres(fx.ConnectionString).UseSchema(schemaBuilder);
+        services.AddCustodex().UsePostgres(fx.ConnectionString).UseSchema(schemaBuilder);
         var provider = services.BuildServiceProvider();
 
         var stores = provider.GetRequiredService<IStoreManager>();
@@ -883,13 +883,13 @@ public class EndToEndSampleTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter EndToEndSampleTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter EndToEndSampleTests`
 Expected: PASS — the fully wired library defines a schema, writes audited tuples, and answers Check/ListObjects over real Postgres.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/Relkit.Storage.Postgres.Tests/Di/EndToEndSampleTests.cs
+git add tests/Custodex.Storage.Postgres.Tests/Di/EndToEndSampleTests.cs
 git commit -m "test: end-to-end DI sample over Testcontainers Postgres"
 ```
 
@@ -898,17 +898,17 @@ git commit -m "test: end-to-end DI sample over Testcontainers Postgres"
 ## Self-review checklist (run after all tasks)
 
 - [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`.
-- [ ] `AddRelkit().UsePostgres(conn).UseSchema(builder)` resolves `IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager` (Tasks 1, 4).
+- [ ] `AddCustodex().UsePostgres(conn).UseSchema(builder)` resolves `IAuthorizer`, `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager` (Tasks 1, 4).
 - [ ] The managers supply the caller's `actor` and before/after diffs, and call `AuditedWritePath` so the data write + `change_log` + epoch bump commit in one unit of work (Task 2).
 - [ ] An invalid schema throws `SchemaValidationException` and activates nothing; a valid one activates + audits atomically (Task 3).
 - [ ] `IAuthorizer` resolves to `NpgsqlCteAuthorizer` (the CTE primary path); the `CachingAuthorizer` wrap is deferred to the cacheability-seam contract gap, with the one-line follow-up registration documented (Task 4).
-- [ ] `AddRelkitInstrumentation()` subscribes the `"Relkit"` ActivitySource and Meter into OTel (Task 5).
+- [ ] `AddCustodexInstrumentation()` subscribes the `"Custodex"` ActivitySource and Meter into OTel (Task 5).
 - [ ] The end-to-end sample defines a schema, writes audited tuples, and answers Check + ListObjects over real Postgres, with the audit trail recording the actor (Task 6).
 
 ## Contract gaps (reported, not changed)
 
-- **`CachingAuthorizer` requires a concrete inner with `CheckInternalAsync`.** `m0/08`'s `CachingAuthorizer` takes a concrete `EngineDrivenAuthorizer` and calls its internal `CheckInternalAsync` returning `(bool Allowed, bool ConditionTouched)` so it never caches condition-dependent results. `NpgsqlCteAuthorizer` (m1/05) currently exposes only the public `IAuthorizer.CheckAsync`. To cache the CTE path safely with the unconditioned-only rule, **`NpgsqlCteAuthorizer` must expose an equivalent internal `CheckInternalAsync(CheckRequest) -> (bool, bool)`** (it already tracks `ConditionTouched` via the reused `EvalContext` — surfacing it is mechanical) **and `CachingAuthorizer` must accept it** (either via a shared `ICacheableAuthorizer` interface or a second constructor overload). This is a real contract/seam gap touching `m0/08` and `m1/05`. The `UsePostgres` registration (Task 4) notes the interim: until the signal is surfaced, the cache wraps the CTE authorizer conservatively. **Recommended resolution (for `README.md` + `m0/08`/`m1/05`):** add an `internal (bool Allowed, bool ConditionTouched) ` async check method to both authorizers behind a small shared `Relkit.Core` interface, and have `CachingAuthorizer` depend on that interface. Not changed here per the hard rules; flagged for the contract owner.
-- **Manager home is the Postgres package, not Core.** The contract's architecture diagram (spec §4) sketches managers in `Relkit.Core`. Because `AuditedWritePath` (the in-transaction sequencer, owned by `m1/07`) lives in `Relkit.Storage.Postgres` and the managers must call it within an `NpgsqlUnitOfWork`, the concrete managers are registered from `Relkit.Storage.Postgres` here. They implement the `Relkit.Abstractions` interfaces, so consumers are unaffected. If the contract owner prefers managers in Core, Core would need an abstract sequencing primitive (an `IAuditedWritePath` in Abstractions) that the Postgres provider implements — a larger refactor flagged for visibility.
+- **`CachingAuthorizer` requires a concrete inner with `CheckInternalAsync`.** `m0/08`'s `CachingAuthorizer` takes a concrete `EngineDrivenAuthorizer` and calls its internal `CheckInternalAsync` returning `(bool Allowed, bool ConditionTouched)` so it never caches condition-dependent results. `NpgsqlCteAuthorizer` (m1/05) currently exposes only the public `IAuthorizer.CheckAsync`. To cache the CTE path safely with the unconditioned-only rule, **`NpgsqlCteAuthorizer` must expose an equivalent internal `CheckInternalAsync(CheckRequest) -> (bool, bool)`** (it already tracks `ConditionTouched` via the reused `EvalContext` — surfacing it is mechanical) **and `CachingAuthorizer` must accept it** (either via a shared `ICacheableAuthorizer` interface or a second constructor overload). This is a real contract/seam gap touching `m0/08` and `m1/05`. The `UsePostgres` registration (Task 4) notes the interim: until the signal is surfaced, the cache wraps the CTE authorizer conservatively. **Recommended resolution (for `README.md` + `m0/08`/`m1/05`):** add an `internal (bool Allowed, bool ConditionTouched) ` async check method to both authorizers behind a small shared `Custodex.Core` interface, and have `CachingAuthorizer` depend on that interface. Not changed here per the hard rules; flagged for the contract owner.
+- **Manager home is the Postgres package, not Core.** The contract's architecture diagram (spec §4) sketches managers in `Custodex.Core`. Because `AuditedWritePath` (the in-transaction sequencer, owned by `m1/07`) lives in `Custodex.Storage.Postgres` and the managers must call it within an `NpgsqlUnitOfWork`, the concrete managers are registered from `Custodex.Storage.Postgres` here. They implement the `Custodex.Abstractions` interfaces, so consumers are unaffected. If the contract owner prefers managers in Core, Core would need an abstract sequencing primitive (an `IAuditedWritePath` in Abstractions) that the Postgres provider implements — a larger refactor flagged for visibility.
 - **`PostgresCacheStore` tenant scope in DI.** `PostgresCacheStore` is constructed with a fixed `(store, tenant)` scope (`m1/07`), but the DI registration is process-wide. The epoch methods (`GetEpochAsync(t)`/`BumpEpochAsync(t)`) take the tenant explicitly and ignore the construction scope, so the epoch path is correct regardless; only `GetAsync/SetAsync` (the entry cache) use the construction scope. For the cross-request check cache to be tenant-correct, the cache must be resolved per `TenantContext`. The interim registration uses a `default` scope for the shared epoch operations the `CachingAuthorizer` and `AuditedWritePath` need; a per-tenant cache factory is the clean fix (flagged for `m2/05`, which refines the cache). Not changed here.
 ```
 

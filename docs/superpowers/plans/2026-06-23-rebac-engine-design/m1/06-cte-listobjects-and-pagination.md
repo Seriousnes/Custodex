@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement `NpgsqlCteAuthorizer.ListObjectsAsync` and `ListSubjectsAsync` (spec §7.3 Milestone 1 / §7.5) over the Postgres recursive-CTE path, with the **over-fetch/refill** pagination contract and the **same `ContinuationCursor`** shape `m0/07` uses (reused verbatim from `Relkit.Core.Evaluation`). Candidate generation (reverse reachability, type universe for wildcard grants) runs in SQL via recursive CTEs; each candidate is **confirmed by the pointwise CTE Check** from `m1/05`, so exclusion/intersection/conditions are honoured — identical results to the `m0/07` `EngineDrivenAuthorizer` oracle.
+**Goal:** Implement `NpgsqlCteAuthorizer.ListObjectsAsync` and `ListSubjectsAsync` (spec §7.3 Milestone 1 / §7.5) over the Postgres recursive-CTE path, with the **over-fetch/refill** pagination contract and the **same `ContinuationCursor`** shape `m0/07` uses (reused verbatim from `Custodex.Core.Evaluation`). Candidate generation (reverse reachability, type universe for wildcard grants) runs in SQL via recursive CTEs; each candidate is **confirmed by the pointwise CTE Check** from `m1/05`, so exclusion/intersection/conditions are honoured — identical results to the `m0/07` `EngineDrivenAuthorizer` oracle.
 
 **Architecture (the seam decided in `m1/02`, reproduced):** The recursive CTE computes **reachability only** — here, the reverse direction: the distinct objects of the target type reachable from the subject (subject's tuples, the tuples of every group it transitively belongs to, structural-reference edges). That candidate set is a **superset**; correctness comes from re-confirming each candidate with the full pointwise `NpgsqlCteAuthorizer.CheckPermissionAsync` from `m1/05` (which composes the algebra in C#). `ListObjects` is the oracle's Milestone-1 strategy (spec §7.3) ported to Postgres: SQL gathers candidates fast, C# confirms them correctly. `ListSubjects` forward-collects candidate leaf users (relations, nested groups, arrow targets) then confirms each with Check. Pagination is **over-fetch and refill** (spec §7.5): scan candidates in a deterministic ordinal-id order, confirm, return exactly `PageSize` (or fewer only at the true end) with an opaque `ContinuationCursor` encoding the last-confirmed id.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Relkit.Core` (`ContinuationCursor`, `EvalContext`, `SchemaIndex`).
+**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Custodex.Core` (`ContinuationCursor`, `EvalContext`, `SchemaIndex`).
 
 ## Global Constraints
 
 See `../README.md` → Global Constraints. All I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard; no `DateTime.Now`/`Guid.NewGuid()` in evaluation. Depends on `m0/01` (Abstractions), `m0/07` (`ContinuationCursor` shape, the oracle's ListObjects/ListSubjects semantics this must match), `m1/01` (`relation_tuples`, `MigrationRunner`, `PostgresFixture`), `m1/03` (`NpgsqlUnitOfWorkFactory`), `m1/04` (`NpgsqlRelationStore`/`SchemaStore`/`AttributeStore` for seeding), `m1/05` (`NpgsqlCteAuthorizer`, `CheckPermissionAsync`, `CteReachability`).
 
-**Pagination contract (spec §7.5).** Conditioned candidates are re-checked and may be dropped after the scan, so storage-level paging alone yields unpredictable page sizes. The contract is **over-fetch and refill**: scan candidates in a deterministic order (ordinal by object id), confirm the permission and conditions per candidate, and return exactly `PageSize` confirmed ids (or fewer only at the true end). The returned `ContinuationToken` is the opaque `ContinuationCursor` encoding the last-confirmed id; a null token means the end of results. This is byte-for-byte the `m0/07` contract; `ListObjects`/`ListSubjects` reuse `ContinuationCursor.Encode`/`DecodeAfter` from `Relkit.Core.Evaluation`.
+**Pagination contract (spec §7.5).** Conditioned candidates are re-checked and may be dropped after the scan, so storage-level paging alone yields unpredictable page sizes. The contract is **over-fetch and refill**: scan candidates in a deterministic order (ordinal by object id), confirm the permission and conditions per candidate, and return exactly `PageSize` confirmed ids (or fewer only at the true end). The returned `ContinuationToken` is the opaque `ContinuationCursor` encoding the last-confirmed id; a null token means the end of results. This is byte-for-byte the `m0/07` contract; `ListObjects`/`ListSubjects` reuse `ContinuationCursor.Encode`/`DecodeAfter` from `Custodex.Core.Evaluation`.
 
 > **CALIBRATION (critical).** The candidate-generation CTEs are the hardest, least-certain SQL after the check path. The **tests are the spec**: every test here pins behaviour the `m0/07` oracle proves. The SQL is the **approach validated by the `m1/08` differential harness** — candidate generation must never miss a true positive (the confirm-by-Check step removes false positives, never adds them); if `m1/08` finds a missed candidate, widen the CTE, the test is right. `NpgsqlCteAuthorizer ≡ EngineDrivenAuthorizer` for ListObjects/ListSubjects is the correctness claim, proven by `m1/08`.
 
@@ -21,8 +21,8 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 ### Task 1: Reverse-reachability candidate CTE + the type universe
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/CteCandidates.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cte/CteCandidatesTests.cs`
+- Create: `src/Custodex.Storage.Postgres/CteCandidates.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteCandidatesTests.cs`
 
 **Interfaces:**
 - Produces: `CteCandidates` with:
@@ -35,13 +35,13 @@ See `../README.md` → Global Constraints. All I/O methods are `async` with a tr
 - [ ] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cte/CteCandidatesTests.cs
-using Relkit.Abstractions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Cte/CteCandidatesTests.cs
+using Custodex.Abstractions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cte;
+namespace Custodex.Storage.Postgres.Tests.Cte;
 
 [Collection("postgres")]
 public class CteCandidatesTests(PostgresFixture fx) : IAsyncLifetime
@@ -95,7 +95,7 @@ public class CteCandidatesTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteCandidatesTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteCandidatesTests`
 Expected: FAIL — `CteCandidates` does not exist.
 
 - [ ] **Step 3: Implement candidate generation**
@@ -103,12 +103,12 @@ Expected: FAIL — `CteCandidates` does not exist.
 > **Calibration:** these CTEs are the candidate validated by the `m1/08` harness. The reverse-reachability CTE climbs the subject → groups graph: the base frontier is the subject (as a leaf and, if it is a group member, as a group-as-member), and the recursive step follows inbound `group#member` tuples upward. From every reached principal it collects inbound tuples whose object is of the target type. Structural edges are followed by a second recursive arm (objects whose tuples point at an already-reached object). Hard-filters `store_id + tenant_id`.
 
 ```csharp
-// src/Relkit.Storage.Postgres/CteCandidates.cs
+// src/Custodex.Storage.Postgres/CteCandidates.cs
 using Dapper;
 using Npgsql;
-using Relkit.Abstractions;
+using Custodex.Abstractions;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 /// <summary>
 /// Reverse-reachability candidate generation (the seam decided by m1/02, validated by m1/08).
@@ -187,13 +187,13 @@ public static class CteCandidates
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteCandidatesTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteCandidatesTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: add reverse-reachability candidate and type-universe CTEs"
 ```
 
@@ -202,27 +202,27 @@ git commit -m "feat: add reverse-reachability candidate and type-universe CTEs"
 ### Task 2: `ListObjectsAsync` — over-fetch, confirm, refill, paginate
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.ListObjects.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cte/CteListObjectsTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListObjects.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteListObjectsTests.cs`
 
 **Interfaces:**
 - Produces: `ListObjectsAsync` (replaces the `m1/05` stub) — builds the candidate set (`ReachableObjectIdsAsync ∪ TypeUniverseAsync`), sorts distinct by ordinal id, skips strictly after the decoded cursor, confirms each via the full pointwise `CheckPermissionAsync`, and returns exactly `PageSize` confirmed ids with a resumable `ContinuationCursor`. Reuses one open connection for candidate generation and all confirms in the page.
-- Consumes: `CteCandidates` (Task 1); `CheckPermissionAsync`/`EvalContext`/`SchemaIndex` (`m1/05`); `ContinuationCursor` (`Relkit.Core.Evaluation`, from `m0/07`).
+- Consumes: `CteCandidates` (Task 1); `CheckPermissionAsync`/`EvalContext`/`SchemaIndex` (`m1/05`); `ContinuationCursor` (`Custodex.Core.Evaluation`, from `m0/07`).
 
 > **Algorithm (mirrors `m0/07` Task 3).** (1) candidates = reverse-reachable ∪ type universe, distinct, ordinal-sorted. (2) skip to strictly after the decoded cursor id. (3) walk candidates; for each, run the full pointwise Check under a **fresh** `EvalContext` (each candidate is an independent membership question; conditions are evaluated). (4) stop once `PageSize` confirm; the token is the last-confirmed id, null only if no confirmable candidate remains beyond it.
 
 - [ ] **Step 1: Write the failing tests** (the `m0/07` ListObjects cases, over Postgres)
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cte/CteListObjectsTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Cte/CteListObjectsTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cte;
+namespace Custodex.Storage.Postgres.Tests.Cte;
 
 [Collection("postgres")]
 public class CteListObjectsTests(PostgresFixture fx) : IAsyncLifetime
@@ -346,7 +346,7 @@ public class CteListObjectsTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteListObjectsTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteListObjectsTests`
 Expected: FAIL — `ListObjectsAsync` still throws `NotImplementedException` from the `m1/05` stub.
 
 - [ ] **Step 3: Implement `ListObjectsAsync` (remove the stub)**
@@ -354,12 +354,12 @@ Expected: FAIL — `ListObjectsAsync` still throws `NotImplementedException` fro
 Delete the `ListObjectsAsync` throwing stub from `NpgsqlCteAuthorizer.Expr.cs` (keep `ListSubjectsAsync` until Task 3), and add:
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.ListObjects.cs
+// src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListObjects.cs
 using Npgsql;
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class NpgsqlCteAuthorizer
 {
@@ -426,13 +426,13 @@ public sealed partial class NpgsqlCteAuthorizer
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteListObjectsTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteListObjectsTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: implement CTE list objects with over-fetch/refill pagination"
 ```
 
@@ -441,8 +441,8 @@ git commit -m "feat: implement CTE list objects with over-fetch/refill paginatio
 ### Task 3: `ListSubjectsAsync` — forward-collect leaf users, confirm, paginate
 
 **Files:**
-- Create: `src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.ListSubjects.cs`
-- Test: `tests/Relkit.Storage.Postgres.Tests/Cte/CteListSubjectsTests.cs`
+- Create: `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListSubjects.cs`
+- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteListSubjectsTests.cs`
 
 **Interfaces:**
 - Produces: `ListSubjectsAsync` (replaces the `m1/05` stub) — forward-collects candidate leaf `user`s from the whole permission expansion (relations, nested groups, arrow targets) via the reachability CTE and recursive C# walk, records whether a `user:*` wildcard appears, then confirms each candidate (including the surfaced `"*"` subject) with the pointwise Check, returning them sorted by id with the same over-fetch/`ContinuationCursor` contract.
@@ -453,15 +453,15 @@ git commit -m "feat: implement CTE list objects with over-fetch/refill paginatio
 - [ ] **Step 1: Write the failing tests** (the `m0/07` ListSubjects cases, over Postgres)
 
 ```csharp
-// tests/Relkit.Storage.Postgres.Tests/Cte/CteListSubjectsTests.cs
-using Relkit.Abstractions;
-using Relkit.Core;
-using Relkit.Core.Conditions;
-using Relkit.Storage.Postgres;
+// tests/Custodex.Storage.Postgres.Tests/Cte/CteListSubjectsTests.cs
+using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
+using Custodex.Storage.Postgres;
 using Shouldly;
 using Xunit;
 
-namespace Relkit.Storage.Postgres.Tests.Cte;
+namespace Custodex.Storage.Postgres.Tests.Cte;
 
 [Collection("postgres")]
 public class CteListSubjectsTests(PostgresFixture fx) : IAsyncLifetime
@@ -566,7 +566,7 @@ public class CteListSubjectsTests(PostgresFixture fx) : IAsyncLifetime
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteListSubjectsTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteListSubjectsTests`
 Expected: FAIL — `ListSubjectsAsync` still throws `NotImplementedException`.
 
 - [ ] **Step 3: Implement `ListSubjectsAsync` (remove the stub)**
@@ -574,12 +574,12 @@ Expected: FAIL — `ListSubjectsAsync` still throws `NotImplementedException`.
 Delete the `ListSubjectsAsync` throwing stub from `NpgsqlCteAuthorizer.Expr.cs`, and add:
 
 ```csharp
-// src/Relkit.Storage.Postgres/NpgsqlCteAuthorizer.ListSubjects.cs
+// src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListSubjects.cs
 using Npgsql;
-using Relkit.Abstractions;
-using Relkit.Core.Evaluation;
+using Custodex.Abstractions;
+using Custodex.Core.Evaluation;
 
-namespace Relkit.Storage.Postgres;
+namespace Custodex.Storage.Postgres;
 
 public sealed partial class NpgsqlCteAuthorizer
 {
@@ -711,17 +711,17 @@ public sealed partial class NpgsqlCteAuthorizer
 }
 ```
 
-> `EvalFrame` is in `Relkit.Core.Evaluation` (reused via the `using` above). The collector walks the same shape as the oracle's `m0/07` `CollectLeafUsersAsync`; the only change is reading edges via `CteReachability.EdgesThroughRelationAsync` instead of `IRelationStore.GetByObjectAsync`.
+> `EvalFrame` is in `Custodex.Core.Evaluation` (reused via the `using` above). The collector walks the same shape as the oracle's `m0/07` `CollectLeafUsersAsync`; the only change is reading edges via `CteReachability.EdgesThroughRelationAsync` instead of `IRelationStore.GetByObjectAsync`.
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `dotnet test tests/Relkit.Storage.Postgres.Tests --filter CteListSubjectsTests`
+Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteListSubjectsTests`
 Expected: PASS (3 tests). With Task 2 done, `NpgsqlCteAuthorizer` now implements every `IAuthorizer` member.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Relkit.Storage.Postgres tests/Relkit.Storage.Postgres.Tests
+git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
 git commit -m "feat: implement CTE list subjects with leaf-user expansion and pagination"
 ```
 
@@ -739,6 +739,6 @@ git commit -m "feat: implement CTE list subjects with leaf-user expansion and pa
 
 ## Contract gaps (reported, not changed)
 
-- **None new.** `ContinuationCursor` is reused from `Relkit.Core.Evaluation` (`m0/07`), now reachable because `Relkit.Storage.Postgres` references `Relkit.Core` (decided `m1/02`, added `m1/05`). The `m0/07` Contract-gaps note already records that the type universe lives in the provider, not the portable `IRelationStore` — fulfilled here by `CteCandidates.TypeUniverseAsync` (provider-side SQL), exactly as `m0/07` anticipated.
+- **None new.** `ContinuationCursor` is reused from `Custodex.Core.Evaluation` (`m0/07`), now reachable because `Custodex.Storage.Postgres` references `Custodex.Core` (decided `m1/02`, added `m1/05`). The `m0/07` Contract-gaps note already records that the type universe lives in the provider, not the portable `IRelationStore` — fulfilled here by `CteCandidates.TypeUniverseAsync` (provider-side SQL), exactly as `m0/07` anticipated.
 ```
 
