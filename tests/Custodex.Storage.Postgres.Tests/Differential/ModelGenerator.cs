@@ -30,7 +30,10 @@ public static class ModelGenerator
     private static readonly CsCheck.Gen<string> GroupIdGen =
         CsCheck.Gen.OneOfConst(Groups);
 
-    /// <summary>S1: doc.view = viewer - blocked; viewer accepts user, group#member, or wildcard user:*.</summary>
+    /// <summary>S1: doc.view = viewer - blocked; viewer accepts user, group#member, or wildcard user:*.
+    /// Three docs (d1/d2/d3) all share the same viewer group to exercise ListObjects pagination at
+    /// PageSize:2. A two-hop nested group chain (og→ig→leafU) exercises depth-2 subject-set
+    /// traversal: <c>group:og#member@group:ig#member</c>, <c>group:ig#member@user:leafU</c>.</summary>
     private static Schema S1Schema() => new SchemaBuilder("s1")
         .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
         .Type("doc", t => t
@@ -41,26 +44,31 @@ public static class ModelGenerator
 
     private static readonly CsCheck.Gen<GeneratedModel> S1 =
         CsCheck.Gen.Select(
-            CsCheck.Gen.OneOfConst("d1", "d2", "d3"),
             CsCheck.Gen.Bool,
             UserGen,
             UserGen,
             GroupIdGen,
             UserGen,
             UserGen,
-            (docId, wildcard, viewU, blockU, vg, m1, m2) =>
+            UserGen,
+            (wildcard, viewU, blockU, vg, m1, m2, leafU) =>
             {
                 var tuples = new List<RelationTuple>
                 {
-                    T("doc", docId, "viewer", new SubjectRef("group", vg, "member")),
+                    T("doc", "d1", "viewer", new SubjectRef("group", vg, "member")),
+                    T("doc", "d2", "viewer", new SubjectRef("group", vg, "member")),
+                    T("doc", "d3", "viewer", new SubjectRef("group", vg, "member")),
                     T("group", vg, "member", new SubjectRef("user", m1)),
                     T("group", vg, "member", new SubjectRef("user", m2)),
-                    T("doc", docId, "viewer", new SubjectRef("user", viewU)),
-                    T("doc", docId, "blocked", new SubjectRef("user", blockU)),
+                    T("doc", "d1", "viewer", new SubjectRef("user", viewU)),
+                    T("doc", "d1", "blocked", new SubjectRef("user", blockU)),
+                    T("group", vg, "member", new SubjectRef("group", "og", "member")),
+                    T("group", "og", "member", new SubjectRef("group", "ig", "member")),
+                    T("group", "ig", "member", new SubjectRef("user", leafU)),
                 };
-                if (wildcard) tuples.Add(T("doc", docId, "viewer", new SubjectRef("user", "*")));
+                if (wildcard) tuples.Add(T("doc", "d1", "viewer", new SubjectRef("user", "*")));
                 return new GeneratedModel(S1Schema(), tuples, [],
-                    [new EntityRef("doc", docId)],
+                    [new EntityRef("doc", "d1"), new EntityRef("doc", "d2"), new EntityRef("doc", "d3")],
                     Users.Select(u => new SubjectRef("user", u)).ToList());
             });
 
