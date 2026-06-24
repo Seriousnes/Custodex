@@ -7,6 +7,7 @@ public sealed partial class IndexedAuthorizer
 {
     private const int ScanBatchSize = 256;
 
+    /// <inheritdoc />
     public async Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
     {
         var schema = await _schemaStore.GetActiveAsync(request.Tenant.Store, ct)
