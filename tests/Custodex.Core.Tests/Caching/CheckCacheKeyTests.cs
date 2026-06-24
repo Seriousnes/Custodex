@@ -1,37 +1,66 @@
 using Custodex.Abstractions;
 using Custodex.Core.Caching;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Caching;
 
 public class CheckCacheKeyTests
 {
-    private static readonly TenantContext T = new("zoo", "t1");
+    private readonly TestWorld _world = TestWorld.New();
 
     [Fact]
     public void Same_inputs_produce_the_same_key()
     {
-        var a = CheckCacheKey.Build(T, "v1", new EntityRef("doc", "D1"), "view", new SubjectRef("user", "alice"));
-        var b = CheckCacheKey.Build(T, "v1", new EntityRef("doc", "D1"), "view", new SubjectRef("user", "alice"));
+        var t = _world.Tenant;
+        var objType = _world.EntityType();
+        var objId = _world.ObjectId();
+        var perm = _world.Permission();
+        var subjectId = _world.SubjectId();
+
+        var a = CheckCacheKey.Build(t, _world.Version, new EntityRef(objType, objId), perm, _world.User(subjectId));
+        var b = CheckCacheKey.Build(t, _world.Version, new EntityRef(objType, objId), perm, _world.User(subjectId));
         a.ShouldBe(b);
     }
 
     [Fact]
     public void Different_components_produce_different_keys()
     {
-        var baseKey = CheckCacheKey.Build(T, "v1", new EntityRef("doc", "D1"), "view", new SubjectRef("user", "alice"));
-        CheckCacheKey.Build(T, "v2", new EntityRef("doc", "D1"), "view", new SubjectRef("user", "alice")).ShouldNotBe(baseKey);
-        CheckCacheKey.Build(new TenantContext("zoo", "t2"), "v1", new EntityRef("doc", "D1"), "view", new SubjectRef("user", "alice")).ShouldNotBe(baseKey);
-        CheckCacheKey.Build(T, "v1", new EntityRef("doc", "D2"), "view", new SubjectRef("user", "alice")).ShouldNotBe(baseKey);
-        CheckCacheKey.Build(T, "v1", new EntityRef("doc", "D1"), "edit", new SubjectRef("user", "alice")).ShouldNotBe(baseKey);
-        CheckCacheKey.Build(T, "v1", new EntityRef("doc", "D1"), "view", new SubjectRef("user", "bob")).ShouldNotBe(baseKey);
+        var t = _world.Tenant;
+        var objType = _world.EntityType();
+        var objId = _world.ObjectId();
+        var perm = _world.Permission();
+        var subjectId = _world.SubjectId();
+        var obj = new EntityRef(objType, objId);
+        var subject = _world.User(subjectId);
+
+        // Distinct alternates that vary exactly one component from the base.
+        var otherVersion = "v2";
+        var otherTenant = new TenantContext(t.Store, _world.SubjectId());
+        var otherObjId = _world.ObjectId();
+        var otherPerm = _world.Permission();
+        var otherSubjectId = _world.SubjectId();
+
+        var baseKey = CheckCacheKey.Build(t, _world.Version, obj, perm, subject);
+        CheckCacheKey.Build(t, otherVersion, obj, perm, subject).ShouldNotBe(baseKey);
+        CheckCacheKey.Build(otherTenant, _world.Version, obj, perm, subject).ShouldNotBe(baseKey);
+        CheckCacheKey.Build(t, _world.Version, new EntityRef(objType, otherObjId), perm, subject).ShouldNotBe(baseKey);
+        CheckCacheKey.Build(t, _world.Version, obj, otherPerm, subject).ShouldNotBe(baseKey);
+        CheckCacheKey.Build(t, _world.Version, obj, perm, _world.User(otherSubjectId)).ShouldNotBe(baseKey);
     }
 
     [Fact]
     public void Subject_set_relation_is_part_of_the_key()
     {
-        var plain = CheckCacheKey.Build(T, "v1", new EntityRef("doc", "D1"), "view", new SubjectRef("group", "vets"));
-        var set = CheckCacheKey.Build(T, "v1", new EntityRef("doc", "D1"), "view", new SubjectRef("group", "vets", "member"));
+        var t = _world.Tenant;
+        var objType = _world.EntityType();
+        var objId = _world.ObjectId();
+        var perm = _world.Permission();
+        var groupId = _world.SubjectId();
+        var obj = new EntityRef(objType, objId);
+
+        var plain = CheckCacheKey.Build(t, _world.Version, obj, perm, new SubjectRef(_world.GroupType, groupId));
+        var set = CheckCacheKey.Build(t, _world.Version, obj, perm, _world.Member(groupId));
         plain.ShouldNotBe(set);
     }
 }

@@ -1,13 +1,30 @@
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
 
 public class EvalContextTests
 {
-    private static EvalFrame Frame(string perm = "view") =>
-        new(new EntityRef("animal", "EL-001"), perm, new SubjectRef("user", "alice"));
+    private readonly TestWorld _world = TestWorld.New();
+    private readonly string _objType;
+    private readonly string _objId;
+    private readonly string _perm;
+    private readonly string _subjectId;
+
+    public EvalContextTests()
+    {
+        _objType = _world.EntityType();
+        _objId = _world.ObjectId();
+        _perm = _world.Permission();
+        _subjectId = _world.SubjectId();
+    }
+
+    private EvalFrame Frame() => Frame(_perm);
+
+    private EvalFrame Frame(string perm) =>
+        new(new EntityRef(_objType, _objId), perm, _world.User(_subjectId));
 
     [Fact]
     public void Memo_stores_and_returns_completed_results()
@@ -33,9 +50,10 @@ public class EvalContextTests
     public void Exceeding_depth_bound_throws_evaluation_limit()
     {
         var ctx = new EvalContext(new EvaluationOptions(MaxDepth: 2));
-        ctx.TryEnter(Frame("a"), out _).ShouldBeTrue();
-        ctx.TryEnter(Frame("b"), out _).ShouldBeTrue();
-        Should.Throw<EvaluationLimitException>(() => ctx.TryEnter(Frame("c"), out _));
+        var (a, b, c) = (_world.Permission(), _world.Permission(), _world.Permission());
+        ctx.TryEnter(Frame(a), out _).ShouldBeTrue();
+        ctx.TryEnter(Frame(b), out _).ShouldBeTrue();
+        Should.Throw<EvaluationLimitException>(() => ctx.TryEnter(Frame(c), out _));
     }
 
     [Fact]

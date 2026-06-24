@@ -4,13 +4,32 @@ using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
 using Custodex.Storage.InMemory;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Caching;
 
 public class CachingAuthorizerTests
 {
-    private static readonly TenantContext T = new("zoo", "t1");
+    private readonly TestWorld _world = TestWorld.New();
+    private readonly string _objType;
+    private readonly string _viewer;
+    private readonly string _view;
+    private readonly string _objId;
+    private readonly string _condition;
+    private readonly string _subjectId;
+
+    public CachingAuthorizerTests()
+    {
+        _objType = _world.EntityType();
+        _viewer = _world.Relation();
+        _view = _world.Permission();
+        _objId = _world.ObjectId();
+        _condition = _world.ConditionName();
+        _subjectId = _world.SubjectId();
+    }
+
+    private TenantContext T => _world.Tenant;
 
     private sealed class CountingRelationStore : IRelationStore
     {
@@ -28,20 +47,20 @@ public class CachingAuthorizerTests
             => _inner.ListObjectIdsAsync(t, objectType, ct);
     }
 
-    private static Schema UnconditionedSchema() => new SchemaBuilder("v1")
-        .Type("doc", t => t
-            .Relation("viewer", s => s.User())
-            .Permission("view", p => p.Relation("viewer")))
+    private Schema UnconditionedSchema() => new SchemaBuilder(_world.Version)
+        .Type(_objType, t => t
+            .Relation(_viewer, s => s.Type(_world.UserType))
+            .Permission(_view, p => p.Relation(_viewer)))
         .Build();
 
-    private static Schema ConditionedSchema() => new SchemaBuilder("v1")
-        .Type("doc", t => t
-            .Relation("viewer", s => s.User())
-            .Permission("view", p => p.Relation("viewer")))
-        .Condition("always", c => { })
+    private Schema ConditionedSchema() => new SchemaBuilder(_world.Version)
+        .Type(_objType, t => t
+            .Relation(_viewer, s => s.Type(_world.UserType))
+            .Permission(_view, p => p.Relation(_viewer)))
+        .Condition(_condition, c => { })
         .Build();
 
-    private static async Task<(CachingAuthorizer Auth, CountingRelationStore Counter, InMemoryCacheStore Cache, IUnitOfWork Uow)>
+    private async Task<(CachingAuthorizer Auth, CountingRelationStore Counter, InMemoryCacheStore Cache, IUnitOfWork Uow)>
         NewAsync(Schema schema, IConditionEvaluator conditions, params RelationTuple[] tuples)
     {
         var schemaStore = new InMemorySchemaStore();
@@ -57,22 +76,22 @@ public class CachingAuthorizerTests
         return (new CachingAuthorizer(inner, schemaStore, cache), counter, cache, new NoOpUnitOfWork());
     }
 
-    private static CheckRequest Req(string user, bool explain = false) => new(
-        T, new EntityRef("doc", "D1"), "view", new SubjectRef("user", user),
-        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", user),
+    private CheckRequest Req(string user, bool explain = false) => new(
+        T, new EntityRef(_objType, _objId), _view, new SubjectRef(_world.UserType, user),
+        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef(_world.UserType, user),
             new Dictionary<string, object?>()), Explain: explain);
 
     [Fact]
     public async Task Second_identical_check_is_served_from_cache()
     {
         var (auth, counter, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
-            new RelationTuple(new EntityRef("doc", "D1"), "viewer", new SubjectRef("user", "alice")));
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
 
-        (await auth.CheckAsync(Req("alice"))).Allowed.ShouldBeTrue();
+        (await auth.CheckAsync(Req(_subjectId))).Allowed.ShouldBeTrue();
         var afterFirst = counter.GetByObjectCalls;
         afterFirst.ShouldBeGreaterThan(0);
 
-        (await auth.CheckAsync(Req("alice"))).Allowed.ShouldBeTrue();
+        (await auth.CheckAsync(Req(_subjectId))).Allowed.ShouldBeTrue();
         counter.GetByObjectCalls.ShouldBe(afterFirst);   // no further store reads: cache hit
     }
 
@@ -80,15 +99,15 @@ public class CachingAuthorizerTests
     public async Task Epoch_bump_invalidates_the_cache()
     {
         var (auth, counter, cache, uow) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
-            new RelationTuple(new EntityRef("doc", "D1"), "viewer", new SubjectRef("user", "alice")));
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
 
-        await auth.CheckAsync(Req("alice"));
+        await auth.CheckAsync(Req(_subjectId));
         var afterFirst = counter.GetByObjectCalls;
 
         await cache.BumpEpochAsync(T, uow);   // simulate a write bumping the epoch
         await uow.CommitAsync();
 
-        await auth.CheckAsync(Req("alice"));
+        await auth.CheckAsync(Req(_subjectId));
         counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);   // epoch mismatch => miss => recompute
     }
 
@@ -98,14 +117,14 @@ public class CachingAuthorizerTests
         // A schema whose tuple carries a condition => result touches a condition => not cacheable.
         var schema = ConditionedSchema();
         var conditioned = new RelationTuple(
-            new EntityRef("doc", "D1"), "viewer", new SubjectRef("user", "alice"),
-            new ConditionRef("always", new Dictionary<string, object?>()));
+            new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId),
+            new ConditionRef(_condition, new Dictionary<string, object?>()));
         var (auth, counter, _, _) = await NewAsync(schema, new AlwaysTrueConditionEvaluator(), conditioned);
 
-        await auth.CheckAsync(Req("alice"));
+        await auth.CheckAsync(Req(_subjectId));
         var afterFirst = counter.GetByObjectCalls;
 
-        await auth.CheckAsync(Req("alice"));
+        await auth.CheckAsync(Req(_subjectId));
         counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);   // recomputed: condition touched => not cached
     }
 
@@ -113,13 +132,13 @@ public class CachingAuthorizerTests
     public async Task Explain_requests_bypass_the_cache()
     {
         var (auth, counter, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
-            new RelationTuple(new EntityRef("doc", "D1"), "viewer", new SubjectRef("user", "alice")));
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
 
-        var explained = await auth.CheckAsync(Req("alice", explain: true));
+        var explained = await auth.CheckAsync(Req(_subjectId, explain: true));
         explained.Explain.ShouldNotBeNull();
         var afterFirst = counter.GetByObjectCalls;
 
-        var explainedAgain = await auth.CheckAsync(Req("alice", explain: true));
+        var explainedAgain = await auth.CheckAsync(Req(_subjectId, explain: true));
         explainedAgain.Explain.ShouldNotBeNull();
         counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);   // never cached: fresh trace each time
     }
@@ -142,10 +161,10 @@ public class CachingAuthorizerTests
         ml.Start();
 
         var (auth, _, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
-            new RelationTuple(new EntityRef("doc", "D1"), "viewer", new SubjectRef("user", "alice")));
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
 
-        await auth.CheckAsync(Req("alice"));   // miss
-        await auth.CheckAsync(Req("alice"));   // hit
+        await auth.CheckAsync(Req(_subjectId));   // miss
+        await auth.CheckAsync(Req(_subjectId));   // hit
         ml.Dispose();
 
         misses.ShouldBeGreaterThanOrEqualTo(1);

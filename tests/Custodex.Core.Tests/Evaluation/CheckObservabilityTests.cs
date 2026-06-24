@@ -1,40 +1,47 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Custodex.Abstractions;
-using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
-using Custodex.Storage.InMemory;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
 
 public class CheckObservabilityTests
 {
-    private static readonly TenantContext T = new("zoo", "t1");
+    private readonly TestWorld _world = TestWorld.New();
+    private readonly string _objType;
+    private readonly string _viewer;
+    private readonly string _editor;
+    private readonly string _access;
+    private readonly string _objId;
+    private readonly string _subjectId;
 
-    private static async Task<EngineDrivenAuthorizer> NewAsync()
+    public CheckObservabilityTests()
     {
-        var schema = new SchemaBuilder("v1")
-            .Type("doc", t => t
-                .Relation("viewer", s => s.User())
-                .Relation("editor", s => s.User())
-                .Permission("access", p => p.Relation("viewer").Union(x => x.Relation("editor"))))
-            .Build();
-        var schemaStore = new InMemorySchemaStore();
-        var relations = new InMemoryRelationStore();
-        var attributes = new InMemoryAttributeStore();
-        var uow = new NoOpUnitOfWork();
-        await schemaStore.SetActiveAsync(T.Store, schema, uow);
-        await relations.WriteAsync(T,
-            new[] { new RelationTuple(new EntityRef("doc", "D1"), "editor", new SubjectRef("user", "alice")) },
-            Array.Empty<RelationTuple>(), uow);
-        await uow.CommitAsync();
-        return new EngineDrivenAuthorizer(schemaStore, relations, attributes, new NullConditionEvaluator());
+        _objType = _world.EntityType();
+        _viewer = _world.Relation();
+        _editor = _world.Relation();
+        _access = _world.Permission();
+        _objId = _world.ObjectId();
+        _subjectId = _world.SubjectId();
     }
 
-    private static CheckRequest Req(bool explain) => new(
-        T, new EntityRef("doc", "D1"), "access", new SubjectRef("user", "alice"),
-        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", "alice"),
+    private Task<EngineDrivenAuthorizer> NewAsync()
+    {
+        var schema = new SchemaBuilder(_world.Version)
+            .Type(_objType, t => t
+                .Relation(_viewer, s => s.Type(_world.UserType))
+                .Relation(_editor, s => s.Type(_world.UserType))
+                .Permission(_access, p => p.Relation(_viewer).Union(x => x.Relation(_editor))))
+            .Build();
+        return _world.BuildAsync(schema,
+            _world.Tuple(_objType, _objId, _editor, _world.User(_subjectId)));
+    }
+
+    private CheckRequest Req(bool explain) => new(
+        _world.Tenant, new EntityRef(_objType, _objId), _access, _world.User(_subjectId),
+        new RequestContext(DateTimeOffset.UnixEpoch, _world.User(_subjectId),
             new Dictionary<string, object?>()), Explain: explain);
 
     [Fact]
@@ -48,7 +55,7 @@ public class CheckObservabilityTests
         var explained = await auth.CheckAsync(Req(explain: true));
         explained.Allowed.ShouldBeTrue();
         explained.Explain.ShouldNotBeNull();
-        explained.Explain!.Description.ShouldContain("access");
+        explained.Explain!.Description.ShouldContain(_access);
         // The union branch and its two relation children are present.
         explained.Explain.Children.ShouldNotBeEmpty();
     }

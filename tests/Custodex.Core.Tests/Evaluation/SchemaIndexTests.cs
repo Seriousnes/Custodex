@@ -1,42 +1,62 @@
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
 
 public class SchemaIndexTests
 {
-    private static Schema Build() => new SchemaBuilder("v1")
-        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
-        .Type("animal", t => t
-            .Relation("medicator", s => s.User().SubjectSet("group", "member"))
-            .Relation("enclosure", s => s.Type("enclosure"))
-            .Permission("edit", p => p.Relation("medicator")))
+    private readonly TestWorld _world = TestWorld.New();
+    private readonly string _objType;
+    private readonly string _grantRel;
+    private readonly string _linkRel;
+    private readonly string _linkedType;
+    private readonly string _edit;
+
+    public SchemaIndexTests()
+    {
+        _objType = _world.EntityType();
+        _grantRel = _world.Relation();
+        _linkRel = _world.Relation();
+        _linkedType = _world.EntityType();
+        _edit = _world.Permission();
+    }
+
+    private Schema Build() => new SchemaBuilder(_world.Version)
+        .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
+            s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
+        .Type(_objType, t => t
+            .Relation(_grantRel, s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation))
+            .Relation(_linkRel, s => s.Type(_linkedType))
+            .Permission(_edit, p => p.Relation(_grantRel)))
         .Build();
 
     [Fact]
     public void Resolves_known_type_relation_and_permission()
     {
         var idx = new SchemaIndex(Build());
-        idx.Type("animal").Name.ShouldBe("animal");
-        idx.Relation("animal", "enclosure").Name.ShouldBe("enclosure");
-        idx.Permission("animal", "edit").Name.ShouldBe("edit");
+        idx.Type(_objType).Name.ShouldBe(_objType);
+        idx.Relation(_objType, _linkRel).Name.ShouldBe(_linkRel);
+        idx.Permission(_objType, _edit).Name.ShouldBe(_edit);
     }
 
     [Fact]
     public void Unknown_lookups_throw_typed_exceptions()
     {
         var idx = new SchemaIndex(Build());
-        Should.Throw<UnknownTypeException>(() => idx.Type("dragon"));
-        Should.Throw<UnknownRelationException>(() => idx.Relation("animal", "nope"));
-        Should.Throw<UnknownPermissionException>(() => idx.Permission("animal", "nope"));
+        var unknownType = _world.EntityType();
+        var unknownName = _world.Relation();
+        Should.Throw<UnknownTypeException>(() => idx.Type(unknownType));
+        Should.Throw<UnknownRelationException>(() => idx.Relation(_objType, unknownName));
+        Should.Throw<UnknownPermissionException>(() => idx.Permission(_objType, unknownName));
     }
 
     [Fact]
     public void TryPermission_distinguishes_permission_from_relation()
     {
         var idx = new SchemaIndex(Build());
-        idx.TryPermission("animal", "edit", out _).ShouldBeTrue();
-        idx.TryPermission("animal", "enclosure", out _).ShouldBeFalse();   // a relation, not a permission
+        idx.TryPermission(_objType, _edit, out _).ShouldBeTrue();
+        idx.TryPermission(_objType, _linkRel, out _).ShouldBeFalse();   // a relation, not a permission
     }
 }

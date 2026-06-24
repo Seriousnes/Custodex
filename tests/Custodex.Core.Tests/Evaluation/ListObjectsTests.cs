@@ -1,109 +1,128 @@
 using Custodex.Abstractions;
-using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
-using Custodex.Storage.InMemory;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
 
 public class ListObjectsTests
 {
-    private static readonly TenantContext T = new("zoo", "t1");
+    private readonly TestWorld _world = TestWorld.New();
+    private readonly string _objType;
+    private readonly string _editor;
+    private readonly string _blocked;
+    private readonly string _edit;
+    private readonly string[] _sortedIds;   // five distinct object ids in ordinal order
 
-    private static Schema Build() => new SchemaBuilder("v1")
-        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
-        .Type("species", t => t
-            .Relation("editor", s => s.User().SubjectSet("group", "member").Wildcard("user"))
-            .Relation("blocked", s => s.User())
-            .Permission("edit", p => p.Relation("editor").Exclude(x => x.Relation("blocked"))))
-        .Build();
-
-    private static async Task<EngineDrivenAuthorizer> NewAsync(params RelationTuple[] tuples)
+    public ListObjectsTests()
     {
-        var schemaStore = new InMemorySchemaStore();
-        var relations = new InMemoryRelationStore();
-        var attributes = new InMemoryAttributeStore();
-        var uow = new NoOpUnitOfWork();
-        await schemaStore.SetActiveAsync(T.Store, Build(), uow);
-        await relations.WriteAsync(T, tuples, Array.Empty<RelationTuple>(), uow);
-        await uow.CommitAsync();
-        return new EngineDrivenAuthorizer(schemaStore, relations, attributes, new NullConditionEvaluator());
+        _objType = _world.EntityType();
+        _editor = _world.Relation();
+        _blocked = _world.Relation();
+        _edit = _world.Permission();
+        _sortedIds = new[]
+        {
+            _world.ObjectId(), _world.ObjectId(), _world.ObjectId(), _world.ObjectId(), _world.ObjectId(),
+        }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
     }
 
-    private static RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
-        new(new EntityRef(ot, oid), rel, s);
+    private Schema Build() => new SchemaBuilder(_world.Version)
+        .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
+            s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
+        .Type(_objType, t => t
+            .Relation(_editor, s => s.Type(_world.UserType)
+                .SubjectSet(_world.GroupType, _world.MemberRelation).Wildcard(_world.UserType))
+            .Relation(_blocked, s => s.Type(_world.UserType))
+            .Permission(_edit, p => p.Relation(_editor).Exclude(x => x.Relation(_blocked))))
+        .Build();
 
-    private static ListObjectsRequest Req(string user, int pageSize = 100, string? token = null) => new(
-        T, new SubjectRef("user", user), "species", "edit",
-        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", user),
+    private Task<EngineDrivenAuthorizer> NewAsync(params RelationTuple[] tuples) =>
+        _world.BuildAsync(Build(), tuples);
+
+    private RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
+        _world.Tuple(ot, oid, rel, s);
+
+    private ListObjectsRequest Req(string user, int pageSize = 100, string? token = null) => new(
+        _world.Tenant, _world.User(user), _objType, _edit,
+        new RequestContext(DateTimeOffset.UnixEpoch, _world.User(user),
             new Dictionary<string, object?>()), pageSize, token);
 
     [Fact]
     public async Task Lists_only_confirmed_objects_respecting_exclusion()
     {
+        var groupId = _world.SubjectId();
+        var subjectId = _world.SubjectId();
+        var allowedObj = _world.ObjectId();
+        var revokedObj = _world.ObjectId();
         var auth = await NewAsync(
-            Tuple("species", "kangaroo", "editor", new SubjectRef("group", "macropods", "member")),
-            Tuple("species", "wallaby", "editor", new SubjectRef("group", "macropods", "member")),
-            Tuple("species", "wallaby", "blocked", new SubjectRef("user", "alice")),     // alice revoked on wallaby
-            Tuple("group", "macropods", "member", new SubjectRef("user", "alice")));
+            Tuple(_objType, allowedObj, _editor, _world.Member(groupId)),
+            Tuple(_objType, revokedObj, _editor, _world.Member(groupId)),
+            Tuple(_objType, revokedObj, _blocked, _world.User(subjectId)),     // subject revoked on revokedObj
+            Tuple(_world.GroupType, groupId, _world.MemberRelation, _world.User(subjectId)));
 
-        var result = await auth.ListObjectsAsync(Req("alice"));
-        result.ObjectIds.ShouldBe(new[] { "kangaroo" });   // wallaby excluded
+        var result = await auth.ListObjectsAsync(Req(subjectId));
+        result.ObjectIds.ShouldBe(new[] { allowedObj });   // revokedObj excluded
         result.ContinuationToken.ShouldBeNull();
     }
 
     [Fact]
     public async Task Wildcard_grant_lists_every_object_of_the_type()
     {
+        var anyone = _world.SubjectId();
+        var ids = _sortedIds.Take(3).ToArray();
         var auth = await NewAsync(
-            Tuple("species", "kangaroo", "editor", new SubjectRef("user", "*")),
-            Tuple("species", "wallaby", "editor", new SubjectRef("user", "*")),
-            Tuple("species", "emu", "editor", new SubjectRef("user", "*")));
+            Tuple(_objType, ids[0], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[1], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[2], _editor, new SubjectRef(_world.UserType, "*")));
 
-        var result = await auth.ListObjectsAsync(Req("anyone"));
-        result.ObjectIds.ShouldBe(new[] { "emu", "kangaroo", "wallaby" });   // sorted, all three
+        var result = await auth.ListObjectsAsync(Req(anyone));
+        result.ObjectIds.ShouldBe(ids);   // sorted, all three
     }
 
     [Fact]
     public async Task Paginates_to_exact_page_size_with_resumable_cursor()
     {
+        var anyone = _world.SubjectId();
+        var ids = _sortedIds;
         var auth = await NewAsync(
-            Tuple("species", "a", "editor", new SubjectRef("user", "*")),
-            Tuple("species", "b", "editor", new SubjectRef("user", "*")),
-            Tuple("species", "c", "editor", new SubjectRef("user", "*")),
-            Tuple("species", "d", "editor", new SubjectRef("user", "*")),
-            Tuple("species", "e", "editor", new SubjectRef("user", "*")));
+            Tuple(_objType, ids[0], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[1], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[2], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[3], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[4], _editor, new SubjectRef(_world.UserType, "*")));
 
-        var page1 = await auth.ListObjectsAsync(Req("anyone", pageSize: 2));
-        page1.ObjectIds.ShouldBe(new[] { "a", "b" });
+        var page1 = await auth.ListObjectsAsync(Req(anyone, pageSize: 2));
+        page1.ObjectIds.ShouldBe(new[] { ids[0], ids[1] });
         page1.ContinuationToken.ShouldNotBeNull();
 
-        var page2 = await auth.ListObjectsAsync(Req("anyone", pageSize: 2, token: page1.ContinuationToken));
-        page2.ObjectIds.ShouldBe(new[] { "c", "d" });
+        var page2 = await auth.ListObjectsAsync(Req(anyone, pageSize: 2, token: page1.ContinuationToken));
+        page2.ObjectIds.ShouldBe(new[] { ids[2], ids[3] });
         page2.ContinuationToken.ShouldNotBeNull();
 
-        var page3 = await auth.ListObjectsAsync(Req("anyone", pageSize: 2, token: page2.ContinuationToken));
-        page3.ObjectIds.ShouldBe(new[] { "e" });
+        var page3 = await auth.ListObjectsAsync(Req(anyone, pageSize: 2, token: page2.ContinuationToken));
+        page3.ObjectIds.ShouldBe(new[] { ids[4] });
         page3.ContinuationToken.ShouldBeNull();   // true end of results
     }
 
     [Fact]
     public async Task Pages_do_not_overlap_or_drop_across_the_full_range()
     {
+        var anyone = _world.SubjectId();
+        var ids = _sortedIds.Take(3).ToArray();
         var auth = await NewAsync(
-            Tuple("species", "a", "editor", new SubjectRef("user", "*")),
-            Tuple("species", "b", "editor", new SubjectRef("user", "*")),
-            Tuple("species", "c", "editor", new SubjectRef("user", "*")));
+            Tuple(_objType, ids[0], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[1], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[2], _editor, new SubjectRef(_world.UserType, "*")));
 
         var all = new List<string>();
         string? token = null;
         do
         {
-            var page = await auth.ListObjectsAsync(Req("anyone", pageSize: 2, token: token));
+            var page = await auth.ListObjectsAsync(Req(anyone, pageSize: 2, token: token));
             all.AddRange(page.ObjectIds);
             token = page.ContinuationToken;
         } while (token is not null);
 
-        all.ShouldBe(new[] { "a", "b", "c" });   // no dupes, no gaps
+        all.ShouldBe(ids);   // no dupes, no gaps
     }
 }
