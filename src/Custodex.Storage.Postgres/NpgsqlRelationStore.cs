@@ -109,6 +109,33 @@ public sealed class NpgsqlRelationStore(string connectionString) : IRelationStor
         }
     }
 
+    /// <summary>
+    /// Admin/management read: returns tuples matching the given filter, scoped to <paramref name="t"/>.
+    /// Each filter field is optional; omitting it means "match any value" for that column.
+    /// </summary>
+    public async Task<IReadOnlyList<RelationTuple>> QueryAsync(
+        TenantContext t, TupleFilter filter, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(connectionString);
+        var rows = await conn.QueryAsync<Row>(new CommandDefinition($"""
+            SELECT {SelectColumns} FROM relation_tuples
+            WHERE store_id = @store AND tenant_id = @tenant
+              AND (@ot IS NULL OR object_type = @ot)
+              AND (@oid IS NULL OR object_id = @oid)
+              AND (@rel IS NULL OR relation = @rel)
+              AND (@st IS NULL OR subject_type = @st)
+              AND (@sid IS NULL OR subject_id = @sid)
+            """,
+            new
+            {
+                store = t.Store, tenant = t.Tenant,
+                ot = filter.ObjectType, oid = filter.ObjectId, rel = filter.Relation,
+                st = filter.SubjectType, sid = filter.SubjectId,
+            },
+            cancellationToken: ct));
+        return rows.Select(Map).ToList();
+    }
+
     private static void AddKeyParams(NpgsqlCommand cmd, TenantContext t, RelationTuple tuple)
     {
         cmd.Parameters.AddWithValue("store", t.Store);
