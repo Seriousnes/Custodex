@@ -20,9 +20,9 @@ public sealed partial class IndexedAuthorizer
         var wildcard = $"{request.Subject.Type}:*";
 
         var candidates = new SortedSet<string>(StringComparer.Ordinal);
-        await CollectConfirmedAsync(request, schema.Version, subject, candidates, ct);
+        await CollectConfirmedAsync(request, schema.Version, subject, candidates, recheckAll: false, ct);
         if (!string.Equals(wildcard, subject, StringComparison.Ordinal))
-            await CollectConfirmedAsync(request, schema.Version, wildcard, candidates, ct);
+            await CollectConfirmedAsync(request, schema.Version, wildcard, candidates, recheckAll: true, ct);
 
         var after = ContinuationCursor.DecodeAfter(request.ContinuationToken);
         var confirmed = new List<string>(request.PageSize);
@@ -47,7 +47,8 @@ public sealed partial class IndexedAuthorizer
     }
 
     private async Task CollectConfirmedAsync(
-        ListObjectsRequest request, string schemaVersion, string subject, SortedSet<string> candidates, CancellationToken ct)
+        ListObjectsRequest request, string schemaVersion, string subject, SortedSet<string> candidates,
+        bool recheckAll, CancellationToken ct)
     {
         string? cursor = null;
         while (true)
@@ -60,7 +61,7 @@ public sealed partial class IndexedAuthorizer
             foreach (var row in batch)
             {
                 cursor = row.ObjectId;
-                if (await ConfirmAsync(request, row, ct))
+                if (await ConfirmRowAsync(request, row, recheckAll, ct))
                     candidates.Add(row.ObjectId);
             }
             if (batch.Count < ScanBatchSize)
@@ -68,9 +69,9 @@ public sealed partial class IndexedAuthorizer
         }
     }
 
-    private async Task<bool> ConfirmAsync(ListObjectsRequest request, ReverseIndexRow row, CancellationToken ct)
+    private async Task<bool> ConfirmRowAsync(ListObjectsRequest request, ReverseIndexRow row, bool recheckAll, CancellationToken ct)
     {
-        if (!row.Conditioned)
+        if (!recheckAll && !row.Conditioned)
             return true;
         var result = await _inner.CheckAsync(new CheckRequest(
             request.Tenant, new EntityRef(request.ObjectType, row.ObjectId),
