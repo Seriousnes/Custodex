@@ -1,16 +1,19 @@
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Conditions;
 
 public class ConditionExprNodesTests
 {
+    private readonly TestWorld _world = TestWorld.New();
+
     [Fact]
     public void Nodes_derive_from_condition_expr_and_are_pattern_matchable()
     {
         ConditionExpr expr = new Compare(
-            new AttributeRef("weight"), CompareOp.Ge, new ParamRef("n"));
+            new AttributeRef(_world.ParamName()), CompareOp.Ge, new ParamRef(_world.ParamName()));
 
         var label = expr switch
         {
@@ -22,13 +25,15 @@ public class ConditionExprNodesTests
     }
 
     [Fact]
-    public void Within_hours_body_is_expressible_as_a_tree()
+    public void Bounded_window_body_is_expressible_as_a_tree()
     {
         // context.now.hour >= start && context.now.hour < end
+        var start = _world.ParamName();
+        var end = _world.ParamName();
         ConditionExpr body = new BoolOp(
-            new Compare(new HourOf(new ContextNow()), CompareOp.Ge, new ParamRef("start")),
+            new Compare(new HourOf(new ContextNow()), CompareOp.Ge, new ParamRef(start)),
             BoolConnective.And,
-            new Compare(new HourOf(new ContextNow()), CompareOp.Lt, new ParamRef("end")));
+            new Compare(new HourOf(new ContextNow()), CompareOp.Lt, new ParamRef(end)));
 
         body.ShouldBeOfType<BoolOp>().Op.ShouldBe(BoolConnective.And);
     }

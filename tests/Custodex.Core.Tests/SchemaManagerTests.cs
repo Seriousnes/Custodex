@@ -1,10 +1,25 @@
 using Custodex.Abstractions;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests;
 
 public class SchemaManagerTests
 {
+    private readonly TestWorld _world = TestWorld.New();
+    private readonly string _objType;
+    private readonly string _grant;
+    private readonly string _edit;
+    private readonly string _missing;   // a relation name referenced but never declared
+
+    public SchemaManagerTests()
+    {
+        _objType = _world.EntityType();
+        _grant = _world.Relation();
+        _edit = _world.Permission();
+        _missing = _world.Relation();
+    }
+
     private sealed class FakeSchemaStore : ISchemaStore
     {
         private readonly Dictionary<string, Schema> _store = new(StringComparer.Ordinal);
@@ -34,12 +49,12 @@ public class SchemaManagerTests
         }
     }
 
-    private static Schema ValidSchema() => new SchemaBuilder("v1")
-        .Type("animal", t => t.Relation("medicator", s => s.User()).Permission("edit", p => p.Relation("medicator")))
+    private Schema ValidSchema() => new SchemaBuilder(_world.Version)
+        .Type(_objType, t => t.Relation(_grant, s => s.Type(_world.UserType)).Permission(_edit, p => p.Relation(_grant)))
         .Build();
 
-    private static Schema InvalidSchema() => new SchemaBuilder("v1")
-        .Type("animal", t => t.Relation("medicator", s => s.User()).Permission("edit", p => p.Relation("ghost")))
+    private Schema InvalidSchema() => new SchemaBuilder(_world.Version)
+        .Type(_objType, t => t.Relation(_grant, s => s.Type(_world.UserType)).Permission(_edit, p => p.Relation(_missing)))
         .Build();
 
     [Fact]
@@ -58,9 +73,9 @@ public class SchemaManagerTests
         var factory = new FakeUowFactory();
         var mgr = new SchemaManager(store, factory);
 
-        await mgr.SetActiveSchemaAsync("zoo", ValidSchema());
+        await mgr.SetActiveSchemaAsync(_world.Tenant.Store, ValidSchema());
 
-        (await mgr.GetActiveSchemaAsync("zoo"))!.Version.ShouldBe("v1");
+        (await mgr.GetActiveSchemaAsync(_world.Tenant.Store))!.Version.ShouldBe(_world.Version);
         factory.Last.Committed.ShouldBeTrue();
     }
 
@@ -70,8 +85,8 @@ public class SchemaManagerTests
         var mgr = new SchemaManager(new FakeSchemaStore(), new FakeUowFactory());
 
         var ex = await Should.ThrowAsync<SchemaValidationException>(
-            () => mgr.SetActiveSchemaAsync("zoo", InvalidSchema()));
+            () => mgr.SetActiveSchemaAsync(_world.Tenant.Store, InvalidSchema()));
 
-        ex.Errors.ShouldContain(e => e.Contains("ghost"));
+        ex.Errors.ShouldContain(e => e.Contains(_missing));
     }
 }

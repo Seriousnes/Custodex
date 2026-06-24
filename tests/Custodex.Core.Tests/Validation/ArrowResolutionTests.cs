@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core.Validation;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Validation;
@@ -9,13 +10,20 @@ public class ArrowResolutionTests
     [Fact]
     public void Arrow_to_permission_present_on_related_type_passes()
     {
-        var schema = new SchemaBuilder("v1")
-            .Type("enclosure", t => t
-                .Relation("can_edit", s => s.User())
-                .Permission("edit", p => p.Relation("can_edit")))
-            .Type("animal", t => t
-                .Relation("enclosure", s => s.Type("enclosure"))
-                .Permission("edit", p => p.Arrow("enclosure", "edit")))
+        var world = TestWorld.New();
+        var linkedType = world.EntityType();
+        var childType = world.EntityType();
+        var canEdit = world.Relation();
+        var link = world.Relation();
+        var edit = world.Permission();
+
+        var schema = new SchemaBuilder(world.Version)
+            .Type(linkedType, t => t
+                .Relation(canEdit, s => s.Type(world.UserType))
+                .Permission(edit, p => p.Relation(canEdit)))
+            .Type(childType, t => t
+                .Relation(link, s => s.Type(linkedType))
+                .Permission(edit, p => p.Arrow(link, edit)))
             .Build();
 
         SchemaValidator.Validate(schema).IsValid.ShouldBeTrue();
@@ -24,51 +32,72 @@ public class ArrowResolutionTests
     [Fact]
     public void Arrow_to_permission_absent_on_related_type_fails()
     {
-        var schema = new SchemaBuilder("v1")
-            .Type("enclosure", t => t.Relation("can_edit", s => s.User()))   // no 'edit' permission
-            .Type("animal", t => t
-                .Relation("enclosure", s => s.Type("enclosure"))
-                .Permission("edit", p => p.Arrow("enclosure", "edit")))
+        var world = TestWorld.New();
+        var linkedType = world.EntityType();
+        var childType = world.EntityType();
+        var canEdit = world.Relation();
+        var link = world.Relation();
+        var edit = world.Permission();
+
+        var schema = new SchemaBuilder(world.Version)
+            .Type(linkedType, t => t.Relation(canEdit, s => s.Type(world.UserType)))   // no 'edit' permission
+            .Type(childType, t => t
+                .Relation(link, s => s.Type(linkedType))
+                .Permission(edit, p => p.Arrow(link, edit)))
             .Build();
 
         var result = SchemaValidator.Validate(schema);
 
         result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.Contains("enclosure") && e.Contains("edit"));
+        result.Errors.ShouldContain(e => e.Contains(linkedType) && e.Contains(edit));
     }
 
     [Fact]
     public void Arrow_fails_when_one_of_several_target_types_lacks_the_permission()
     {
-        // 'parent' may be an enclosure (has edit) or a site (lacks edit).
-        var schema = new SchemaBuilder("v1")
-            .Type("enclosure", t => t
-                .Relation("can_edit", s => s.User())
-                .Permission("edit", p => p.Relation("can_edit")))
-            .Type("site", t => t.Relation("can_edit", s => s.User()))   // no 'edit' permission
-            .Type("animal", t => t
-                .Relation("parent", s => s.Type("enclosure").Type("site"))
-                .Permission("edit", p => p.Arrow("parent", "edit")))
+        // 'parent' may be the first type (has edit) or the second (lacks edit).
+        var world = TestWorld.New();
+        var hasPermType = world.EntityType();
+        var lacksPermType = world.EntityType();
+        var childType = world.EntityType();
+        var canEdit = world.Relation();
+        var parent = world.Relation();
+        var edit = world.Permission();
+
+        var schema = new SchemaBuilder(world.Version)
+            .Type(hasPermType, t => t
+                .Relation(canEdit, s => s.Type(world.UserType))
+                .Permission(edit, p => p.Relation(canEdit)))
+            .Type(lacksPermType, t => t.Relation(canEdit, s => s.Type(world.UserType)))   // no 'edit' permission
+            .Type(childType, t => t
+                .Relation(parent, s => s.Type(hasPermType).Type(lacksPermType))
+                .Permission(edit, p => p.Arrow(parent, edit)))
             .Build();
 
         var result = SchemaValidator.Validate(schema);
 
         result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.Contains("site") && e.Contains("edit"));
+        result.Errors.ShouldContain(e => e.Contains(lacksPermType) && e.Contains(edit));
     }
 
     [Fact]
     public void Arrow_to_unknown_related_type_fails()
     {
-        var schema = new Schema("v1",
-            [new EntityTypeDef("animal",
-                [new RelationDef("enclosure", [new SubjectTypeRef("enclosure")])],
-                [new PermissionDef("edit", new Arrow("enclosure", "edit"))])],
-            []);   // no 'enclosure' type declared at all
+        var world = TestWorld.New();
+        var childType = world.EntityType();
+        var linkedType = world.EntityType();
+        var link = world.Relation();
+        var edit = world.Permission();
+
+        var schema = new Schema(world.Version,
+            [new EntityTypeDef(childType,
+                [new RelationDef(link, [new SubjectTypeRef(linkedType)])],
+                [new PermissionDef(edit, new Arrow(link, edit))])],
+            []);   // no linkedType declared at all
 
         var result = SchemaValidator.Validate(schema);
 
         result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.Contains("enclosure"));
+        result.Errors.ShouldContain(e => e.Contains(linkedType));
     }
 }

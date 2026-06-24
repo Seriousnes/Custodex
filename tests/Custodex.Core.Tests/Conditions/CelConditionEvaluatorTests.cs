@@ -1,84 +1,82 @@
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
-using Custodex.Storage.InMemory;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Conditions;
 
 public class CelConditionEvaluatorTests
 {
-    private static readonly TenantContext T = new("zoo", "t1");
+    private readonly TestWorld _world = TestWorld.New();
+    private readonly string _condition;
+    private readonly string _attribute;   // attribute key compared to the request subject
 
-    private static ConditionDef IsCreatorDef() => new(
-        "is_creator",
+    public CelConditionEvaluatorTests()
+    {
+        _condition = _world.ConditionName();
+        _attribute = _world.ParamName();
+    }
+
+    private ConditionDef CreatorDef() => new(
+        _condition,
         [],
-        new Compare(new AttributeRef("created_by"), CompareOp.Eq, new ContextSubject()));
+        new Compare(new AttributeRef(_attribute), CompareOp.Eq, new ContextSubject()));
 
-    private static RequestContext Ctx(string subjectId) =>
-        new(DateTimeOffset.UnixEpoch, new SubjectRef("user", subjectId), new Dictionary<string, object?>());
+    private RequestContext Ctx(string subjectId) =>
+        new(DateTimeOffset.UnixEpoch, _world.User(subjectId), new Dictionary<string, object?>());
 
     [Fact]
     public void Adapter_forwards_to_static_evaluator_satisfied_and_denied()
     {
         var adapter = new CelConditionEvaluator();
-        var def = IsCreatorDef();
-        var inv = new ConditionRef("is_creator", new Dictionary<string, object?>());
+        var def = CreatorDef();
+        var inv = new ConditionRef(_condition, new Dictionary<string, object?>());
+        var creator = _world.SubjectId();
+        var other = _world.SubjectId();
 
         adapter.Evaluate(def, inv,
-            new Dictionary<string, object?> { ["created_by"] = "dr-smith" },
-            Ctx("dr-smith")).ShouldBeTrue();
+            new Dictionary<string, object?> { [_attribute] = creator },
+            Ctx(creator)).ShouldBeTrue();
 
         adapter.Evaluate(def, inv,
-            new Dictionary<string, object?> { ["created_by"] = "alice" },
-            Ctx("dr-smith")).ShouldBeFalse();
+            new Dictionary<string, object?> { [_attribute] = other },
+            Ctx(creator)).ShouldBeFalse();
     }
 
     [Fact]
-    public async Task End_to_end_conditioned_branch_gates_on_is_creator()
+    public async Task End_to_end_conditioned_branch_gates_on_attribute_equals_subject()
     {
-        var schema = new SchemaBuilder("v1")
-            .Type("doc", t => t
-                .Relation("viewer", s => s.User())
-                .Permission("view", p => p.Relation("viewer").Conditioned("is_creator")))
-            .Condition("is_creator", p => { }, b => b.Eq(b.Attribute("created_by"), b.Subject()))
+        var objType = _world.EntityType();
+        var viewer = _world.Relation();
+        var view = _world.Permission();
+        var objId = _world.ObjectId();
+        var subject = _world.SubjectId();
+        var nonMatch = _world.SubjectId();
+
+        var schema = new SchemaBuilder(_world.Version)
+            .Type(objType, t => t
+                .Relation(viewer, s => s.Type(_world.UserType))
+                .Permission(view, p => p.Relation(viewer).Conditioned(_condition)))
+            .Condition(_condition, p => { }, b => b.Eq(b.Attribute(_attribute), b.Subject()))
             .Build();
 
-        var viewerTuple = new RelationTuple(new EntityRef("doc", "D1"), "viewer", new SubjectRef("user", "alice"));
+        var viewerTuple = _world.Tuple(objType, objId, viewer, _world.User(subject));
+        var obj = _world.Object(objType, objId);
 
-        // Case 1: created_by == subject → Allowed
+        // Case 1: attribute == subject → Allowed
         {
-            var schemaStore = new InMemorySchemaStore();
-            var relations = new InMemoryRelationStore();
-            var attributes = new InMemoryAttributeStore();
-            var uow = new NoOpUnitOfWork();
-            await schemaStore.SetActiveAsync(T.Store, schema, uow);
-            await relations.WriteAsync(T, [viewerTuple], [], uow);
-            await attributes.SetAsync(T, new EntityRef("doc", "D1"),
-                new Dictionary<string, object?> { ["created_by"] = "alice" }, uow);
-            await uow.CommitAsync();
-
-            var auth = new EngineDrivenAuthorizer(schemaStore, relations, attributes, new CelConditionEvaluator());
-            var req = new CheckRequest(T, new EntityRef("doc", "D1"), "view", new SubjectRef("user", "alice"),
-                Ctx("alice"));
+            var auth = await _world.BuildAsync(schema, new CelConditionEvaluator(), [viewerTuple],
+                [(obj, new Dictionary<string, object?> { [_attribute] = subject })]);
+            var req = new CheckRequest(_world.Tenant, obj, view, _world.User(subject), Ctx(subject));
             (await auth.CheckAsync(req)).Allowed.ShouldBeTrue();
         }
 
-        // Case 2: created_by != subject → Denied (condition gates the viewer grant)
+        // Case 2: attribute != subject → Denied (condition gates the viewer grant)
         {
-            var schemaStore = new InMemorySchemaStore();
-            var relations = new InMemoryRelationStore();
-            var attributes = new InMemoryAttributeStore();
-            var uow = new NoOpUnitOfWork();
-            await schemaStore.SetActiveAsync(T.Store, schema, uow);
-            await relations.WriteAsync(T, [viewerTuple], [], uow);
-            await attributes.SetAsync(T, new EntityRef("doc", "D1"),
-                new Dictionary<string, object?> { ["created_by"] = "bob" }, uow);
-            await uow.CommitAsync();
-
-            var auth = new EngineDrivenAuthorizer(schemaStore, relations, attributes, new CelConditionEvaluator());
-            var req = new CheckRequest(T, new EntityRef("doc", "D1"), "view", new SubjectRef("user", "alice"),
-                Ctx("alice"));
+            var auth = await _world.BuildAsync(schema, new CelConditionEvaluator(), [viewerTuple],
+                [(obj, new Dictionary<string, object?> { [_attribute] = nonMatch })]);
+            var req = new CheckRequest(_world.Tenant, obj, view, _world.User(subject), Ctx(subject));
             (await auth.CheckAsync(req)).Allowed.ShouldBeFalse();
         }
     }

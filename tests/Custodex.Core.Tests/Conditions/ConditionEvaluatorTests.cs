@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Core.Tests.Conditions;
@@ -8,95 +9,120 @@ public class ConditionEvaluatorTests
 {
     private static readonly IReadOnlyDictionary<string, object?> NoAttrs = new Dictionary<string, object?>();
 
-    private static RequestContext Context(DateTimeOffset now, string subjectId) =>
-        new(now, new SubjectRef("user", subjectId), new Dictionary<string, object?>());
+    private readonly TestWorld _world = TestWorld.New();
+    private readonly string _withinHours;
+    private readonly string _startParam;
+    private readonly string _endParam;
+    private readonly string _atLeast;
+    private readonly string _nParam;
+    private readonly string _measure;       // numeric attribute key
+    private readonly string _isCreator;
+    private readonly string _creatorAttr;   // subject-valued attribute key
+
+    public ConditionEvaluatorTests()
+    {
+        _withinHours = _world.ConditionName();
+        _startParam = _world.ParamName();
+        _endParam = _world.ParamName();
+        _atLeast = _world.ConditionName();
+        _nParam = _world.ParamName();
+        _measure = _world.ParamName();
+        _isCreator = _world.ConditionName();
+        _creatorAttr = _world.ParamName();
+    }
+
+    private RequestContext Context(DateTimeOffset now, string subjectId) =>
+        new(now, _world.User(subjectId), new Dictionary<string, object?>());
 
     // within_hours(start, end) = context.now.hour >= start && context.now.hour < end
-    private static ConditionDef WithinHours() => new(
-        "within_hours",
-        [new ConditionParam("start", ConditionType.Int), new ConditionParam("end", ConditionType.Int)],
+    private ConditionDef WithinHours() => new(
+        _withinHours,
+        [new ConditionParam(_startParam, ConditionType.Int), new ConditionParam(_endParam, ConditionType.Int)],
         new BoolOp(
-            new Compare(new HourOf(new ContextNow()), CompareOp.Ge, new ParamRef("start")),
+            new Compare(new HourOf(new ContextNow()), CompareOp.Ge, new ParamRef(_startParam)),
             BoolConnective.And,
-            new Compare(new HourOf(new ContextNow()), CompareOp.Lt, new ParamRef("end"))));
+            new Compare(new HourOf(new ContextNow()), CompareOp.Lt, new ParamRef(_endParam))));
 
-    // at_least(field, n) = resource[field] >= n  — 'field' selects the attribute name.
-    private static ConditionDef AtLeastWeight() => new(
-        "at_least",
-        [new ConditionParam("n", ConditionType.Int)],
-        new Compare(new AttributeRef("weight"), CompareOp.Ge, new ParamRef("n")));
+    // at_least(n) = resource[measure] >= n  — 'measure' selects the attribute name.
+    private ConditionDef AtLeastMeasure() => new(
+        _atLeast,
+        [new ConditionParam(_nParam, ConditionType.Int)],
+        new Compare(new AttributeRef(_measure), CompareOp.Ge, new ParamRef(_nParam)));
 
-    // is_creator() = resource.created_by == context.subject
-    private static ConditionDef IsCreator() => new(
-        "is_creator",
+    // is_creator() = resource[creatorAttr] == context.subject
+    private ConditionDef IsCreator() => new(
+        _isCreator,
         [],
-        new Compare(new AttributeRef("created_by"), CompareOp.Eq, new ContextSubject()));
+        new Compare(new AttributeRef(_creatorAttr), CompareOp.Eq, new ContextSubject()));
 
     [Fact]
     public void Within_hours_allows_inside_window_and_denies_outside()
     {
         var def = WithinHours();
-        var p = new Dictionary<string, object?> { ["start"] = 8, ["end"] = 18 };
+        var p = new Dictionary<string, object?> { [_startParam] = 8, [_endParam] = 18 };
+        var subject = _world.SubjectId();
 
         ConditionEvaluator.Evaluate(def, NoAttrs,
-            Context(new DateTimeOffset(2026, 6, 23, 10, 0, 0, TimeSpan.Zero), "dr-smith"), p)
+            Context(new DateTimeOffset(2026, 6, 23, 10, 0, 0, TimeSpan.Zero), subject), p)
             .Allowed.ShouldBeTrue();
 
         ConditionEvaluator.Evaluate(def, NoAttrs,
-            Context(new DateTimeOffset(2026, 6, 23, 20, 0, 0, TimeSpan.Zero), "dr-smith"), p)
+            Context(new DateTimeOffset(2026, 6, 23, 20, 0, 0, TimeSpan.Zero), subject), p)
             .Allowed.ShouldBeFalse();
     }
 
     [Fact]
     public void At_least_compares_attribute_to_parameter()
     {
-        var def = AtLeastWeight();
-        var ctx = Context(DateTimeOffset.UnixEpoch, "dr-smith");
+        var def = AtLeastMeasure();
+        var ctx = Context(DateTimeOffset.UnixEpoch, _world.SubjectId());
 
         ConditionEvaluator.Evaluate(def,
-            new Dictionary<string, object?> { ["weight"] = 50 }, ctx,
-            new Dictionary<string, object?> { ["n"] = 30 }).Allowed.ShouldBeTrue();
+            new Dictionary<string, object?> { [_measure] = 50 }, ctx,
+            new Dictionary<string, object?> { [_nParam] = 30 }).Allowed.ShouldBeTrue();
 
         ConditionEvaluator.Evaluate(def,
-            new Dictionary<string, object?> { ["weight"] = 10 }, ctx,
-            new Dictionary<string, object?> { ["n"] = 30 }).Allowed.ShouldBeFalse();
+            new Dictionary<string, object?> { [_measure] = 10 }, ctx,
+            new Dictionary<string, object?> { [_nParam] = 30 }).Allowed.ShouldBeFalse();
     }
 
     [Fact]
-    public void Is_creator_compares_created_by_to_subject_id()
+    public void Is_creator_compares_attribute_to_subject_id()
     {
         var def = IsCreator();
         var noParams = new Dictionary<string, object?>();
+        var creator = _world.SubjectId();
+        var other = _world.SubjectId();
 
         ConditionEvaluator.Evaluate(def,
-            new Dictionary<string, object?> { ["created_by"] = "dr-smith" },
-            Context(DateTimeOffset.UnixEpoch, "dr-smith"), noParams).Allowed.ShouldBeTrue();
+            new Dictionary<string, object?> { [_creatorAttr] = creator },
+            Context(DateTimeOffset.UnixEpoch, creator), noParams).Allowed.ShouldBeTrue();
 
         ConditionEvaluator.Evaluate(def,
-            new Dictionary<string, object?> { ["created_by"] = "alice" },
-            Context(DateTimeOffset.UnixEpoch, "dr-smith"), noParams).Allowed.ShouldBeFalse();
+            new Dictionary<string, object?> { [_creatorAttr] = other },
+            Context(DateTimeOffset.UnixEpoch, creator), noParams).Allowed.ShouldBeFalse();
     }
 
     [Fact]
     public void Missing_attribute_is_a_deny_with_a_diagnostic_not_an_exception()
     {
-        var def = AtLeastWeight();
-        var result = ConditionEvaluator.Evaluate(def, NoAttrs,   // no 'weight'
-            Context(DateTimeOffset.UnixEpoch, "dr-smith"),
-            new Dictionary<string, object?> { ["n"] = 30 });
+        var def = AtLeastMeasure();
+        var result = ConditionEvaluator.Evaluate(def, NoAttrs,   // no measure attribute
+            Context(DateTimeOffset.UnixEpoch, _world.SubjectId()),
+            new Dictionary<string, object?> { [_nParam] = 30 });
 
         result.Allowed.ShouldBeFalse();
-        result.Diagnostic!.ShouldContain("weight");
+        result.Diagnostic!.ShouldContain(_measure);
     }
 
     [Fact]
     public void Type_mismatch_is_a_deny_with_a_diagnostic()
     {
-        var def = AtLeastWeight();
+        var def = AtLeastMeasure();
         var result = ConditionEvaluator.Evaluate(def,
-            new Dictionary<string, object?> { ["weight"] = "heavy" },   // string vs int compare
-            Context(DateTimeOffset.UnixEpoch, "dr-smith"),
-            new Dictionary<string, object?> { ["n"] = 30 });
+            new Dictionary<string, object?> { [_measure] = "not-a-number" },   // string vs int compare
+            Context(DateTimeOffset.UnixEpoch, _world.SubjectId()),
+            new Dictionary<string, object?> { [_nParam] = 30 });
 
         result.Allowed.ShouldBeFalse();
         result.Diagnostic.ShouldNotBeNull();
