@@ -106,4 +106,21 @@ public class CteListSubjectsTests(PostgresFixture fx) : IAsyncLifetime
         p2.Subjects.Select(s => s.Id).ShouldBe(["b"]);
         p2.ContinuationToken.ShouldBeNull();
     }
+
+    /// <summary>
+    /// A mutual-membership cycle between two groups must not cause a StackOverflowException.
+    /// The walk should terminate and still collect subjects reachable before the cycle is closed.
+    /// </summary>
+    [Fact]
+    public async Task Nested_group_cycle_does_not_overflow_and_returns_reachable_subjects()
+    {
+        var (auth, t) = await SetupAsync("ls-cycle",
+            Tup("doc", "D1", "viewer", new SubjectRef("group", "a", "member")),
+            Tup("group", "a", "member", new SubjectRef("group", "b", "member")),
+            Tup("group", "b", "member", new SubjectRef("group", "a", "member")),
+            Tup("group", "a", "member", new SubjectRef("user", "alice")));
+
+        var result = await auth.ListSubjectsAsync(Req(t));
+        result.Subjects.Select(s => s.Id).ShouldBe(["alice"]);
+    }
 }
