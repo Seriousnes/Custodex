@@ -49,11 +49,4 @@ public sealed partial class PostgresCacheStore : ICacheStore
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    /// <inheritdoc />
-    public Task<CacheEntry?> GetAsync(string key, CancellationToken ct = default)
-        => throw new NotImplementedException("Implemented in PostgresCacheStore.Entries.cs");
-
-    /// <inheritdoc />
-    public Task SetAsync(string key, CacheEntry entry, TimeSpan ttl, CancellationToken ct = default)
-        => throw new NotImplementedException("Implemented in PostgresCacheStore.Entries.cs");
 }
