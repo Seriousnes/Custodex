@@ -16,6 +16,11 @@ public sealed partial class IndexedAuthorizer
         if (!await _index.IsBuiltAsync(request.Tenant, schema.Version, ct))
             return await _inner.ListObjectsAsync(request, ct);
 
+        if (request.Subject is not { Type: "user", Relation: null })
+            return await _inner.ListObjectsAsync(request, ct);
+
+        _ = new SchemaIndex(schema).Permission(request.ObjectType, request.Permission);
+
         var subject = IndexSubject.Of(request.Subject);
         var wildcard = $"{request.Subject.Type}:*";
 

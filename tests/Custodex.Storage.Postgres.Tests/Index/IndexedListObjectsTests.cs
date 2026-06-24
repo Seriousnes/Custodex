@@ -3,6 +3,7 @@ using Custodex.Abstractions;
 using Custodex.Core;
 using Custodex.Core.Conditions;
 using Custodex.Storage.Postgres;
+using Custodex.Storage.Postgres.Index;
 using Shouldly;
 using Xunit;
 
@@ -168,5 +169,46 @@ public class IndexedListObjectsTests(PostgresFixture fx) : IAsyncLifetime
 
         var result = await auth.ListObjectsAsync(Req(t, "nobody"));
         result.ObjectIds.ShouldBe(["gamma"]);
+    }
+
+    [Fact]
+    public async Task Non_user_subject_falls_back_to_the_inner_path()
+    {
+        var t = new TenantContext("ilo-nonuser", "t");
+        var schema = new SchemaBuilder("v1")
+            .Type("svc", x => x.Relation("self", s => s.User()))
+            .Type("doc", x => x
+                .Relation("editor", s => s.User().Type("svc"))
+                .Permission("edit", p => p.Relation("editor")))
+            .Build();
+
+        await using (var u = await _factory.BeginAsync())
+        {
+            var uow = NpgsqlUnitOfWork.From(u);
+            await uow.Connection.ExecuteAsync("INSERT INTO stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
+                new { s = t.Store }, uow.Transaction);
+            await uow.Connection.ExecuteAsync("INSERT INTO tenants (store_id, tenant_id) VALUES (@s, @t) ON CONFLICT DO NOTHING",
+                new { s = t.Store, t = t.Tenant }, uow.Transaction);
+            await _schemas.SetActiveAsync(t.Store, schema, u);
+            await _relations.WriteAsync(t, [Tup("doc", "alpha", "editor", new SubjectRef("svc", "s1"))], [], u);
+            await u.CommitAsync();
+        }
+        await using (var u = await _factory.BeginAsync())
+        {
+            await new ReverseIndexRebuilder(fx.ConnectionString, _schemas, _relations, _attributes, _index).RebuildAsync(t, u);
+            await u.CommitAsync();
+        }
+
+        var inner = new NpgsqlCteAuthorizer(fx.ConnectionString, _schemas, _attributes, new NullConditionEvaluator());
+        var auth = new IndexedAuthorizer(inner, _index, _schemas);
+        var subject = new SubjectRef("svc", "s1");
+        var ctx = new RequestContext(DateTimeOffset.UnixEpoch, subject, new Dictionary<string, object?>());
+
+        var viaIndex = await auth.ListObjectsAsync(new ListObjectsRequest(t, subject, "doc", "edit", ctx, PageSize: 100));
+        var viaInner = await inner.ListObjectsAsync(new ListObjectsRequest(t, subject, "doc", "edit", ctx, PageSize: 100));
+
+        (await _index.IsBuiltAsync(t, "v1")).ShouldBeTrue();
+        viaIndex.ObjectIds.ShouldBe(["alpha"]);
+        viaIndex.ObjectIds.ShouldBe(viaInner.ObjectIds);
     }
 }
