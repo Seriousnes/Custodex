@@ -114,9 +114,6 @@ public sealed partial class NpgsqlCteAuthorizer
     }
 
     /// <inheritdoc />
-    public Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
-        => throw new NotImplementedException();
-    /// <inheritdoc />
     public Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
         => throw new NotImplementedException();
 }
