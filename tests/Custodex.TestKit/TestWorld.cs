@@ -24,12 +24,12 @@ public sealed class TestWorld
         _randomizer = new Randomizer(seed);
         _ids = new NeutralIdentifiers(_randomizer);
 
-        // Canonical, already-neutral structural RBAC terms. Fixing them keeps the common
-        // user | group#member nesting terse AND makes them agree by construction with
-        // SchemaBuilder.User()/group subject-sets. Reserve them so vended tokens never collide.
-        UserType = Reserve("user");
-        GroupType = Reserve("group");
-        MemberRelation = Reserve("member");
+        // De-domained structural terms, generated once and cached. They share the uniqueness set
+        // (Vend reserves them), so later EntityType()/Relation()/Permission() vends can never collide
+        // with them — a schema can use UserType as a subject type and EntityType() as the object type.
+        UserType = Vend(() => _ids.Noun());
+        GroupType = Vend(() => _ids.Noun());
+        MemberRelation = Vend(() => _ids.Verb());
 
         Tenant = new TenantContext(Vend(() => _ids.Noun()), Vend(() => _ids.Noun()));
     }
@@ -42,15 +42,16 @@ public sealed class TestWorld
         new(Fnv1a(test ?? string.Empty));
 
     /// <summary>
-    /// The entity type for principals, fixed to <c>user</c> so it agrees with
-    /// <c>SchemaBuilder.User()</c> and the <see cref="User"/> factory by construction.
+    /// The de-domained entity type for principals, generated once and stable within this world.
+    /// The <see cref="User"/> factory binds to it, so declaring a schema with
+    /// <c>s.Type(world.UserType)</c> agrees with <c>world.User(id)</c> tuples by construction.
     /// </summary>
     public string UserType { get; }
 
-    /// <summary>The entity type for groups, fixed to <c>group</c>.</summary>
+    /// <summary>The de-domained entity type for groups, generated once and stable within this world.</summary>
     public string GroupType { get; }
 
-    /// <summary>The relation that names group membership, fixed to <c>member</c>.</summary>
+    /// <summary>The de-domained relation naming group membership, generated once and stable within this world.</summary>
     public string MemberRelation { get; }
 
     /// <summary>A simple, stable schema version label. Not domain vocabulary.</summary>
@@ -165,12 +166,6 @@ public sealed class TestWorld
 
     private static readonly IReadOnlyDictionary<string, object?> EmptyAttributes =
         new Dictionary<string, object?>(StringComparer.Ordinal);
-
-    private string Reserve(string value)
-    {
-        _used.Add(value);
-        return value;
-    }
 
     private string Vend(Func<string> draw)
     {
