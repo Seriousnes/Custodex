@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Custodex.Storage.InMemory\Custodex.Storage.InMemory.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Abstractions\Custodex.Abstractions.csproj" />
+    <ProjectReference Include="..\Custodex.TestKit\Custodex.TestKit.csproj" />
   </ItemGroup>
 
 </Project>

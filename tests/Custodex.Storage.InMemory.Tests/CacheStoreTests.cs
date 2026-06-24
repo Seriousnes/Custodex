@@ -1,11 +1,11 @@
 using Custodex.Abstractions;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Storage.InMemory.Tests;
 
 public class CacheStoreTests
 {
-    private static readonly TenantContext T1 = new("zoo", "t1");
     private static readonly NoOpUnitOfWork Uow = new();
 
     private sealed class TestClock(DateTimeOffset start) : TimeProvider
@@ -50,11 +50,13 @@ public class CacheStoreTests
     [Fact]
     public async Task Epoch_starts_at_zero_and_increments_on_bump()
     {
+        var world = TestWorld.New();
+        var tenant = world.Tenant;
         var store = new InMemoryCacheStore();
 
-        (await store.GetEpochAsync(T1)).ShouldBe(0);
-        await store.BumpEpochAsync(T1, Uow);
-        await store.BumpEpochAsync(T1, Uow);
-        (await store.GetEpochAsync(T1)).ShouldBe(2);
+        (await store.GetEpochAsync(tenant)).ShouldBe(0);
+        await store.BumpEpochAsync(tenant, Uow);
+        await store.BumpEpochAsync(tenant, Uow);
+        (await store.GetEpochAsync(tenant)).ShouldBe(2);
     }
 }

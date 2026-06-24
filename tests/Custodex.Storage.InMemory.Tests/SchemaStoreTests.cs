@@ -1,4 +1,5 @@
 using Custodex.Abstractions;
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Storage.InMemory.Tests;
@@ -18,19 +19,23 @@ public class SchemaStoreTests
     [Fact]
     public async Task Set_then_get_returns_the_active_schema()
     {
-        var store = new InMemorySchemaStore();
-        await store.SetActiveAsync("zoo", SchemaV("v1"), Uow);
+        var world = TestWorld.New();
+        var store = world.Tenant.Store;
+        var schemaStore = new InMemorySchemaStore();
+        await schemaStore.SetActiveAsync(store, SchemaV(world.Version), Uow);
 
-        (await store.GetActiveAsync("zoo"))!.Version.ShouldBe("v1");
+        (await schemaStore.GetActiveAsync(store))!.Version.ShouldBe(world.Version);
     }
 
     [Fact]
     public async Task Set_replaces_the_previous_active_schema()
     {
-        var store = new InMemorySchemaStore();
-        await store.SetActiveAsync("zoo", SchemaV("v1"), Uow);
-        await store.SetActiveAsync("zoo", SchemaV("v2"), Uow);
+        var world = TestWorld.New();
+        var store = world.Tenant.Store;
+        var schemaStore = new InMemorySchemaStore();
+        await schemaStore.SetActiveAsync(store, SchemaV("v1"), Uow);
+        await schemaStore.SetActiveAsync(store, SchemaV("v2"), Uow);
 
-        (await store.GetActiveAsync("zoo"))!.Version.ShouldBe("v2");
+        (await schemaStore.GetActiveAsync(store))!.Version.ShouldBe("v2");
     }
 }
