@@ -1,4 +1,4 @@
-// tests/Custodex.Abstractions.Tests/ReferenceTypesTests.cs
+using Custodex.TestKit;
 using Shouldly;
 
 namespace Custodex.Abstractions.Tests;
@@ -8,16 +8,22 @@ public class ReferenceTypesTests
     [Fact]
     public void EntityRef_detects_wildcard_and_formats()
     {
-        new EntityRef("animal", "EL-001").IsWildcard.ShouldBeFalse();
-        new EntityRef("user", "*").IsWildcard.ShouldBeTrue();
-        new EntityRef("animal", "EL-001").ToString().ShouldBe("animal:EL-001");
+        var world = TestWorld.New();
+        var type = world.EntityType();
+        var id = world.ObjectId();
+
+        new EntityRef(type, id).IsWildcard.ShouldBeFalse();
+        new EntityRef(world.UserType, "*").IsWildcard.ShouldBeTrue();
+        new EntityRef(type, id).ToString().ShouldBe($"{type}:{id}");
     }
 
     [Fact]
     public void SubjectRef_detects_subject_set_and_wildcard()
     {
-        new SubjectRef("group", "vets", "member").IsSubjectSet.ShouldBeTrue();
-        new SubjectRef("user", "alice").IsSubjectSet.ShouldBeFalse();
-        new SubjectRef("user", "*").IsWildcard.ShouldBeTrue();
+        var world = TestWorld.New();
+
+        new SubjectRef(world.GroupType, world.ObjectId(), world.MemberRelation).IsSubjectSet.ShouldBeTrue();
+        new SubjectRef(world.UserType, world.SubjectId()).IsSubjectSet.ShouldBeFalse();
+        new SubjectRef(world.UserType, "*").IsWildcard.ShouldBeTrue();
     }
 }
