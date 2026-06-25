@@ -1,13 +1,13 @@
 # Custodex
 
-Custodex is a runtime-configurable **relationship-based (ReBAC) + attribute-based (ABAC) authorization engine** for .NET, modelled on Google Zanzibar (the lineage behind SpiceDB, OpenFGA, and Permify). It carries **zero domain concepts**: your application supplies its permission model as a *schema* and its authorization data as *tuples* and *attributes*. Custodex then answers four questions:
+Custodex is a runtime-configurable **relationship-based (ReBAC) + attribute-based (ABAC) authorization engine** for .NET, modelled on Google Zanzibar. Your application supplies its permission model as a *schema* and its authorization data as *tuples* and *attributes*. Custodex then answers four questions:
 
-- **Check** — may this subject use this permission on this object?
-- **ListObjects** — which objects of a type may this subject act on?
-- **ListSubjects** — who may act on this object?
-- **BatchCheck** — many Checks in one round trip.
+- **Check** - may this subject use this permission on this object?
+- **ListObjects** - which objects of a type may this subject act on?
+- **ListSubjects** - who may act on this object?
+- **BatchCheck** - many Checks in one round trip.
 
-Use it as an embedded library that evaluates in-process, or run it behind a gRPC/REST service as a standalone authorization service — the same engine either way.
+Use it as an embedded library that evaluates in-process, or run it behind a gRPC/REST service as a standalone authorization service - the same engine either way.
 
 ## Getting started
 
@@ -56,11 +56,9 @@ var schema = new SchemaBuilder("v1")
     .Build();
 ```
 
-The full algebra — union, intersection, exclusion, arrow traversal, and conditions — is documented in the [`Custodex`](src/Custodex.Core/README.md) engine package.
+The full algebra - union, intersection, exclusion, arrow traversal, and conditions - is documented in the [`Custodex`](src/Custodex.Core/README.md) package.
 
 ### Run against Postgres
-
-This is the production path: register the provider, apply migrations, provision the store and tenant, activate the schema, write a tuple, then Check.
 
 ```csharp
 using Custodex.Abstractions;
@@ -102,7 +100,7 @@ Console.WriteLine(result.Allowed); // True
 
 ### Run in memory
 
-For tests and demos, wire the engine over the in-memory stores directly — no DI, no migrations. The [`Custodex.Storage.InMemory`](src/Custodex.Storage.InMemory/README.md) package documents the full setup; the short version:
+For tests and demos, wire the engine over the in-memory stores directly. The [`Custodex.Storage.InMemory`](src/Custodex.Storage.InMemory/README.md) package documents the full setup.
 
 ```csharp
 using Custodex.Core.Conditions;
@@ -127,9 +125,9 @@ var authorizer = new EngineDrivenAuthorizer(
 
 Custodex keeps three concerns separate:
 
-- **The engine** (this repository) — generic, with no knowledge of your domain.
-- **The schema** — a versioned developer artifact describing entity types, relations, permissions, and conditions.
-- **Tenant data** — tuples and attributes, editable at runtime with no code changes and no redeploy.
+- **The engine** - generic, with no knowledge of your domain.
+- **The schema** - a versioned developer artifact describing entity types, relations, permissions, and conditions.
+- **Tenant data** - tuples and attributes, editable at runtime with no code changes and no redeploy.
 
 One set of evaluation semantics drives two execution paths that produce identical results: a portable engine-driven traversal (also the in-memory path) and Postgres recursive CTEs (the production path). A differential test harness generates random schemas and data and asserts the two stay in lock-step, so the fast path is trusted only when it agrees with the portable one.
 
@@ -137,12 +135,12 @@ Every store, schema, tuple, and attribute is scoped by `(store, tenant)`, so a s
 
 ## Packages
 
-| Package | What it is |
+| Package | Description |
 | --- | --- |
-| [`Custodex.Abstractions`](src/Custodex.Abstractions/README.md) | The public contract — interfaces and records, no logic. Depend on it to code against contracts or to build a storage/condition provider. |
+| [`Custodex.Abstractions`](src/Custodex.Abstractions/README.md) | The public contract - interfaces and records. |
 | [`Custodex`](src/Custodex.Core/README.md) | The evaluation engine: schema authoring, the permission algebra, conditions, and the DI entry point. |
 | [`Custodex.Storage.InMemory`](src/Custodex.Storage.InMemory/README.md) | Database-free storage for tests, local development, and demos. |
-| [`Custodex.Storage.Postgres`](src/Custodex.Storage.Postgres/README.md) | The PostgreSQL provider — the production storage and evaluation path. |
+| [`Custodex.Storage.Postgres`](src/Custodex.Storage.Postgres/README.md) | The PostgreSQL provider - storage and evaluation path. |
 
 ## Building from source
 
