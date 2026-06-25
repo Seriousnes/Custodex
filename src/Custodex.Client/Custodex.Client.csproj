@@ -1,22 +1,39 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<TargetFramework>net10.0</TargetFramework>
-		<Nullable>enable</Nullable>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<RootNamespace>Custodex</RootNamespace>
-		<UserSecretsId>890ae1d8-ef38-4e12-9a94-3a1f5f46270e</UserSecretsId>
-		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-		<DockerfileContext>..\..</DockerfileContext>
-	</PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Custodex.Client</RootNamespace>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Grpc.AspNetCore" Version="2.64.0" />
-		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
-	</ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.64.0" />
+    <PackageReference Include="Grpc.Net.ClientFactory" Version="2.64.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.64.0" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
+  </ItemGroup>
 
-	<ItemGroup>
-	  <ProjectReference Include="..\Custodex.ServiceDefaults\Custodex.ServiceDefaults.csproj" />
-	</ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Custodex.Abstractions\Custodex.Abstractions.csproj" />
+    <ProjectReference Include="..\Custodex.Core\Custodex.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="..\Custodex.Service\Protos\custodex_common.proto"
+              GrpcServices="None"
+              Link="Protos\custodex_common.proto"
+              ProtoRoot="..\Custodex.Service" />
+    <Protobuf Include="..\Custodex.Service\Protos\custodex_decision.proto"
+              GrpcServices="Client"
+              Link="Protos\custodex_decision.proto"
+              ProtoRoot="..\Custodex.Service" />
+    <Protobuf Include="..\Custodex.Service\Protos\custodex_management.proto"
+              GrpcServices="Client"
+              Link="Protos\custodex_management.proto"
+              ProtoRoot="..\Custodex.Service" />
+  </ItemGroup>
 
 </Project>

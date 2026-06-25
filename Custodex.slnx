@@ -15,6 +15,7 @@
     <Project Path="tests/Custodex.Core.Tests/Custodex.Core.Tests.csproj" />
     <Project Path="tests/Custodex.Storage.InMemory.Tests/Custodex.Storage.InMemory.Tests.csproj" />
     <Project Path="tests/Custodex.TestKit/Custodex.TestKit.csproj" />
+    <Project Path="tests/Custodex.Client.Tests/Custodex.Client.Tests.csproj" />
     <Project Path="tests/Custodex.Service.Tests/Custodex.Service.Tests.csproj" />
     <Project Path="tests/Custodex.Storage.Postgres.Tests/Custodex.Storage.Postgres.Tests.csproj" />
   </Folder>
