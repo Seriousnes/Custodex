@@ -11,8 +11,13 @@
 		<RootNamespace>Custodex</RootNamespace>
 		<IsPackable>true</IsPackable>
 		<PackageId>Custodex</PackageId>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<Description>The runtime-configurable ReBAC + ABAC authorization engine — the portable, dependency-light evaluation core.</Description>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Update="README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
 
 	<ItemGroup>
 	  <InternalsVisibleTo Include="Custodex.Core.Tests" />

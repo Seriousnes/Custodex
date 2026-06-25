@@ -6,7 +6,12 @@
 		<Nullable>enable</Nullable>
 		<RootNamespace>Custodex</RootNamespace>
 		<IsPackable>true</IsPackable>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<Description>Public contracts (interfaces and records) for the Custodex authorization engine — the dependency for consumers and third-party storage and condition providers.</Description>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Update="README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
 
 </Project>
