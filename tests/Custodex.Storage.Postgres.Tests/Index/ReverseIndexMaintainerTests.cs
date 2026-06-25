@@ -63,7 +63,7 @@ public class ReverseIndexMaintainerTests(PostgresFixture fx) : IAsyncLifetime
     }
 
     private ReverseIndexMaintainer Maintainer() =>
-        new(fx.ConnectionString, _schemas, _relations, _attributes, _index);
+        new(_schemas, _relations, _attributes, _index);
 
     private async Task<string[]> EditableDocsAsync(TenantContext t, string user) =>
         (await _index.QueryObjectsAsync(t, "v1", $"user:{user}", "edit", "doc", 1000, null))

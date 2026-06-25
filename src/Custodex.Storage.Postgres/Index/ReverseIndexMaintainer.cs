@@ -12,7 +12,6 @@ namespace Custodex.Storage.Postgres.Index;
 /// full rebuild is required before the index is used again.
 /// </summary>
 public sealed class ReverseIndexMaintainer(
-    string connectionString,
     ISchemaStore schemas,
     NpgsqlRelationStore relations,
     IAttributeStore attributes,
@@ -43,7 +42,7 @@ public sealed class ReverseIndexMaintainer(
         var inputs = await RebuildEnumeration.LoadAsync(w.Connection, t, ct);
 
         var bound = relations.OnUnitOfWork(uow);
-        var recomputer = new ObjectRowRecomputer(connectionString, bound, attributes);
+        var recomputer = new ObjectRowRecomputer(bound, attributes);
 
         foreach (var obj in affected)
         {

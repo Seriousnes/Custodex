@@ -42,7 +42,7 @@ public class IndexedWritePathTests(PostgresFixture fx) : IAsyncLifetime
     {
         _cache = new PostgresCacheStore(fx.ConnectionString, t);
         var audited = new AuditedWritePath(_relations, _attributes, _schemas, _changeLog, _cache);
-        var maintainer = new ReverseIndexMaintainer(fx.ConnectionString, _schemas, _relations, _attributes, _index);
+        var maintainer = new ReverseIndexMaintainer(_schemas, _relations, _attributes, _index);
         return new IndexedWritePath(audited, maintainer, _index);
     }
 
