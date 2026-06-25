@@ -35,7 +35,7 @@ public static class ConditionEvaluator
                     $"Condition '{definition.Name}' body did not evaluate to a boolean.");
             return value.AsBool() ? ConditionResult.Allow : ConditionResult.Deny;
         }
-        catch (EvalException ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return ConditionResult.Error($"Condition '{definition.Name}': {ex.Message}");
         }
@@ -122,7 +122,6 @@ public static class ConditionEvaluator
         IReadOnlyDictionary<string, ConditionType> paramTypes)
     {
         var left = ExpectBool(Eval(b.Left, attributes, context, parameters, paramTypes));
-        // Short-circuit.
         if (b.Op == BoolConnective.And && !left) return CelValue.Bool(false);
         if (b.Op == BoolConnective.Or && left) return CelValue.Bool(true);
         var right = ExpectBool(Eval(b.Right, attributes, context, parameters, paramTypes));
