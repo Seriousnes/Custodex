@@ -17,20 +17,20 @@ public sealed class ComposeSmokeTests
         using var client = new HttpClient { BaseAddress = new Uri(ServiceUrl) };
         client.DefaultRequestHeaders.Add("X-Custodex-Key", AdminKey);
 
-        var storeResp = await client.PostAsJsonAsync("/v1/stores", new { id = Store });
+        var storeResp = await client.PostAsJsonAsync("/v1/stores", new { store = Store });
         (storeResp.StatusCode == HttpStatusCode.Created || storeResp.StatusCode == HttpStatusCode.Conflict)
             .ShouldBeTrue($"create store: {storeResp.StatusCode}");
 
         var tenantId = $"t-{Guid.NewGuid():N}";
 
-        var tenantResp = await client.PostAsJsonAsync("/v1/tenants", new { storeId = Store, tenantId });
+        var tenantResp = await client.PostAsJsonAsync("/v1/tenants", new { store = Store, tenant = tenantId });
         tenantResp.IsSuccessStatusCode.ShouldBeTrue($"create tenant: {tenantResp.StatusCode}");
 
         client.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenantId);
 
-        var schemaResp = await client.PutAsJsonAsync($"/v1/stores/{Store}/schema", new
+        var schemaResp = await client.PutAsJsonAsync($"/v1/schema/{Store}", new
         {
-            schema = """
+            schemaJson = """
                 schema "v1" {
                     type res {
                         relation owner: user
@@ -47,9 +47,9 @@ public sealed class ComposeSmokeTests
 
         var tuplesResp = await client.PostAsJsonAsync("/v1/tuples", new
         {
-            storeId = Store,
-            tenantId,
-            changeId = "c1",
+            store = Store,
+            tenant = tenantId,
+            actor = "smoke",
             tuples = new[]
             {
                 new

@@ -6,7 +6,8 @@ var postgres = builder.AddPostgres("postgres")
 
 var service = builder.AddProject<Projects.Custodex_Service>("custodex-service")
     .WithReference(postgres)
-    .WaitFor(postgres);
+    .WaitFor(postgres)
+    .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development");
 
 var testKey = builder.Configuration["Custodex:TestAdminKey"];
 if (!string.IsNullOrEmpty(testKey))
