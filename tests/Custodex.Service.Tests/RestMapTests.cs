@@ -67,12 +67,4 @@ public sealed class RestMapTests
         dto.Children.ShouldNotBeEmpty();
         dto.Children[0].Description.ShouldBe("direct");
     }
-
-    [Fact]
-    public void Tenant_helper_produces_correct_TenantContext()
-    {
-        var ctx = RestMap.Tenant("my-store", "t-1");
-        ctx.Store.ShouldBe("my-store");
-        ctx.Tenant.ShouldBe("t-1");
-    }
 }

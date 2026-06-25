@@ -30,9 +30,6 @@ public static class RestMap
     public static ExplainNodeDto ToDto(ExplainNode node) =>
         new(node.Description, node.Allowed, node.Children.Select(ToDto).ToList());
 
-    /// <summary>Builds a <see cref="TenantContext"/> from separate store and tenant strings.</summary>
-    public static TenantContext Tenant(string store, string tenant) => new(store, tenant);
-
     /// <summary>Converts a <see cref="ConditionRefDto"/> to the contract record.</summary>
     public static ConditionRef FromDto(ConditionRefDto dto) => new(dto.Name, dto.Parameters);
 
