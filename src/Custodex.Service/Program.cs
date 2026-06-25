@@ -16,6 +16,9 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 app.MapGrpcService<DecisionGrpcService>();
+app.MapGrpcService<RelationsGrpcService>();
+app.MapGrpcService<SchemaGrpcService>();
+app.MapGrpcService<ProvisioningGrpcService>();
 
 app.Run();
 
