@@ -13,7 +13,7 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class NpgsqlUnitOfWorkFactory(string connectionString) : IUnitOfWorkFactory
 {
-    private readonly string _connectionString = connectionString;
+    private readonly string _connectionString = CustodexSchema.Apply(connectionString);
 
     /// <summary>
     /// Owned mode: opens a fresh connection, begins a transaction, and returns a unit of work

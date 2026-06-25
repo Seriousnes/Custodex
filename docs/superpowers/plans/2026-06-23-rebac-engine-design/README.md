@@ -172,9 +172,9 @@ public sealed record SubjectTypeRef(string Type, string? Relation = null, bool W
 
 public sealed record PermissionDef(string Name, PermExpr Expression);
 
-// The AST carries System.Text.Json polymorphism so Schema serializes to jsonb (storage) and to the DSL.
-// Apply [JsonPolymorphic(TypeDiscriminatorPropertyName="$type")] to PermExpr and ConditionExpr, with a
-// stable [JsonDerivedType(typeof(X), "x")] per concrete node. (Implemented in m0/01.)
+// PermExpr and ConditionExpr carry no System.Text.Json polymorphism attributes. Serialization to jsonb
+// is owned by the storage provider: PermExprJsonConverter (a JsonConverterFactory in
+// Custodex.Storage.Postgres) writes a stable "$type" discriminator per concrete node when persisting a Schema.
 public abstract record PermExpr;
 public sealed record RelationRef(string Relation) : PermExpr;                       // direct relation
 public sealed record Union(PermExpr Left, PermExpr Right) : PermExpr;               // a + b
@@ -216,7 +216,19 @@ public interface IRelationStore
 }
 public interface ISchemaStore { Task<Schema?> GetActiveAsync(string store, CancellationToken ct = default); Task SetActiveAsync(string store, Schema schema, IUnitOfWork uow, CancellationToken ct = default); }
 public interface IAttributeStore { Task<IReadOnlyDictionary<string, object?>?> GetAsync(TenantContext t, EntityRef obj, CancellationToken ct = default); Task SetAsync(TenantContext t, EntityRef obj, IReadOnlyDictionary<string, object?> attrs, IUnitOfWork uow, CancellationToken ct = default); }
-public interface IIndexStore { /* M2 */ }
+// One maintained reverse-index row; the (store, tenant, schema_version) scope is supplied alongside, not stored on it.
+public sealed record ReverseIndexRow(string Subject, string Permission, string ObjectType, string ObjectId, bool Conditioned);
+public interface IIndexStore   // populated by m2/01
+{
+    Task UpsertAsync(TenantContext t, string schemaVersion, IReadOnlyList<ReverseIndexRow> rows, IUnitOfWork uow, CancellationToken ct = default);
+    Task DeleteForObjectAsync(TenantContext t, string schemaVersion, string objectType, string objectId, IUnitOfWork uow, CancellationToken ct = default);
+    Task DeleteRowsAsync(TenantContext t, string schemaVersion, IReadOnlyList<ReverseIndexRow> rows, IUnitOfWork uow, CancellationToken ct = default);
+    Task<IReadOnlyList<ReverseIndexRow>> QueryObjectsAsync(TenantContext t, string schemaVersion, string subject, string permission, string objectType, int limit, string? afterObjectId, CancellationToken ct = default);
+    Task<IReadOnlyList<ReverseIndexRow>> ReadForObjectAsync(TenantContext t, string schemaVersion, string objectType, string objectId, CancellationToken ct = default);
+    Task ClearAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default);
+    Task<bool> IsBuiltAsync(TenantContext t, string schemaVersion, CancellationToken ct = default);
+    Task MarkBuiltAsync(TenantContext t, string schemaVersion, IUnitOfWork uow, CancellationToken ct = default);
+}
 public sealed record CacheEntry(byte[] Value, long Epoch);
 // GetAsync returns the stored entry with the epoch it was written at; the caching layer (M0/08)
 // compares CacheEntry.Epoch to the current tenant epoch and treats a mismatch as a miss.
@@ -244,10 +256,10 @@ Allow/deny is always a `CheckResult`, never an exception. The exceptions above s
 
 Decisions made after the milestone plans were drafted in parallel; these are authoritative and supersede any drafted plan text that conflicts. They are applied as each affected plan is executed (see the `rebac-plan-maintenance` memory).
 
-1. **Condition evaluator seam (Custodex.Core).** A single interface `IConditionEvaluator { ConditionResult Evaluate(ConditionDef def, IReadOnlyDictionary<string,object?> tupleParams, IReadOnlyDictionary<string,object?> resourceAttributes, RequestContext context); }` where `ConditionResult(bool Passed, string? Diagnostic)`. `ConditionEvaluator` (m0/06) implements it; `NullConditionEvaluator` returns `Passed=true`. A missing attribute or type mismatch is `Passed=false` with a diagnostic — never an exception. `EngineDrivenAuthorizer` (m0/05) and `NpgsqlCteAuthorizer` (m1/05) depend on the interface.
+1. **Condition evaluator seam (Custodex.Core).** The injectable seam is a bool-returning interface `IConditionEvaluator { bool Evaluate(ConditionDef definition, ConditionRef invocation, IReadOnlyDictionary<string,object?> resourceAttributes, RequestContext context); }`. The predicate logic lives in the static `ConditionEvaluator` (m0/06), whose `ConditionResult Evaluate(ConditionDef definition, IReadOnlyDictionary<string,object?> attributes, RequestContext context, IReadOnlyDictionary<string,object?> parameters)` returns `ConditionResult(bool Allowed, string? Diagnostic)`. `CelConditionEvaluator` is the adapter that bridges the static evaluator to the interface — mapping `ConditionResult.Allowed` to the bool — and is the `IConditionEvaluator` that `UsePostgres` registers by default; `NullConditionEvaluator` returns `true`. A missing attribute or type mismatch yields `Allowed=false` with a diagnostic, so the adapter returns `false` — never an exception. `EngineDrivenAuthorizer` (m0/05) and `NpgsqlCteAuthorizer` (m1/05) depend on the interface.
 2. **Cacheability seam (Custodex.Core).** `EngineDrivenAuthorizer` exposes `internal Task<(bool Allowed, bool ConditionTouched)> CheckInternalAsync(...)` via an internal interface `ICacheableAuthorizer`; `CachingAuthorizer` (m0/08) depends on `ICacheableAuthorizer` and wraps it, caching only `ConditionTouched == false` results. `NpgsqlCteAuthorizer` does not implement `ICacheableAuthorizer`, so the Postgres CTE path that `UsePostgres` registers (m1/09) runs without the cross-request cache; per-request memoization and read-your-writes still hold. A cache wrap over the CTE path would require adding the seam to that authorizer.
 3. **`reverse_index` and `tenant_epochs`.** `reverse_index` carries `schema_version` (already in §6.3 DDL, m1/01). `ICacheStore.GetEpochAsync`/`BumpEpochAsync` are backed by a provider-internal `tenant_epochs(store_id, tenant_id, epoch bigint, PK(store_id,tenant_id))` table (m1/07) — distinct from the per-row `cache_entries.epoch` stamp.
-4. **`IIndexStore` members (m2/01).** Defined in `Custodex.Abstractions` by m2/01: `UpsertAsync` / `DeleteForObjectAsync` / `QueryObjectsAsync(subject, permission, objectType, paging)` / rebuild markers, all `(store, tenant, schema_version)`-scoped.
+4. **`IIndexStore` members + `ReverseIndexRow` (m2/01).** Populated in `Custodex.Abstractions` by m2/01 with eight `(store, tenant, schema_version)`-scoped members — `UpsertAsync`, `DeleteForObjectAsync`, `DeleteRowsAsync`, `QueryObjectsAsync(subject, permission, objectType, limit, afterObjectId)`, `ReadForObjectAsync`, `ClearAsync`, `IsBuiltAsync`, `MarkBuiltAsync` — and the `ReverseIndexRow(Subject, Permission, ObjectType, ObjectId, Conditioned)` record. The `reverse_index` natural-key unique index `ux_reverse_index_natural` (conditioned excluded) and the `index_build_markers(store_id, tenant_id, schema_version, built_at, PK(store_id, tenant_id, schema_version))` table backing `IsBuiltAsync`/`MarkBuiltAsync` are added by m2/01 migrations. `NpgsqlIndexStore` is the Postgres implementation.
 5. **Provider references Core.** `Custodex.Storage.Postgres` takes a project reference on `Custodex.Core` (for `SchemaIndex`, `EvalContext`, `ContinuationCursor`, `IConditionEvaluator`). Spec §4 forbids DB code *inside* Core, not Core being referenced by a provider.
 6. **Manager registration.** The concrete `IRelationManager`/`ISchemaManager`/`IStoreManager`/`ITenantManager` implementations are registered from `Custodex.Storage.Postgres` (they call the provider's in-transaction `AuditedWritePath`); they implement the `Custodex.Abstractions` interfaces, so consumers are unaffected.
 7. **Project structure (resolves cross-plan drift).** The milestone plans were drafted in parallel and reference some project names that are not the canonical layout above. When executing a plan, map them as follows — the layout above is authoritative:

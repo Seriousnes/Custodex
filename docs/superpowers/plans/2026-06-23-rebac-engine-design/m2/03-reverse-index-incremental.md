@@ -2,7 +2,7 @@
 
 **Goal:** Maintain `reverse_index` incrementally, **inside the write transaction**, when tuples or attributes change: compute the **affected closure** (every object whose structural grants could have changed) and recompute each affected object's rows from scratch, so the index stays equal to the full rebuild (m2/02) — including the exclusion landmine (adding a `blocked` tuple removes rows; removing it re-adds them, even for objects reachable by multiple independent grant paths) and arrow-reachable changes. Rows are stamped with the active `schema_version`; a schema change yields a new version whose marker is absent, invalidating the index and owing a rebuild.
 
-**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [ ]` checkboxes.
+**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [x]` checkboxes.
 
 **Architecture/approach (recompute-the-affected-closure):** Surgical delta arithmetic on the reverse index is where exclusion and multi-path bugs hide — "this write adds these rows and removes those" is the spec's hardest landmine (§7.3). This plan **does not** do delta arithmetic. On a write it (1) computes the **affected closure** — the objects whose grants could change as a consequence of the changed tuples — then (2) for each affected object **recomputes that object's rows exactly as the rebuilder does** (probe every candidate subject × the object's permissions with the unconditioned structural Check) and (3) **replaces** that object's rows (delete-for-object then upsert). Recompute-per-object is correct-by-construction for exclusion and multi-path: it never reasons about deltas, it re-derives the full structural truth for each touched object — identical to the rebuild, scoped to the closure. The only failure mode is an **incomplete closure** (a changed object not recomputed), which the m2/06 differential harness exists to catch. The closure is computed by reverse traversal from the changed tuples and must be a **complete superset**: recomputing an unchanged object is harmless (it re-derives the same rows); missing one is the bug.
 
@@ -18,7 +18,7 @@
 
 ### Task 1: Compute the affected closure from changed tuples
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/Index/AffectedClosure.cs`; test `…Tests/Index/AffectedClosureTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/Index/AffectedClosure.cs`; test `…Tests/Index/AffectedClosureTests.cs`.
 
 **Produces:** `AffectedClosure.ComputeAsync(NpgsqlConnection, NpgsqlTransaction, TenantContext, IReadOnlyList<RelationTuple> changed, ct)` returning the distinct objects whose structural grants could change as a result of `changed` (the added ∪ removed tuples of a write).
 **Consumes (see README):** `relation_tuples` (m1/01); `RelationTuple`/`EntityRef`/`TenantContext`.
@@ -53,7 +53,7 @@ return distinct reached
 
 ### Task 2: Recompute one object's rows (scoped rebuild)
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/Index/ObjectRowRecomputer.cs`; test `…Tests/Index/ObjectRowRecomputerTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/Index/ObjectRowRecomputer.cs`; test `…Tests/Index/ObjectRowRecomputerTests.cs`.
 
 **Produces:** `ObjectRowRecomputer(connectionString, IRelationStore, IAttributeStore)` with `RecomputeAsync(SchemaIndex, ISchemaStore, TenantContext, EntityRef obj, IReadOnlyList<string> candidateUsers, ct)` returning the structural rows that should exist for one object.
 **Consumes (see README):** the structural probe + `EngineDrivenAuthorizer` (m2/02 Task 1); `SchemaIndex`, `NullConditionEvaluator` (m0/05); `ReverseIndexRow` (m2/01).
@@ -75,7 +75,7 @@ return distinct reached
 
 ### Task 3: `ReverseIndexMaintainer` — closure, recompute, replace, in-transaction
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/Index/ReverseIndexMaintainer.cs`; small addition to `src/Custodex.Core/Evaluation/SchemaIndex.cs` (see contract gaps); test `…Tests/Index/ReverseIndexMaintainerTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/Index/ReverseIndexMaintainer.cs`; small addition to `src/Custodex.Core/Evaluation/SchemaIndex.cs` (see contract gaps); test `…Tests/Index/ReverseIndexMaintainerTests.cs`.
 
 **Produces:** `ReverseIndexMaintainer(connectionString, ISchemaStore, IRelationStore, IAttributeStore, IIndexStore)` with `MaintainAsync(TenantContext, IReadOnlyList<RelationTuple> changed, IUnitOfWork, ct)`.
 **Consumes (see README):** `AffectedClosure` (Task 1), `ObjectRowRecomputer` (Task 2), `RebuildEnumeration` (m2/02), `IIndexStore` (m2/01), `SchemaIndex`.
@@ -109,7 +109,7 @@ All index writes go on the caller's unit of work, so maintenance commits **atomi
 
 ### Task 4: Hook maintenance into the write path; schema change invalidates
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/Index/IndexedWritePath.cs`; test `…Tests/Index/IndexedWritePathTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/Index/IndexedWritePath.cs`; test `…Tests/Index/IndexedWritePathTests.cs`.
 
 **Produces:** `IndexedWritePath(AuditedWritePath inner, ReverseIndexMaintainer, IIndexStore)` wrapping m1/07's `AuditedWritePath` so every write also maintains the index on the same unit of work. Members mirror the inner path: write-tuples, write-attributes, set-schema.
 **Consumes (see README):** `AuditedWritePath` (m1/07), `ReverseIndexMaintainer` (Task 3), `IIndexStore` (m2/01).
@@ -133,15 +133,15 @@ All index writes go on the caller's unit of work, so maintenance commits **atomi
 
 ## Self-review checklist (after all tasks)
 
-- [ ] `dotnet build` clean under `TreatWarningsAsErrors=true`.
-- [ ] Maintenance recomputes-and-replaces per affected object (no delta arithmetic); rows equal the scoped rebuild.
-- [ ] The exclusion landmine is owned: add `blocked` removes the row, remove `blocked` re-adds it — including a multi-path object where one block revokes all union paths (Task 3).
-- [ ] Group-membership and arrow-reachable changes ripple through the closure to the right objects (Task 3).
-- [ ] Rows stamped with the active `schema_version`; a not-built version makes maintenance a no-op (rebuild owed) and ListObjects (m2/04) falls back (Task 3).
-- [ ] A schema change clears the index and leaves the new version unbuilt (Task 4).
-- [ ] All index writes enlist in the caller's `IUnitOfWork`: a rolled-back write leaves the index unchanged (Task 4).
-- [ ] The recomputer's relation reads see the in-flight write (uow-bound store), or the post-maintenance index would miss it.
-- [ ] The recompute strategy and the affected closure are framed as "validated by the m2/06 differential harness," not guaranteed-correct copy-paste.
+- [x] `dotnet build` clean under `TreatWarningsAsErrors=true`.
+- [x] Maintenance recomputes-and-replaces per affected object (no delta arithmetic); rows equal the scoped rebuild.
+- [x] The exclusion landmine is owned: add `blocked` removes the row, remove `blocked` re-adds it — including a multi-path object where one block revokes all union paths (Task 3).
+- [x] Group-membership and arrow-reachable changes ripple through the closure to the right objects (Task 3).
+- [x] Rows stamped with the active `schema_version`; a not-built version makes maintenance a no-op (rebuild owed) and ListObjects (m2/04) falls back (Task 3).
+- [x] A schema change clears the index and leaves the new version unbuilt (Task 4).
+- [x] All index writes enlist in the caller's `IUnitOfWork`: a rolled-back write leaves the index unchanged (Task 4).
+- [x] The recomputer's relation reads see the in-flight write (uow-bound store), or the post-maintenance index would miss it.
+- [x] The recompute strategy and the affected closure are framed as "validated by the m2/06 differential harness," not guaranteed-correct copy-paste.
 
 ## Contract gaps / additions (reported, not changed)
 

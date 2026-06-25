@@ -17,11 +17,11 @@ public static class CteReachability
 
     private const string SubjectsSql = """
         WITH RECURSIVE reach (object_type, object_id, relation) AS (
-            SELECT @ot::text, @oid::text, @rel::text
+            SELECT @ot::text COLLATE "C", @oid::text COLLATE "C", @rel::text COLLATE "C"
           UNION
             SELECT rt.subject_type, rt.subject_id, rt.subject_relation
             FROM reach r
-            JOIN relation_tuples rt
+            JOIN custodex.relation_tuples rt
               ON rt.store_id = @store AND rt.tenant_id = @tenant
              AND rt.object_type = r.object_type
              AND rt.object_id   = r.object_id
@@ -34,7 +34,7 @@ public static class CteReachability
             rt.condition_name AS ConditionName,
             rt.condition_params::text AS ConditionParams
         FROM reach r
-        JOIN relation_tuples rt
+        JOIN custodex.relation_tuples rt
           ON rt.store_id = @store AND rt.tenant_id = @tenant
          AND rt.object_type = r.object_type
          AND rt.object_id   = r.object_id
@@ -46,7 +46,7 @@ public static class CteReachability
         SELECT subject_type AS SubjectType, subject_id AS SubjectId,
                subject_relation AS SubjectRelation,
                condition_name AS ConditionName, condition_params::text AS ConditionParams
-        FROM relation_tuples
+        FROM custodex.relation_tuples
         WHERE store_id = @store AND tenant_id = @tenant
           AND object_type = @ot AND object_id = @oid AND relation = @rel
         """;

@@ -13,12 +13,14 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class NpgsqlSchemaStore(string connectionString) : ISchemaStore
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     /// <inheritdoc />
     public async Task<Schema?> GetActiveAsync(string store, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         var json = await conn.ExecuteScalarAsync<string?>(new CommandDefinition("""
-            SELECT definition::text FROM schema_versions
+            SELECT definition::text FROM custodex.schema_versions
             WHERE store_id = @store AND is_active
             """,
             new { store }, cancellationToken: ct));
@@ -32,7 +34,7 @@ public sealed class NpgsqlSchemaStore(string connectionString) : ISchemaStore
         var w = NpgsqlUnitOfWork.From(uow);
 
         await using (var deactivate = new NpgsqlCommand(
-            "UPDATE schema_versions SET is_active = false WHERE store_id = @store AND is_active",
+            "UPDATE custodex.schema_versions SET is_active = false WHERE store_id = @store AND is_active",
             w.Connection, w.Transaction))
         {
             deactivate.Parameters.AddWithValue("store", store);
@@ -40,7 +42,7 @@ public sealed class NpgsqlSchemaStore(string connectionString) : ISchemaStore
         }
 
         await using var upsert = new NpgsqlCommand("""
-            INSERT INTO schema_versions (store_id, version, definition, is_active)
+            INSERT INTO custodex.schema_versions (store_id, version, definition, is_active)
             VALUES (@store, @version, @definition, true)
             ON CONFLICT (store_id, version)
             DO UPDATE SET definition = EXCLUDED.definition, is_active = true

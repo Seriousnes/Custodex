@@ -15,6 +15,8 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogStore
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     private sealed record Row(
         long Id, string Actor, string Operation, string Target,
         string? Before, string? After, DateTime OccurredAt);
@@ -25,7 +27,7 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await using var cmd = new NpgsqlCommand("""
-            INSERT INTO change_log (store_id, tenant_id, actor, operation, target, before, after)
+            INSERT INTO custodex.change_log (store_id, tenant_id, actor, operation, target, before, after)
             VALUES (@store, @tenant, @actor, @operation, @target, @before, @after)
             """, w.Connection, w.Transaction);
         cmd.Parameters.AddWithValue("store", t.Store);
@@ -44,10 +46,10 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
     public async Task<IReadOnlyList<ChangeLogEntry>> ReadAsync(
         TenantContext t, ChangeLogFilter filter, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition("""
             SELECT id, actor, operation, target, before::text AS before, after::text AS after, occurred_at
-            FROM change_log
+            FROM custodex.change_log
             WHERE store_id = @store AND tenant_id = @tenant
               AND (@since IS NULL OR occurred_at >= @since)
               AND (@actor IS NULL OR actor = @actor)

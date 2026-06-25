@@ -1,3 +1,4 @@
+using Custodex.Abstractions;
 using Dapper;
 using Npgsql;
 using Shouldly;
@@ -60,6 +61,36 @@ public class EnlistmentTests(PostgresFixture fx)
 
         appConn.State.ShouldBe(System.Data.ConnectionState.Open);
         (await CountAsync(appConn, store, "obj-100")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Store_write_enlisted_on_a_consumer_connection_targets_the_custodex_schema()
+    {
+        await using (var seed = await fx.OpenAsync())
+            await MigrationRunner.ApplyAsync(seed);
+
+        const string store = "enlist-raw";
+        const string tenant = "t1";
+        await SeedTenantAsync(store, tenant);
+
+        var factory = new NpgsqlUnitOfWorkFactory(fx.ConnectionString);
+        var relations = new NpgsqlRelationStore(fx.ConnectionString);
+        var t = new TenantContext(store, tenant);
+        var tuple = new RelationTuple(new EntityRef("resource", "obj-300"), "owner", new SubjectRef("user", "user-a"));
+
+        await using var appConn = new NpgsqlConnection(fx.RawConnectionString);
+        await appConn.OpenAsync();
+        await using var appTx = await appConn.BeginTransactionAsync();
+
+        await using (var u = factory.Enlist(appConn, appTx))
+        {
+            await relations.WriteAsync(t, [tuple], [], u);
+            await u.CommitAsync();
+        }
+        await appTx.CommitAsync();
+
+        await using var other = await fx.OpenAsync();
+        (await CountAsync(other, store, "obj-300")).ShouldBe(1);
     }
 
     [Fact]

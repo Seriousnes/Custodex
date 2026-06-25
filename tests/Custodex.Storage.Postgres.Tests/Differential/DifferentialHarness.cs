@@ -10,7 +10,7 @@ namespace Custodex.Storage.Postgres.Tests.Differential;
 /// <summary>Seeds a <see cref="GeneratedModel"/> into both an in-memory oracle and a fresh
 /// Postgres tenant, then returns the two authorizers so the caller can compare their answers
 /// over an identical dataset.</summary>
-public static class DifferentialHarness
+public static partial class DifferentialHarness
 {
     /// <summary>Seeds <paramref name="model"/> into the in-memory oracle stores and into a fresh
     /// <c>(<paramref name="store"/>, "t")</c> tenant in Postgres, then constructs one

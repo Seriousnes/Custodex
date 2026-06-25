@@ -2,7 +2,7 @@
 
 **Goal:** Stand up the `Custodex.Benchmarks` BenchmarkDotNet project measuring **Check** and **ListObjects** latency at representative zoo scale — a Testcontainers Postgres seeded with ~50 users, ~2k objects, ~20k tuples — comparing the three execution paths (engine-driven **oracle**, Postgres **CTE**, index-backed **IndexedAuthorizer**), plus the cross-request cache effect on the engine-driven path — the only authorizer that exposes the cacheability seam today — and document how to run and read it (spec §11.1, §11.4).
 
-**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD/build unit, committed as one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [ ]` checkboxes. (Benchmarks are measurement code, so the rhythm is build-and-verify-discoverable rather than Red→Green.)
+**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD/build unit, committed as one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [x]` checkboxes. (Benchmarks are measurement code, so the rhythm is build-and-verify-discoverable rather than Red→Green.)
 
 **Architecture/approach:** one `Custodex.Benchmarks` console project under `tests/`. A shared `ZooScaleFixture` starts a single Postgres container, applies migrations, seeds the representative dataset once (deterministic seed for comparable runs), and builds every authorizer variant over it: the in-memory `EngineDrivenAuthorizer` oracle (seeded from the same model), the `NpgsqlCteAuthorizer`, and the `IndexedAuthorizer` over a `reverse_index` populated by the m2/02 full rebuild. The cache variant wraps the **engine-driven** authorizer in `CachingAuthorizer` (m0/08) over a `PostgresCacheStore` — the only path exposing the cacheability seam today (README → Post-dispatch reconciliations); the CTE and indexed production paths are measured uncached. BenchmarkDotNet `[GlobalSetup]` builds the fixture once per process; `[Benchmark]` methods run the hot operation. Two classes — `CheckBenchmarks` and `ListObjectsBenchmarks` — each parameterised by path (oracle/cte/index) and cache (on/off, meaningful only for the engine-driven path), measuring a fixed canonical probe so every variant does equivalent work.
 
@@ -28,7 +28,7 @@ A single tenant under one store; the seed is deterministic so latency numbers ar
 
 ### Task 1: Create the `Custodex.Benchmarks` project
 
-- [ ] **Files:** create `tests/Custodex.Benchmarks/Custodex.Benchmarks.csproj` and `…/Program.cs`; add to `Custodex.slnx`.
+- [x] **Files:** create `tests/Custodex.Benchmarks/Custodex.Benchmarks.csproj` and `…/Program.cs`; add to `Custodex.slnx`.
 
 **Produces:** a runnable BenchmarkDotNet console app referencing the engine, the Postgres provider, and the in-memory provider, with a `Program` entry point dispatching to the benchmark classes via `BenchmarkSwitcher.FromAssembly(...).Run(args)`.
 **Consumes (see README):** BenchmarkDotNet, Testcontainers.PostgreSql, Npgsql, Dapper; the three project references above.
@@ -41,7 +41,7 @@ A single tenant under one store; the seed is deterministic so latency numbers ar
 
 ### Task 2: `ZooScaleFixture` — seed the dataset and build every authorizer
 
-- [ ] **Files:** create `tests/Custodex.Benchmarks/ZooScaleFixture.cs`.
+- [x] **Files:** create `tests/Custodex.Benchmarks/ZooScaleFixture.cs`.
 
 **Produces:** `ZooScaleFixture` with `InitializeAsync` (start container, migrate, seed ~50/2k/20k, rebuild the reverse index, build all authorizers), `DisposeAsync`, and properties exposing each authorizer variant and the canonical probe inputs (`TenantContext`, a probe `SubjectRef`, a probe `EntityRef`, permission, a fresh `RequestContext`).
 **Consumes (see README):** `MigrationRunner`, `NpgsqlUnitOfWorkFactory`, the Npgsql relation/schema/attribute stores, `NpgsqlCteAuthorizer`, `IndexedAuthorizer`, `NpgsqlIndexStore` + `ReverseIndexRebuilder.RebuildAsync`, `PostgresCacheStore`/`PostgresCacheStoreFactory`, `EngineDrivenAuthorizer`, the `InMemory*` stores, `CachingAuthorizer`.
@@ -59,7 +59,7 @@ A single tenant under one store; the seed is deterministic so latency numbers ar
 
 ### Task 3: `CheckBenchmarks` — Check latency across paths and cache
 
-- [ ] **Files:** create `tests/Custodex.Benchmarks/CheckBenchmarks.cs`.
+- [x] **Files:** create `tests/Custodex.Benchmarks/CheckBenchmarks.cs`.
 
 **Produces:** `CheckBenchmarks` with a `[Params]` matrix over path (Oracle/Cte/Index) and cached (false/true), a `[GlobalSetup]` building the fixture once, `[GlobalCleanup]` disposing it, and a `[Benchmark] Check()` running one `CheckAsync` on the canonical probe; `[MemoryDiagnoser]` on.
 **Consumes (see README):** `ZooScaleFixture`, BenchmarkDotNet attributes.
@@ -72,7 +72,7 @@ A single tenant under one store; the seed is deterministic so latency numbers ar
 
 ### Task 4: `ListObjectsBenchmarks` — ListObjects latency across paths and cache
 
-- [ ] **Files:** create `tests/Custodex.Benchmarks/ListObjectsBenchmarks.cs`.
+- [x] **Files:** create `tests/Custodex.Benchmarks/ListObjectsBenchmarks.cs`.
 
 **Produces:** `ListObjectsBenchmarks` mirroring `CheckBenchmarks`: the path × cached matrix, one fixture per `[GlobalSetup]`, and a `[Benchmark] ListObjects()` returning the count of objects the probe subject may `edit` (a full first page at the default page size); `[MemoryDiagnoser]` on.
 **Consumes (see README):** `ZooScaleFixture`, BenchmarkDotNet attributes.
@@ -85,7 +85,7 @@ A single tenant under one store; the seed is deterministic so latency numbers ar
 
 ### Task 5: Document how to run and read the benchmarks
 
-- [ ] **Files:** create `tests/Custodex.Benchmarks/README.md`.
+- [x] **Files:** create `tests/Custodex.Benchmarks/README.md`.
 
 **Produces:** a short README for the benchmark project documenting prerequisites (Docker for Testcontainers, Release build — BenchmarkDotNet refuses Debug), the run commands (all / Check-only / ListObjects-only / `--list flat`), the `(ExecPath, Cached)` parameter matrix, and how to interpret the output (mean latency + allocation via `[MemoryDiagnoser]`; ListObjects is where the index pays off; Check `Cached=true` shows the warm-cache hit path on the engine-driven authorizer — the only cacheable path today; absolute numbers are environment-specific, relative ordering is the durable result). This satisfies the "document how to run it" requirement.
 
@@ -95,12 +95,12 @@ A single tenant under one store; the seed is deterministic so latency numbers ar
 
 ## Self-review checklist (after all tasks)
 
-- [ ] `dotnet build -c Release tests/Custodex.Benchmarks` clean under `TreatWarningsAsErrors=true`.
-- [ ] The fixture seeds ~50 users, ~2k objects, ~20k tuples deterministically and rebuilds the reverse index (Task 2).
-- [ ] The fixture builds oracle / CTE / indexed authorizers plus a cache-wrapped engine-driven variant, and a sanity check asserts the three paths agree on the probe (Task 2).
-- [ ] `CheckBenchmarks` and `ListObjectsBenchmarks` each run the `(ExecPath, Cached)` matrix over one canonical probe (Tasks 3–4).
-- [ ] A full `--filter *ListObjectsBenchmarks*` run completes and prints a summary table (Task 4).
-- [ ] The README documents prerequisites, run commands, the matrix, and how to read the output (Task 5).
+- [x] `dotnet build -c Release tests/Custodex.Benchmarks` clean under `TreatWarningsAsErrors=true`.
+- [x] The fixture seeds ~50 users, ~2k objects, ~20k tuples deterministically and rebuilds the reverse index (Task 2).
+- [x] The fixture builds oracle / CTE / indexed authorizers plus a cache-wrapped engine-driven variant, and a sanity check asserts the three paths agree on the probe (Task 2).
+- [x] `CheckBenchmarks` and `ListObjectsBenchmarks` each run the `(ExecPath, Cached)` matrix over one canonical probe (Tasks 3–4).
+- [x] A full `--filter *ListObjectsBenchmarks*` run completes and prints a summary table (Task 4).
+- [x] The README documents prerequisites, run commands, the matrix, and how to read the output (Task 5).
 
 ## Contract gaps (reported, not changed)
 

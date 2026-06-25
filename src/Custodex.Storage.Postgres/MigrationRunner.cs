@@ -22,6 +22,8 @@ public sealed partial class MigrationRunner
     /// <param name="ct">Cancellation token.</param>
     public static async Task ApplyAsync(NpgsqlConnection connection, CancellationToken ct = default)
     {
+        await EnsureSchemaAsync(connection, ct);
+
         await EnsureTrackingTableAsync(connection, ct);
 
         var applied = await LoadAppliedVersionsAsync(connection, ct);
@@ -45,6 +47,13 @@ public sealed partial class MigrationRunner
 
             await tx.CommitAsync(ct);
         }
+    }
+
+    private static async Task EnsureSchemaAsync(NpgsqlConnection connection, CancellationToken ct)
+    {
+        var ddl = $"CREATE SCHEMA IF NOT EXISTS {CustodexSchema.Name}; SET search_path TO {CustodexSchema.Name};";
+        await using var cmd = new NpgsqlCommand(ddl, connection);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     private static async Task EnsureTrackingTableAsync(NpgsqlConnection connection, CancellationToken ct)

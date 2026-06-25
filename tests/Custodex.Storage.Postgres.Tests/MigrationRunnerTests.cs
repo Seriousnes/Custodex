@@ -20,7 +20,7 @@ public class MigrationRunnerTests(PostgresFixture fx)
         await MigrationRunner.ApplyAsync(conn);
 
         var tables = (await conn.QueryAsync<string>(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"))
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'custodex'"))
             .ToHashSet();
 
         foreach (var t in ExpectedTables)
@@ -34,7 +34,7 @@ public class MigrationRunnerTests(PostgresFixture fx)
         await MigrationRunner.ApplyAsync(conn);
 
         var indexes = (await conn.QueryAsync<string>(
-            "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'"))
+            "SELECT indexname FROM pg_indexes WHERE schemaname = 'custodex'"))
             .ToHashSet();
 
         indexes.ShouldContain("ix_relation_tuples_forward");

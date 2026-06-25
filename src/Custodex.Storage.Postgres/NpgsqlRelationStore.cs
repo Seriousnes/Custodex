@@ -11,7 +11,7 @@ namespace Custodex.Storage.Postgres;
 /// Writes execute through the <see cref="IUnitOfWork"/> supplied by the caller.
 /// Every query hard-filters on both <c>store_id</c> and <c>tenant_id</c>.
 /// </summary>
-public sealed class NpgsqlRelationStore(string connectionString) : IRelationStore
+public sealed class NpgsqlRelationStore : IRelationStore
 {
     private sealed record Row(
         string ObjectType, string ObjectId, string Relation,
@@ -22,49 +22,64 @@ public sealed class NpgsqlRelationStore(string connectionString) : IRelationStor
         "object_type, object_id, relation, subject_type, subject_id, subject_relation, " +
         "condition_name, condition_params::text AS condition_params";
 
+    private readonly string _connectionString;
+    private readonly NpgsqlUnitOfWork? _bound;
+
+    public NpgsqlRelationStore(string connectionString) => _connectionString = CustodexSchema.Apply(connectionString);
+
+    private NpgsqlRelationStore(string connectionString, NpgsqlUnitOfWork bound)
+    {
+        _connectionString = connectionString;
+        _bound = bound;
+    }
+
+    /// <summary>
+    /// Returns a relation store whose reads execute on the given unit of work's connection and
+    /// transaction, so they observe writes made earlier on that same uncommitted unit of work.
+    /// Writes are unaffected. The returned store does not own the connection and never disposes it.
+    /// </summary>
+    public NpgsqlRelationStore OnUnitOfWork(IUnitOfWork uow) => new(_connectionString, NpgsqlUnitOfWork.From(uow));
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<RelationTuple>> GetByObjectAsync(
         TenantContext t, EntityRef obj, string relation, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
-        var rows = await conn.QueryAsync<Row>(new CommandDefinition($"""
-            SELECT {SelectColumns} FROM relation_tuples
+        var sql = $"""
+            SELECT {SelectColumns} FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND object_type = @ot AND object_id = @oid AND relation = @rel
-            """,
+            """;
+        return await QueryTuplesAsync(sql,
             new { store = t.Store, tenant = t.Tenant, ot = obj.Type, oid = obj.Id, rel = relation },
-            cancellationToken: ct));
-        return rows.Select(Map).ToList();
+            ct);
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<RelationTuple>> GetBySubjectAsync(
         TenantContext t, SubjectRef subject, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
-        var rows = await conn.QueryAsync<Row>(new CommandDefinition($"""
-            SELECT {SelectColumns} FROM relation_tuples
+        var sql = $"""
+            SELECT {SelectColumns} FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND subject_type = @st AND subject_id = @sid
               AND COALESCE(subject_relation, '') = COALESCE(@srel, '')
-            """,
+            """;
+        return await QueryTuplesAsync(sql,
             new { store = t.Store, tenant = t.Tenant, st = subject.Type, sid = subject.Id, srel = subject.Relation },
-            cancellationToken: ct));
-        return rows.Select(Map).ToList();
+            ct);
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> ListObjectIdsAsync(
         TenantContext t, string objectType, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
-        var ids = await conn.QueryAsync<string>(new CommandDefinition("""
-            SELECT DISTINCT object_id FROM relation_tuples
+        const string sql = """
+            SELECT DISTINCT object_id FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant AND object_type = @ot
-            """,
+            """;
+        return await QueryStringsAsync(sql,
             new { store = t.Store, tenant = t.Tenant, ot = objectType },
-            cancellationToken: ct));
-        return ids.ToList();
+            ct);
     }
 
     /// <inheritdoc />
@@ -77,7 +92,7 @@ public sealed class NpgsqlRelationStore(string connectionString) : IRelationStor
         foreach (var tuple in remove)
         {
             await using var cmd = new NpgsqlCommand("""
-                DELETE FROM relation_tuples
+                DELETE FROM custodex.relation_tuples
                 WHERE store_id = @store AND tenant_id = @tenant
                   AND object_type = @ot AND object_id = @oid AND relation = @rel
                   AND subject_type = @st AND subject_id = @sid
@@ -90,7 +105,7 @@ public sealed class NpgsqlRelationStore(string connectionString) : IRelationStor
         foreach (var tuple in add)
         {
             await using var cmd = new NpgsqlCommand("""
-                INSERT INTO relation_tuples
+                INSERT INTO custodex.relation_tuples
                     (store_id, tenant_id, object_type, object_id, relation,
                      subject_type, subject_id, subject_relation, condition_name, condition_params)
                 VALUES (@store, @tenant, @ot, @oid, @rel, @st, @sid, @srel, @cname, @cparams)
@@ -116,24 +131,47 @@ public sealed class NpgsqlRelationStore(string connectionString) : IRelationStor
     public async Task<IReadOnlyList<RelationTuple>> QueryAsync(
         TenantContext t, TupleFilter filter, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
-        var rows = await conn.QueryAsync<Row>(new CommandDefinition($"""
-            SELECT {SelectColumns} FROM relation_tuples
+        var sql = $"""
+            SELECT {SelectColumns} FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND (@ot IS NULL OR object_type = @ot)
               AND (@oid IS NULL OR object_id = @oid)
               AND (@rel IS NULL OR relation = @rel)
               AND (@st IS NULL OR subject_type = @st)
               AND (@sid IS NULL OR subject_id = @sid)
-            """,
+            """;
+        return await QueryTuplesAsync(sql,
             new
             {
                 store = t.Store, tenant = t.Tenant,
                 ot = filter.ObjectType, oid = filter.ObjectId, rel = filter.Relation,
                 st = filter.SubjectType, sid = filter.SubjectId,
             },
-            cancellationToken: ct));
-        return rows.Select(Map).ToList();
+            ct);
+    }
+
+    private async Task<IReadOnlyList<RelationTuple>> QueryTuplesAsync(string sql, object args, CancellationToken ct)
+    {
+        if (_bound is { } b)
+        {
+            var rows = await b.Connection.QueryAsync<Row>(new CommandDefinition(sql, args, transaction: b.Transaction, cancellationToken: ct));
+            return rows.Select(Map).ToList();
+        }
+        await using var conn = new NpgsqlConnection(_connectionString);
+        var ownRows = await conn.QueryAsync<Row>(new CommandDefinition(sql, args, cancellationToken: ct));
+        return ownRows.Select(Map).ToList();
+    }
+
+    private async Task<IReadOnlyList<string>> QueryStringsAsync(string sql, object args, CancellationToken ct)
+    {
+        if (_bound is { } b)
+        {
+            var rows = await b.Connection.QueryAsync<string>(new CommandDefinition(sql, args, transaction: b.Transaction, cancellationToken: ct));
+            return rows.ToList();
+        }
+        await using var conn = new NpgsqlConnection(_connectionString);
+        var ownRows = await conn.QueryAsync<string>(new CommandDefinition(sql, args, cancellationToken: ct));
+        return ownRows.ToList();
     }
 
     private static void AddKeyParams(NpgsqlCommand cmd, TenantContext t, RelationTuple tuple)
