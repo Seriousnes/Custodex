@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Custodex.Storage.Postgres;
 
@@ -9,7 +10,8 @@ namespace Custodex.Storage.Postgres;
 /// <see cref="CustodexDiagnostics.CacheSwept"/>. Opt-in: registered via the DI extension only when
 /// automatic sweeping is wanted; the store stays correct without it (lazy expiry).
 /// </summary>
-public sealed class CacheSweepService(CacheSweepOptions options) : BackgroundService
+public sealed class CacheSweepService(CacheSweepOptions options, ILogger<CacheSweepService>? logger = null)
+    : BackgroundService
 {
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -26,6 +28,10 @@ public sealed class CacheSweepService(CacheSweepOptions options) : BackgroundSer
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 break;
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Cache TTL sweep failed; retrying on the next interval.");
             }
         }
         while (await SafeWaitAsync(timer, stoppingToken));
