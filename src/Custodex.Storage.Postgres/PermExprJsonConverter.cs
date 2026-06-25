@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Custodex.Abstractions;
 using Custodex.Core;
+using Custodex.Core.Conditions;
 
 namespace Custodex.Storage.Postgres;
 
@@ -26,6 +27,20 @@ public sealed class PermExprJsonConverter : JsonConverterFactory
     private static readonly IReadOnlyDictionary<string, Type> ConditionTypes = new Dictionary<string, Type>
     {
         ["empty"] = typeof(EmptyConditionBody),
+        ["literalBool"] = typeof(LiteralBool),
+        ["literalInt"] = typeof(LiteralInt),
+        ["literalDouble"] = typeof(LiteralDouble),
+        ["literalString"] = typeof(LiteralString),
+        ["paramRef"] = typeof(ParamRef),
+        ["attributeRef"] = typeof(AttributeRef),
+        ["contextNow"] = typeof(ContextNow),
+        ["contextSubject"] = typeof(ContextSubject),
+        ["compare"] = typeof(Compare),
+        ["boolOp"] = typeof(BoolOp),
+        ["not"] = typeof(Not),
+        ["arithmetic"] = typeof(Arithmetic),
+        ["inList"] = typeof(InList),
+        ["hourOf"] = typeof(HourOf),
     };
 
     /// <inheritdoc />

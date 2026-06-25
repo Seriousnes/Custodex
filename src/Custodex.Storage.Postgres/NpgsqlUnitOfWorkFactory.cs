@@ -23,9 +23,17 @@ public sealed class NpgsqlUnitOfWorkFactory(string connectionString) : IUnitOfWo
     public async Task<IUnitOfWork> BeginAsync(CancellationToken ct = default)
     {
         var connection = new NpgsqlConnection(_connectionString);
-        await connection.OpenAsync(ct);
-        var transaction = await connection.BeginTransactionAsync(ct);
-        return NpgsqlUnitOfWork.Owned(connection, transaction);
+        try
+        {
+            await connection.OpenAsync(ct);
+            var transaction = await connection.BeginTransactionAsync(ct);
+            return NpgsqlUnitOfWork.Owned(connection, transaction);
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>
