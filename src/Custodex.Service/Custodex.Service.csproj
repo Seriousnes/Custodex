@@ -16,7 +16,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\Custodex.Core\Custodex.Core.csproj" />
 	  <ProjectReference Include="..\Custodex.ServiceDefaults\Custodex.ServiceDefaults.csproj" />
+	  <ProjectReference Include="..\Custodex.Storage.Postgres\Custodex.Storage.Postgres.csproj" />
 	</ItemGroup>
 
 </Project>
