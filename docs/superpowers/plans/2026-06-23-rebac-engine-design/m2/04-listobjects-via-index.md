@@ -2,7 +2,7 @@
 
 **Goal:** Implement an index-backed `ListObjectsAsync` on a new `IndexedAuthorizer` decorator that scans the maintained `reverse_index` (via `IIndexStore` from m2/01) for candidate objects, **re-checks only rows flagged `conditioned`** via the CTE Check, applies the §7.5 over-fetch/refill pagination, and returns results identical to the m1/06 CTE oracle path. The index is the fast path; on a schema-version mismatch the decorator falls back to the inner `NpgsqlCteAuthorizer`, and a parity assertion proves `index ≡ oracle`.
 
-**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [ ]` checkboxes.
+**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [x]` checkboxes.
 
 **Architecture/approach:** `IndexedAuthorizer : IAuthorizer` wraps the inner `NpgsqlCteAuthorizer` (m1/05/m1/06) and adds an `IIndexStore`. For `ListObjectsAsync` it scans `reverse_index` rows for `(store, tenant, schema_version, subject, permission, object_type)` — already-resolved structural grants. Unconditioned rows return directly (the maintained index already proved the structural grant holds). Rows flagged `conditioned` are re-checked with the full pointwise CTE Check (which honours tuple/branch conditions against synced attributes + request context) and dropped if the condition fails. If the index holds no rows for the active schema version (a schema change invalidated it before a rebuild ran), the decorator falls back to the inner authorizer so a stale or not-yet-rebuilt index never serves wrong answers. Pagination is over-fetch and refill (spec §7.5), reusing `ContinuationCursor` from `Custodex.Core.Evaluation`. `ListSubjectsAsync`, `CheckAsync`, and `BatchCheckAsync` delegate to the inner authorizer (the reverse index is keyed for the subject→objects direction; ListSubjects stays on the CTE path).
 
@@ -20,7 +20,7 @@
 
 ### Task 1: `IndexSubject` — canonical subject-string encoding
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/IndexSubject.cs`; test `…Tests/Index/IndexSubjectTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/IndexSubject.cs`; test `…Tests/Index/IndexSubjectTests.cs`.
 
 **Produces:** `static string IndexSubject.Of(SubjectRef)` — the canonical `reverse_index.subject` string: `type:id`, `type:id#relation` for a subject-set, `type:*` for a wildcard.
 **Consumes (see README):** `SubjectRef` (`Custodex.Abstractions`).
@@ -41,7 +41,7 @@
 
 ### Task 2: `IndexedAuthorizer` — delegate everything, stub ListObjects
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/IndexedAuthorizer.cs`; test `…Tests/Index/IndexedAuthorizerDelegationTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/IndexedAuthorizer.cs`; test `…Tests/Index/IndexedAuthorizerDelegationTests.cs`.
 
 **Produces:** `IndexedAuthorizer(NpgsqlCteAuthorizer inner, IIndexStore index, ISchemaStore schemaStore) : IAuthorizer` (a `partial` class). This task wires `CheckAsync`/`BatchCheckAsync`/`ListSubjectsAsync` straight through to `inner`, and stubs `ListObjectsAsync` to delegate to `inner` (replaced in Task 3). The schema store supplies the active schema version that keys the index scan.
 **Consumes (see README):** `NpgsqlCteAuthorizer` (m1/05/m1/06), `IIndexStore` + `NpgsqlIndexStore` (m2/01), `ISchemaStore` (m0/01).
@@ -61,7 +61,7 @@
 
 ### Task 3: Index-backed `ListObjectsAsync` — scan, re-check conditioned, refill, fall back
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/IndexedAuthorizer.ListObjects.cs`; test `…Tests/Index/IndexedListObjectsTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/IndexedAuthorizer.ListObjects.cs`; test `…Tests/Index/IndexedListObjectsTests.cs`.
 
 **Produces:** the real `ListObjectsAsync` on `IndexedAuthorizer`, replacing the Task-2 pass-through.
 **Consumes (see README):** `IIndexStore` scan + has-rows-for-version; `ContinuationCursor` (`Custodex.Core.Evaluation`); inner `NpgsqlCteAuthorizer.CheckAsync`/`ListObjectsAsync`; `IndexSubject.Of` (Task 1).
@@ -87,7 +87,7 @@
 
 ### Task 4: Parity anchor — `IndexedAuthorizer ≡ NpgsqlCteAuthorizer` for ListObjects
 
-- [ ] **Files:** test only `…Tests/Index/IndexedListObjectsParityTests.cs` — no new production code.
+- [x] **Files:** test only `…Tests/Index/IndexedListObjectsParityTests.cs` — no new production code.
 
 **Produces:** a focused, always-on parity test proving the index-backed `ListObjectsAsync` returns the same ids (and the same paged ranges) as the inner CTE `ListObjectsAsync` oracle across exclusion, wildcard, and conditioned-drop shapes — the per-boundary complement to m2/06's property harness (fast feedback if a refactor breaks parity, without the full property run).
 **Consumes (see README):** `IndexedAuthorizer` (Tasks 2–3), `NpgsqlCteAuthorizer` (m1/06), `NpgsqlIndexStore` (m2/01).
@@ -106,13 +106,13 @@
 
 ## Self-review checklist (after all tasks)
 
-- [ ] `dotnet build` clean under `TreatWarningsAsErrors=true`.
-- [ ] `IndexSubject.Of` produces the exact `reverse_index.subject` string maintenance writes (Task 1).
-- [ ] Check/BatchCheck/ListSubjects delegate unchanged to the inner CTE authorizer (Task 2).
-- [ ] Unconditioned index rows return directly; only `conditioned` rows are re-checked via the inner Check (Task 3).
-- [ ] An empty index for the active schema version falls back to the inner CTE `ListObjectsAsync` (Task 3).
-- [ ] Pagination returns exactly `PageSize` confirmed ids except at the true end, even when conditioned rows drop inside a page; the cursor encodes the last scanned id and is the m0/07 `ContinuationCursor` (Tasks 3–4).
-- [ ] The index-backed path equals the CTE oracle for exclusion/wildcard/conditioned shapes (Task 4).
+- [x] `dotnet build` clean under `TreatWarningsAsErrors=true`.
+- [x] `IndexSubject.Of` produces the exact `reverse_index.subject` string maintenance writes (Task 1).
+- [x] Check/BatchCheck/ListSubjects delegate unchanged to the inner CTE authorizer (Task 2).
+- [x] Unconditioned index rows return directly; only `conditioned` rows are re-checked via the inner Check (Task 3).
+- [x] An empty index for the active schema version falls back to the inner CTE `ListObjectsAsync` (Task 3).
+- [x] Pagination returns exactly `PageSize` confirmed ids except at the true end, even when conditioned rows drop inside a page; the cursor encodes the last scanned id and is the m0/07 `ContinuationCursor` (Tasks 3–4).
+- [x] The index-backed path equals the CTE oracle for exclusion/wildcard/conditioned shapes (Task 4).
 
 ## Contract gaps (reported, not changed)
 

@@ -2,7 +2,7 @@
 
 **Goal:** Implement `ReverseIndexRebuilder` — a full rebuild of `reverse_index` for a `(store, tenant)` from the current tuples and the active schema, materializing every `(subject, permission, object)` **structural** grant, stamping each row with the active `schema_version` and a `conditioned` flag. This rebuild is the **always-correct safety net** and the **maintenance oracle** the incremental path (m2/03) is diffed against (m2/06).
 
-**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [ ]` checkboxes.
+**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [x]` checkboxes.
 
 **Architecture/approach:** The rebuild computes the same structural truth the m0/07 `EngineDrivenAuthorizer` ListObjects oracle computes, then **stores it** as `reverse_index` rows. For each `(objectType, permission)` in the schema, each candidate object of that type, and each candidate subject (the concrete users plus the public `user:*`), it asks the **unconditioned** pointwise Check whether the grant holds; when it does, it writes a row whose `conditioned` flag records whether any condition was reached on the grant path. "Unconditioned" is achieved by evaluating with `NullConditionEvaluator` (every condition treated as satisfied), so the stored row reflects the *structural* grant; the `ConditionTouched` latch on `EvalContext` (m0/05) decides the flag. ListObjects (m2/04) re-checks only flagged rows at query time, keeping request-time predicates correct (spec §7.3).
 
@@ -20,7 +20,7 @@ The rebuild runs through the **oracle authorizer** (`EngineDrivenAuthorizer`), n
 
 ### Task 1: Structural-grant probe on the oracle
 
-- [ ] **Files:** create `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Structural.cs`; test `tests/Custodex.Core.Tests/Evaluation/StructuralProbeTests.cs`.
+- [x] **Files:** create `src/Custodex.Core/Evaluation/EngineDrivenAuthorizer.Structural.cs`; test `tests/Custodex.Core.Tests/Evaluation/StructuralProbeTests.cs`.
 
 **Produces:** a **public** structural-grant probe on `EngineDrivenAuthorizer` returning a new public `StructuralGrant(bool Granted, bool Conditioned)`. Public because the cross-assembly rebuilder (`Custodex.Storage.Postgres`) calls it — the same precedent as `SchemaIndex`/`EvalContext` being public in `Custodex.Core.Evaluation`. The probe takes a `SchemaIndex`, `TenantContext`, `EntityRef`, permission, `SubjectRef`, `RequestContext` (mirroring the private Check walk's parameters) plus the trailing `ct`. An `internal` test seam forwards to it (m0/07's `[InternalsVisibleTo("Custodex.Core.Tests")]` exposes internals to the test project).
 **Consumes (see README):** the private Check walk, `EvalContext`, `SchemaIndex` (m0/05).
@@ -43,7 +43,7 @@ The rebuild runs through the **oracle authorizer** (`EngineDrivenAuthorizer`), n
 
 ### Task 2: Enumerate the rebuild domain — subjects, objects
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/Index/RebuildEnumeration.cs`; test `…Tests/Index/RebuildEnumerationTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/Index/RebuildEnumeration.cs`; test `…Tests/Index/RebuildEnumerationTests.cs`.
 
 **Produces:** `RebuildEnumeration` static helpers that read the tenant's tuples once and project the rebuild domain: the concrete `user` ids that appear as a subject anywhere (the candidate query subjects), and every object id grouped by object type (the candidate objects). `user:*` is not in the user list — the rebuilder adds the synthetic `*` subject. The rebuilder crosses these with the schema's `(type, permission)` declarations.
 **Consumes (see README):** `relation_tuples` (m1/01); `TenantContext`.
@@ -62,7 +62,7 @@ The rebuild runs through the **oracle authorizer** (`EngineDrivenAuthorizer`), n
 
 ### Task 3: `ReverseIndexRebuilder` — probe, materialize, stamp, mark built
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/Index/ReverseIndexRebuilder.cs`; test `…Tests/Index/ReverseIndexRebuildTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/Index/ReverseIndexRebuilder.cs`; test `…Tests/Index/ReverseIndexRebuildTests.cs`.
 
 **Produces:** `ReverseIndexRebuilder(connectionString, ISchemaStore, IRelationStore, IAttributeStore, IIndexStore)` with `RebuildAsync(TenantContext, IUnitOfWork, ct)`.
 **Consumes (see README):** `RebuildEnumeration` (Task 2); the structural probe (Task 1); `IIndexStore` (m2/01); `SchemaIndex`, `NullConditionEvaluator`, `EngineDrivenAuthorizer` (m0/05); the Npgsql stores (m1/04).
@@ -94,7 +94,7 @@ All writes go on the caller's unit of work so the rebuild commits atomically (sp
 
 ### Task 4: Rebuild ≡ oracle's ListObjects (safety-net anchor)
 
-- [ ] **Files:** test only `…Tests/Index/RebuildEqualsOracleTests.cs` — no new production code.
+- [x] **Files:** test only `…Tests/Index/RebuildEqualsOracleTests.cs` — no new production code.
 
 **Produces:** the concrete-case anchor for the safety-net invariant the m2/06 property harness generalizes.
 **Consumes (see README):** `ReverseIndexRebuilder`, `NpgsqlIndexStore`, `EngineDrivenAuthorizer`, the Npgsql stores.
@@ -113,14 +113,14 @@ All writes go on the caller's unit of work so the rebuild commits atomically (sp
 
 ## Self-review checklist (after all tasks)
 
-- [ ] `dotnet build` clean under `TreatWarningsAsErrors=true`.
-- [ ] Rebuild runs through `EngineDrivenAuthorizer` with `NullConditionEvaluator`, so rows are structural and `conditioned` comes from the `ConditionTouched` latch.
-- [ ] Every row stamped with the active `schema.Version`; the version is marked built (spec §7.3 stamp).
-- [ ] A multi-path object yields one row per `(subject, permission, type, objectId)` (Task 4).
-- [ ] Exclusion is honoured: a `blocked` grant removes the row (Task 3).
-- [ ] Idempotent: clear precedes re-materialization; a second rebuild produces the same rows.
-- [ ] All index writes on the caller's `IUnitOfWork` — atomic commit (spec §9.2).
-- [ ] Rebuilt index equals `EngineDrivenAuthorizer.ListObjects` per subject (Task 4) — the safety-net invariant m2/03 is diffed against.
+- [x] `dotnet build` clean under `TreatWarningsAsErrors=true`.
+- [x] Rebuild runs through `EngineDrivenAuthorizer` with `NullConditionEvaluator`, so rows are structural and `conditioned` comes from the `ConditionTouched` latch.
+- [x] Every row stamped with the active `schema.Version`; the version is marked built (spec §7.3 stamp).
+- [x] A multi-path object yields one row per `(subject, permission, type, objectId)` (Task 4).
+- [x] Exclusion is honoured: a `blocked` grant removes the row (Task 3).
+- [x] Idempotent: clear precedes re-materialization; a second rebuild produces the same rows.
+- [x] All index writes on the caller's `IUnitOfWork` — atomic commit (spec §9.2).
+- [x] Rebuilt index equals `EngineDrivenAuthorizer.ListObjects` per subject (Task 4) — the safety-net invariant m2/03 is diffed against.
 
 ## Contract gaps / additions (reported, not changed)
 
