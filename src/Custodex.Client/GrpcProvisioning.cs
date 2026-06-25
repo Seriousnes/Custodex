@@ -1,6 +1,6 @@
 using Custodex.Abstractions;
-using Custodex.Client.Mapping;
 using Custodex.Client.Transport;
+using Custodex.Protos;
 using ProtoV1 = Custodex.V1;
 
 namespace Custodex.Client;
@@ -27,7 +27,7 @@ public sealed class GrpcTenantManager(ProtoV1.Provisioning.ProvisioningClient cl
     /// <inheritdoc/>
     public async Task CreateTenantAsync(TenantContext tenant, CancellationToken ct = default)
     {
-        var proto = new ProtoV1.CreateTenantRequest { Tenant = ProtoMapping.ToProto(tenant) };
+        var proto = new ProtoV1.CreateTenantRequest { Tenant = ProtoMap.ToProto(tenant) };
         await RemoteStatus.UnwrapAsync(() =>
             client.CreateTenantAsync(proto, cancellationToken: ct).ResponseAsync);
     }

@@ -1,6 +1,4 @@
-extern alias ClientProtos;
-
-using ClientProtos::Custodex.Client.Serialization;
+using Custodex.Client.Serialization;
 using Custodex.Abstractions;
 using Custodex.Core;
 using Shouldly;

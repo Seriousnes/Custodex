@@ -1,4 +1,4 @@
-using Custodex.Service.Mapping;
+using Custodex.Protos;
 using Custodex.Service.Tenancy;
 using Custodex.V1;
 using Google.Protobuf.WellKnownTypes;

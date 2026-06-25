@@ -1,7 +1,6 @@
 using Custodex.Abstractions;
-using Custodex.Client.Mapping;
 using Custodex.Client.Transport;
-using Grpc.Core;
+using Custodex.Protos;
 using ProtoV1 = Custodex.V1;
 
 namespace Custodex.Client;
@@ -13,25 +12,22 @@ namespace Custodex.Client;
 /// </summary>
 public sealed class GrpcAuthorizer(ProtoV1.Decision.DecisionClient client) : IAuthorizer
 {
-    private static Metadata TenantMeta(TenantContext tc) =>
-        new() { { "x-custodex-tenant", tc.Tenant } };
-
     /// <inheritdoc/>
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
         var proto = new ProtoV1.CheckRequest
         {
-            Object = ProtoMapping.ToProto(request.Object),
+            Object = ProtoMap.ToProto(request.Object),
             Permission = request.Permission,
-            Subject = ProtoMapping.ToProto(request.Subject),
-            Context = ProtoMapping.ToProto(request.Context),
+            Subject = ProtoMap.ToProto(request.Subject),
+            Context = ProtoMap.ToProto(request.Context),
             Explain = request.Explain,
         };
         var response = await RemoteStatus.UnwrapAsync(() =>
-            client.CheckAsync(proto, headers: TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
+            client.CheckAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
         return new CheckResult(
             response.Allowed,
-            response.Explain is { Description.Length: > 0 } ? ProtoMapping.ToDomain(response.Explain) : null);
+            response.Explain is { Description.Length: > 0 } ? ProtoMap.FromProto(response.Explain) : null);
     }
 
     /// <inheritdoc/>
@@ -39,23 +35,23 @@ public sealed class GrpcAuthorizer(ProtoV1.Decision.DecisionClient client) : IAu
     {
         var proto = new ProtoV1.BatchCheckRequest
         {
-            Context = ProtoMapping.ToProto(request.Context),
+            Context = ProtoMap.ToProto(request.Context),
         };
         foreach (var item in request.Items)
         {
             proto.Items.Add(new ProtoV1.CheckItem
             {
-                Object = ProtoMapping.ToProto(item.Object),
+                Object = ProtoMap.ToProto(item.Object),
                 Permission = item.Permission,
-                Subject = ProtoMapping.ToProto(item.Subject),
+                Subject = ProtoMap.ToProto(item.Subject),
             });
         }
         var response = await RemoteStatus.UnwrapAsync(() =>
-            client.BatchCheckAsync(proto, headers: TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
+            client.BatchCheckAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
         return response.Results
             .Select(r => new CheckResult(
                 r.Allowed,
-                r.Explain is { Description.Length: > 0 } ? ProtoMapping.ToDomain(r.Explain) : null))
+                r.Explain is { Description.Length: > 0 } ? ProtoMap.FromProto(r.Explain) : null))
             .ToList();
     }
 
@@ -64,15 +60,15 @@ public sealed class GrpcAuthorizer(ProtoV1.Decision.DecisionClient client) : IAu
     {
         var proto = new ProtoV1.ListObjectsRequest
         {
-            Subject = ProtoMapping.ToProto(request.Subject),
+            Subject = ProtoMap.ToProto(request.Subject),
             ObjectType = request.ObjectType,
             Permission = request.Permission,
-            Context = ProtoMapping.ToProto(request.Context),
+            Context = ProtoMap.ToProto(request.Context),
             PageSize = request.PageSize,
             ContinuationToken = request.ContinuationToken ?? string.Empty,
         };
         var response = await RemoteStatus.UnwrapAsync(() =>
-            client.ListObjectsAsync(proto, headers: TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
+            client.ListObjectsAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
         return new ListObjectsResult(
             response.ObjectIds.ToList(),
             string.IsNullOrEmpty(response.ContinuationToken) ? null : response.ContinuationToken);
@@ -83,16 +79,16 @@ public sealed class GrpcAuthorizer(ProtoV1.Decision.DecisionClient client) : IAu
     {
         var proto = new ProtoV1.ListSubjectsRequest
         {
-            Object = ProtoMapping.ToProto(request.Object),
+            Object = ProtoMap.ToProto(request.Object),
             Permission = request.Permission,
-            Context = ProtoMapping.ToProto(request.Context),
+            Context = ProtoMap.ToProto(request.Context),
             PageSize = request.PageSize,
             ContinuationToken = request.ContinuationToken ?? string.Empty,
         };
         var response = await RemoteStatus.UnwrapAsync(() =>
-            client.ListSubjectsAsync(proto, headers: TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
+            client.ListSubjectsAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
         return new ListSubjectsResult(
-            response.Subjects.Select(ProtoMapping.ToDomain).ToList(),
+            response.Subjects.Select(ProtoMap.FromProto).ToList(),
             string.IsNullOrEmpty(response.ContinuationToken) ? null : response.ContinuationToken);
     }
 }

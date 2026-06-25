@@ -1,5 +1,3 @@
-extern alias ServiceHost;
-
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -16,7 +14,7 @@ public sealed class ServiceFixture : IAsyncLifetime
         .WithImage("postgres:16-alpine")
         .Build();
 
-    public WebApplicationFactory<ServiceHost::Program> Factory { get; private set; } = null!;
+    public WebApplicationFactory<Program> Factory { get; private set; } = null!;
     public GrpcChannel GrpcChannel { get; private set; } = null!;
     public string ConnectionString => _postgres.GetConnectionString();
 
@@ -26,7 +24,7 @@ public sealed class ServiceFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
-        Factory = new WebApplicationFactory<ServiceHost::Program>()
+        Factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(b =>
             {
                 b.UseSetting("Custodex:ConnectionString", ConnectionString);

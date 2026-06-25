@@ -1,6 +1,6 @@
 using Custodex.Abstractions;
+using Custodex.Protos;
 using Custodex.V1;
-using Custodex.Service.Mapping;
 using Google.Protobuf.WellKnownTypes;
 using Shouldly;
 
@@ -110,5 +110,43 @@ public sealed class ProtoMapTests
         back.Children.Count.ShouldBe(2);
         back.Children[0].Description.ShouldBe("child1");
         back.Children[1].Allowed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Struct_integral_number_decodes_to_long_not_double()
+    {
+        var s = ProtoMap.ToStruct(new Dictionary<string, object?> { ["n"] = 42L });
+        var back = ProtoMap.FromStruct(s);
+
+        back["n"].ShouldBeOfType<long>();
+        back["n"].ShouldBe(42L);
+    }
+
+    [Fact]
+    public void ConditionRef_integer_parameter_decodes_to_long()
+    {
+        var record = new Abstractions.ConditionRef("c",
+            new Dictionary<string, object?> { ["x"] = 5L });
+
+        var back = ProtoMap.FromProto(ProtoMap.ToProto(record));
+
+        back.Parameters["x"].ShouldBeOfType<long>();
+    }
+
+    [Fact]
+    public void FromStruct_null_decodes_to_empty_dictionary()
+    {
+        ProtoMap.FromStruct(null).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void DateTimeOffset_attribute_serializes_as_invariant_iso8601()
+    {
+        var when = new DateTimeOffset(2026, 6, 25, 8, 30, 0, TimeSpan.Zero);
+
+        var s = ProtoMap.ToStruct(new Dictionary<string, object?> { ["t"] = when });
+
+        s.Fields["t"].StringValue.ShouldBe(when.ToString("O"));
+        ProtoMap.FromStruct(s)["t"].ShouldBe(when.ToString("O"));
     }
 }

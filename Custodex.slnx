@@ -4,6 +4,7 @@
     <Project Path="src/Custodex.AppHost/Custodex.AppHost.csproj" Id="2ee6f37f-4d92-4a22-b9bd-01b5dd70ba9a" />
     <Project Path="src/Custodex.Client/Custodex.Client.csproj" />
     <Project Path="src/Custodex.Core/Custodex.Core.csproj" Id="e5a977c7-5d0d-4d64-b358-056400fbcde1" />
+    <Project Path="src/Custodex.Protos/Custodex.Protos.csproj" />
     <Project Path="src/Custodex.Service/Custodex.Service.csproj" />
     <Project Path="src/Custodex.ServiceDefaults/Custodex.ServiceDefaults.csproj" />
     <Project Path="src/Custodex.Storage.InMemory/Custodex.Storage.InMemory.csproj" />

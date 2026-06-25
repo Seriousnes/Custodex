@@ -19,13 +19,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Protobuf Include="Protos\custodex_common.proto" GrpcServices="None" />
-		<Protobuf Include="Protos\custodex_decision.proto" GrpcServices="Both" />
-		<Protobuf Include="Protos\custodex_management.proto" GrpcServices="Both" />
-	</ItemGroup>
-
-	<ItemGroup>
 	  <ProjectReference Include="..\Custodex.Core\Custodex.Core.csproj" />
+	  <ProjectReference Include="..\Custodex.Protos\Custodex.Protos.csproj" />
 	  <ProjectReference Include="..\Custodex.ServiceDefaults\Custodex.ServiceDefaults.csproj" />
 	  <ProjectReference Include="..\Custodex.Storage.Postgres\Custodex.Storage.Postgres.csproj" />
 	</ItemGroup>
