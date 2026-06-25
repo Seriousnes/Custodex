@@ -8,8 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" Version="13.4.6" />
+    <PackageReference Include="Aspire.Hosting.Testing" Version="13.4.6" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="CsCheck" Version="4.7.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Shouldly" Version="4.3.0" />
@@ -29,6 +32,7 @@
     <ProjectReference Include="..\..\src\Custodex.Abstractions\Custodex.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Core\Custodex.Core.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Storage.InMemory\Custodex.Storage.InMemory.csproj" />
+    <ProjectReference Include="..\..\src\Custodex.AppHost\Custodex.AppHost.csproj" IsAspireProjectResource="false" />
   </ItemGroup>
 
 </Project>

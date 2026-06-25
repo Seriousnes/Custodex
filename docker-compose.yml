@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: custodex
+      POSTGRES_PASSWORD: custodex
+      POSTGRES_DB: custodex
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US --encoding=UTF8 --locale=C.UTF-8"
+    volumes:
+      - custodex-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U custodex -d custodex"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  custodex:
+    build:
+      context: .
+      dockerfile: src/Custodex.Service/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      Custodex__ConnectionString: "Host=db;Port=5432;Database=custodex;Username=custodex;Password=custodex;Search Path=custodex"
+      Custodex__ApplyMigrationsOnStartup: "true"
+      Custodex__ApiKeys__0__Key: "admin-key"
+      Custodex__ApiKeys__0__Store: "default"
+      Custodex__ApiKeys__0__Role: "admin"
+      ASPNETCORE_ENVIRONMENT: Development
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  custodex-db:

@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package custodex.v1;
+
+option csharp_namespace = "Custodex.V1";
+
+import "Protos/custodex_common.proto";
+
+service Decision {
+  rpc Check (CheckRequest) returns (CheckResponse);
+  rpc BatchCheck (BatchCheckRequest) returns (BatchCheckResponse);
+  rpc ListObjects (ListObjectsRequest) returns (ListObjectsResponse);
+  rpc ListSubjects (ListSubjectsRequest) returns (ListSubjectsResponse);
+}
+
+message CheckRequest {
+  TenantContext tenant = 1;
+  EntityRef object = 2;
+  string permission = 3;
+  SubjectRef subject = 4;
+  RequestContext context = 5;
+  bool explain = 6;
+}
+
+message CheckResponse {
+  bool allowed = 1;
+  ExplainNode explain = 2;
+}
+
+message CheckItem {
+  EntityRef object = 1;
+  string permission = 2;
+  SubjectRef subject = 3;
+}
+
+message BatchCheckRequest {
+  TenantContext tenant = 1;
+  repeated CheckItem items = 2;
+  RequestContext context = 3;
+}
+
+message BatchCheckResponse {
+  repeated CheckResponse results = 1;
+}
+
+message ListObjectsRequest {
+  TenantContext tenant = 1;
+  SubjectRef subject = 2;
+  string object_type = 3;
+  string permission = 4;
+  RequestContext context = 5;
+  int32 page_size = 6;
+  string continuation_token = 7;
+}
+
+message ListObjectsResponse {
+  repeated string object_ids = 1;
+  string continuation_token = 2;
+}
+
+message ListSubjectsRequest {
+  TenantContext tenant = 1;
+  EntityRef object = 2;
+  string permission = 3;
+  RequestContext context = 4;
+  int32 page_size = 5;
+  string continuation_token = 6;
+}
+
+message ListSubjectsResponse {
+  repeated SubjectRef subjects = 1;
+  string continuation_token = 2;
+}

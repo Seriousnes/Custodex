@@ -9,8 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Custodex.Client\Custodex.Client.csproj" />
     <ProjectReference Include="..\Custodex.Service\Custodex.Service.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
   </ItemGroup>
 
 </Project>
