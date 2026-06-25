@@ -1,7 +1,6 @@
 namespace Custodex.Core.Dsl.Lexing;
 
-/// <summary>Identifies the syntactic category of a DSL token.</summary>
-public enum TokenKind
+internal enum TokenKind
 {
     Eof,
     Ident,

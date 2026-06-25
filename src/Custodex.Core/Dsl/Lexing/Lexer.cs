@@ -1,7 +1,6 @@
 namespace Custodex.Core.Dsl.Lexing;
 
-/// <summary>Hand-written lexer that tokenizes DSL schema text.</summary>
-public static class Lexer
+internal static class Lexer
 {
     private static readonly Dictionary<string, TokenKind> Keywords = new(StringComparer.Ordinal)
     {
@@ -13,8 +12,7 @@ public static class Lexer
         ["in"] = TokenKind.In,
     };
 
-    /// <summary>Tokenizes the given DSL source text into a list terminated by an <see cref="TokenKind.Eof"/> token.</summary>
-    public static IReadOnlyList<Token> Tokenize(string source)
+    internal static IReadOnlyList<Token> Tokenize(string source)
     {
         var tokens = new List<Token>();
         var pos = 0;
