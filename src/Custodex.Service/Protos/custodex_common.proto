@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package custodex.v1;
+
+option csharp_namespace = "Custodex.V1";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+message TenantContext {
+  string store = 1;
+  string tenant = 2;
+}
+
+message EntityRef {
+  string type = 1;
+  string id = 2;
+}
+
+message SubjectRef {
+  string type = 1;
+  string id = 2;
+  string relation = 3;
+}
+
+message ConditionRef {
+  string name = 1;
+  google.protobuf.Struct parameters = 2;
+}
+
+message RequestContext {
+  google.protobuf.Timestamp now = 1;
+  SubjectRef subject = 2;
+  google.protobuf.Struct attributes = 3;
+}
+
+message ExplainNode {
+  string description = 1;
+  bool allowed = 2;
+  repeated ExplainNode children = 3;
+}
