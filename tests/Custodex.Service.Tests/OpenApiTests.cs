@@ -5,7 +5,7 @@ using Shouldly;
 namespace Custodex.Service.Tests;
 
 [Collection("service")]
-public sealed class OpenApiTests(PostgresFixture pg) : IClassFixture<WebApplicationFactory<Program>>
+public sealed class OpenApiTests(PostgresFixture pg)
 {
     [Fact]
     public async Task Swagger_json_endpoint_returns_200_with_api_title()
