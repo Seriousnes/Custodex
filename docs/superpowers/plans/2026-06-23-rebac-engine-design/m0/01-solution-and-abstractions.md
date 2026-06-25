@@ -1,684 +1,168 @@
-# M0/01 — Solution & Abstractions Implementation Plan
+# M0/01 — Solution & Abstractions
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Goal:** Stand up project-wide packaging (`Directory.Build.props` with Apache-2.0 metadata, semver, symbol packages), the observability primitives (`CustodexDiagnostics`), and the complete `Custodex.Abstractions` public contract — the records, interfaces, enums, and exceptions every other package depends on.
 
-**Goal:** Stand up the Custodex solution, project layout, packaging, observability primitives, and the complete `Custodex.Abstractions` public contract.
+**For implementers:** drive this with `superpowers:subagent-driven-development` or `superpowers:executing-plans`; follow TDD (Red → Green → Commit) per task; tasks are tracked with `- [ ]`; one conventional-commit per green task (co-author trailer per `../README.md` → Global Constraints).
 
-**Architecture:** `Custodex.Abstractions` is contracts only — records, interfaces, enums, exceptions. No logic except trivial computed members on value types. Every other package and plan depends on these names.
+**Architecture/approach:** `Custodex.Abstractions` is contracts only — value records, interfaces, enums, exceptions, with no logic beyond trivial computed members on value types (`EntityRef.IsWildcard`, `SubjectRef.IsSubjectSet`, `ToString` overrides). The Aspire solution (`Custodex.slnx`) and the `Custodex.Abstractions` + `Custodex.Abstractions.Tests` shells already exist; this plan adds packages, references, and source — it does not scaffold projects. Every type name and signature is normative and defined once in `../README.md` → Canonical public contract; reference it there.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, xUnit, Shouldly.
+**Tech stack:** .NET 10 (`net10.0`), C# 14, xUnit, Shouldly.
 
-## Global Constraints
+**Global Constraints:** see `../README.md` → Global Constraints (packaging metadata, `TreatWarningsAsErrors`, async `CancellationToken` trailing param, ordinal identifiers, `"*"` wildcard).
 
-See `../README.md` → Global Constraints. Key points repeated for convenience: `net10.0`; `Nullable`+`ImplicitUsings` enabled; `TreatWarningsAsErrors=true`; Apache-2.0 license metadata on every package; all I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard.
-
-This plan is the source of truth for the type names in `../README.md` → Canonical public contract. Use those signatures verbatim.
+**Dependencies:** none — this is the root of the dependency graph.
 
 ---
 
-### Task 1: Solution, build props, and the Abstractions project
+### Task 1: Packaging and test wiring
 
-**Files:**
-- Create: `Custodex.sln`
-- Create: `Directory.Build.props`
-- Create: `src/Custodex.Abstractions/Custodex.Abstractions.csproj`
-- Create: `tests/Custodex.Abstractions.Tests/Custodex.Abstractions.Tests.csproj`
-- Test: `tests/Custodex.Abstractions.Tests/WiringTests.cs`
+- [ ] **Files:** create/merge `Directory.Build.props` (repo root); wire `tests/Custodex.Abstractions.Tests` → `src/Custodex.Abstractions` reference + Shouldly; remove any template leftovers (`Class1.cs`, `UnitTest1.cs`). Test: `tests/Custodex.Abstractions.Tests/WiringTests.cs`.
 
-**Interfaces:**
-- Produces: a buildable solution and the `Custodex.Abstractions` assembly that later tasks add types to.
+**Produces:** a buildable `Custodex.Abstractions` assembly and a wired test project; the project-wide MSBuild properties.
+**Consumes (see README):** nothing — root.
 
-- [ ] **Step 1: Confirm the existing projects and wire the test reference**
+**Behavior:**
+- `Directory.Build.props` sets the framework/language/nullable/implicit-usings/`TreatWarningsAsErrors` and the package metadata (`Apache-2.0` license expression, authors, semver `Version`, symbol package format) per the Global Constraints. Merge into any existing file; the Aspire host/service-defaults projects keep their own SDK and may override `TargetFramework`.
 
-The Aspire solution (`Custodex.slnx`) and the `Custodex.Abstractions` + `Custodex.Abstractions.Tests` projects **already exist**. Do NOT run `dotnet new sln`/`classlib`/`xunit`. Remove any leftover template files, then add the test→project reference and Shouldly:
+**Cases to pin:**
 
-Run:
-```bash
-# remove template leftovers if present (ignore errors if already gone)
-rm -f src/Custodex.Abstractions/Class1.cs tests/Custodex.Abstractions.Tests/UnitTest1.cs
-dotnet add tests/Custodex.Abstractions.Tests reference src/Custodex.Abstractions
-dotnet add tests/Custodex.Abstractions.Tests package Shouldly
-```
+| Setup | Expect |
+|---|---|
+| reference `Custodex.Abstractions` from the test project | the assembly is loadable and named `Custodex.Abstractions` |
 
-- [ ] **Step 2: Write `Directory.Build.props`** (repo root)
-
-> If `Directory.Build.props` already exists, merge these properties in. The Aspire `Custodex.AppHost`/`Custodex.ServiceDefaults` projects keep their own SDK and may override `TargetFramework`; that is expected. If `TreatWarningsAsErrors` is too aggressive against Aspire-generated code, scope it to `src/Custodex.*` engine projects via a condition rather than globally.
-
-```xml
-<Project>
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Authors>Custodex contributors</Authors>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <Version>0.1.0</Version>
-  </PropertyGroup>
-</Project>
-```
-
-- [ ] **Step 3: Write the wiring test**
-
-```csharp
-// tests/Custodex.Abstractions.Tests/WiringTests.cs
-using Shouldly;
-using Xunit;
-
-namespace Custodex.Abstractions.Tests;
-
-public class WiringTests
-{
-    [Fact]
-    public void Abstractions_assembly_is_referenced()
-    {
-        typeof(Custodex.Abstractions.EntityRef).Assembly.GetName().Name.ShouldBe("Custodex.Abstractions");
-    }
-}
-```
-
-- [ ] **Step 4: Run the test to verify it fails to compile**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests`
-Expected: FAIL — `EntityRef` does not exist yet.
-
-- [ ] **Step 5: Add a placeholder `EntityRef` to make wiring compile** (replaced fully in Task 2)
-
-```csharp
-// src/Custodex.Abstractions/EntityRef.cs
-namespace Custodex.Abstractions;
-public readonly record struct EntityRef(string Type, string Id);
-```
-
-- [ ] **Step 6: Run the test to verify it passes**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests`
-Expected: PASS (1 test).
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add Directory.Build.props src/Custodex.Abstractions tests/Custodex.Abstractions.Tests
-git commit -m "chore: wire Directory.Build.props and Abstractions test reference"
-```
+**Done when:** build clean under TreatWarningsAsErrors; wiring test passes.
 
 ---
 
 ### Task 2: Reference and tuple types
 
-**Files:**
-- Modify: `src/Custodex.Abstractions/EntityRef.cs`
-- Create: `src/Custodex.Abstractions/SubjectRef.cs`
-- Create: `src/Custodex.Abstractions/RelationTuple.cs`
-- Create: `src/Custodex.Abstractions/TenantContext.cs`
-- Test: `tests/Custodex.Abstractions.Tests/ReferenceTypesTests.cs`
+- [ ] **Files:** create `EntityRef.cs`, `SubjectRef.cs`, `RelationTuple.cs` (holds `ConditionRef` + `RelationTuple`), `TenantContext.cs`. Test: `tests/Custodex.Abstractions.Tests/ReferenceTypesTests.cs`.
 
-**Interfaces:**
-- Produces: `EntityRef`, `SubjectRef`, `ConditionRef`, `RelationTuple`, `TenantContext` exactly as in the contract.
+**Produces:** `EntityRef`, `SubjectRef`, `ConditionRef`, `RelationTuple`, `TenantContext`.
+**Consumes (see README):** these types' exact shapes are in the contract.
 
-- [ ] **Step 1: Write the failing tests**
+**Behavior:**
+- `EntityRef` and `SubjectRef` are readonly record structs with computed `IsWildcard` (`Id == "*"`) and, for `SubjectRef`, `IsSubjectSet` (`Relation is not null`) plus a `ToString` that renders `type:id` or `type:id#relation`.
+- `store`/`tenant` are carried by `TenantContext`, not fields on `RelationTuple`, so a tuple value is reusable across stores in tests.
 
-```csharp
-// tests/Custodex.Abstractions.Tests/ReferenceTypesTests.cs
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Abstractions.Tests;
+| Setup | Expect |
+|---|---|
+| `EntityRef(type, "*")` vs a concrete id | `IsWildcard` true / false; `ToString` → `type:id` |
+| `SubjectRef` with a relation vs without | `IsSubjectSet` true / false; wildcard id detected |
 
-public class ReferenceTypesTests
-{
-    [Fact]
-    public void EntityRef_detects_wildcard_and_formats()
-    {
-        new EntityRef("animal", "EL-001").IsWildcard.ShouldBeFalse();
-        new EntityRef("user", "*").IsWildcard.ShouldBeTrue();
-        new EntityRef("animal", "EL-001").ToString().ShouldBe("animal:EL-001");
-    }
-
-    [Fact]
-    public void SubjectRef_detects_subject_set_and_wildcard()
-    {
-        new SubjectRef("group", "vets", "member").IsSubjectSet.ShouldBeTrue();
-        new SubjectRef("user", "alice").IsSubjectSet.ShouldBeFalse();
-        new SubjectRef("user", "*").IsWildcard.ShouldBeTrue();
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter ReferenceTypesTests`
-Expected: FAIL — `IsWildcard`/`IsSubjectSet` not defined.
-
-- [ ] **Step 3: Write the types**
-
-```csharp
-// src/Custodex.Abstractions/EntityRef.cs
-namespace Custodex.Abstractions;
-
-public readonly record struct EntityRef(string Type, string Id)
-{
-    public bool IsWildcard => Id == "*";
-    public override string ToString() => $"{Type}:{Id}";
-}
-```
-
-```csharp
-// src/Custodex.Abstractions/SubjectRef.cs
-namespace Custodex.Abstractions;
-
-public readonly record struct SubjectRef(string Type, string Id, string? Relation = null)
-{
-    public bool IsSubjectSet => Relation is not null;
-    public bool IsWildcard => Id == "*";
-    public override string ToString() => Relation is null ? $"{Type}:{Id}" : $"{Type}:{Id}#{Relation}";
-}
-```
-
-```csharp
-// src/Custodex.Abstractions/RelationTuple.cs
-namespace Custodex.Abstractions;
-
-public sealed record ConditionRef(string Name, IReadOnlyDictionary<string, object?> Parameters);
-
-public sealed record RelationTuple(
-    EntityRef Object,
-    string Relation,
-    SubjectRef Subject,
-    ConditionRef? Condition = null);
-```
-
-```csharp
-// src/Custodex.Abstractions/TenantContext.cs
-namespace Custodex.Abstractions;
-
-public readonly record struct TenantContext(string Store, string Tenant);
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter ReferenceTypesTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Abstractions tests/Custodex.Abstractions.Tests
-git commit -m "feat: add reference and tuple types to abstractions"
-```
+**Done when:** build clean; computed members behave.
 
 ---
 
-### Task 3: Request, result, and context types
+### Task 3: Request, result, and decision API
 
-**Files:**
-- Create: `src/Custodex.Abstractions/RequestContext.cs`
-- Create: `src/Custodex.Abstractions/Requests.cs`
-- Create: `src/Custodex.Abstractions/IAuthorizer.cs`
-- Test: `tests/Custodex.Abstractions.Tests/RequestTypesTests.cs`
+- [ ] **Files:** create `RequestContext.cs`, `Requests.cs`, `IAuthorizer.cs`. Test: `tests/Custodex.Abstractions.Tests/RequestTypesTests.cs`.
 
-**Interfaces:**
-- Produces: `RequestContext`, `CheckRequest`, `CheckResult`, `BatchCheckRequest`, `CheckItem`, `ListObjectsRequest`, `ListObjectsResult`, `ListSubjectsRequest`, `ListSubjectsResult`, `ExplainNode`, `IAuthorizer`.
+**Produces:** `RequestContext`; `CheckRequest`/`CheckResult`; `BatchCheckRequest`/`CheckItem`; `ListObjectsRequest`/`ListObjectsResult`; `ListSubjectsRequest`/`ListSubjectsResult`; `ExplainNode`; `IAuthorizer`.
+**Consumes (see README):** all signatures are in the contract.
 
-- [ ] **Step 1: Write the failing test**
+**Behavior:**
+- The four operations (`CheckAsync`, `BatchCheckAsync`, `ListObjectsAsync`, `ListSubjectsAsync`) on `IAuthorizer` are the engine's whole decision surface. List requests default `PageSize = 100` and a null continuation token.
 
-```csharp
-// tests/Custodex.Abstractions.Tests/RequestTypesTests.cs
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Abstractions.Tests;
+| Setup | Expect |
+|---|---|
+| construct a `ListObjectsRequest` with defaults | `PageSize == 100`; `ContinuationToken` null |
 
-public class RequestTypesTests
-{
-    [Fact]
-    public void ListObjects_request_defaults_page_size_and_null_cursor()
-    {
-        var ctx = new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", "alice"),
-            new Dictionary<string, object?>());
-        var req = new ListObjectsRequest(new TenantContext("zoo", "t1"),
-            new SubjectRef("user", "alice"), "animal", "edit", ctx);
-        req.PageSize.ShouldBe(100);
-        req.ContinuationToken.ShouldBeNull();
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter RequestTypesTests`
-Expected: FAIL — types not defined.
-
-- [ ] **Step 3: Write the types**
-
-```csharp
-// src/Custodex.Abstractions/RequestContext.cs
-namespace Custodex.Abstractions;
-
-public sealed record RequestContext(
-    DateTimeOffset Now,
-    SubjectRef Subject,
-    IReadOnlyDictionary<string, object?> Attributes);
-```
-
-```csharp
-// src/Custodex.Abstractions/Requests.cs
-namespace Custodex.Abstractions;
-
-public sealed record CheckRequest(
-    TenantContext Tenant, EntityRef Object, string Permission, SubjectRef Subject,
-    RequestContext Context, bool Explain = false);
-
-public sealed record ExplainNode(string Description, bool Allowed, IReadOnlyList<ExplainNode> Children);
-public sealed record CheckResult(bool Allowed, ExplainNode? Explain = null);
-
-public sealed record CheckItem(EntityRef Object, string Permission, SubjectRef Subject);
-public sealed record BatchCheckRequest(TenantContext Tenant, IReadOnlyList<CheckItem> Items, RequestContext Context);
-
-public sealed record ListObjectsRequest(
-    TenantContext Tenant, SubjectRef Subject, string ObjectType, string Permission,
-    RequestContext Context, int PageSize = 100, string? ContinuationToken = null);
-public sealed record ListObjectsResult(IReadOnlyList<string> ObjectIds, string? ContinuationToken);
-
-public sealed record ListSubjectsRequest(
-    TenantContext Tenant, EntityRef Object, string Permission,
-    RequestContext Context, int PageSize = 100, string? ContinuationToken = null);
-public sealed record ListSubjectsResult(IReadOnlyList<SubjectRef> Subjects, string? ContinuationToken);
-```
-
-```csharp
-// src/Custodex.Abstractions/IAuthorizer.cs
-namespace Custodex.Abstractions;
-
-public interface IAuthorizer
-{
-    Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default);
-    Task<IReadOnlyList<CheckResult>> BatchCheckAsync(BatchCheckRequest request, CancellationToken ct = default);
-    Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default);
-    Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default);
-}
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter RequestTypesTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Abstractions tests/Custodex.Abstractions.Tests
-git commit -m "feat: add request/result/context types and IAuthorizer"
-```
+**Done when:** build clean; defaults hold.
 
 ---
 
 ### Task 4: Management interfaces
 
-**Files:**
-- Create: `src/Custodex.Abstractions/Management.cs`
-- Test: `tests/Custodex.Abstractions.Tests/ManagementContractTests.cs`
+- [ ] **Files:** create `Management.cs`. Test: `tests/Custodex.Abstractions.Tests/ManagementContractTests.cs`.
 
-**Interfaces:**
-- Produces: `IRelationManager`, `TupleFilter`, `ChangeLogFilter`, `ChangeLogEntry`, `ISchemaManager`, `IStoreManager`, `ITenantManager`.
-- Consumes: `Schema`, `SchemaValidationResult` (defined in Task 5; declared here as forward references — Task 5 must be present for the project to compile, so implement Task 5 before running this task's build).
+**Produces:** `IRelationManager`, `ISchemaManager`, `IStoreManager`, `ITenantManager`; `TupleFilter`, `ChangeLogFilter`, `ChangeLogEntry`.
+**Consumes (see README):** `Schema`, `SchemaValidationResult` (Task 5) — Task 5 must be present for the assembly to compile.
 
-- [ ] **Step 1: Write the failing test**
+**Behavior:**
+- The management seams are how a consuming app writes tuples/attributes, reads them back filtered, manages the active schema, and reads the change log. Concrete implementations land per provider.
 
-```csharp
-// tests/Custodex.Abstractions.Tests/ManagementContractTests.cs
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Abstractions.Tests;
+| Setup | Expect |
+|---|---|
+| construct `ChangeLogFilter` with defaults | `Limit == 100` |
 
-public class ManagementContractTests
-{
-    [Fact]
-    public void ChangeLogFilter_defaults_limit_to_100()
-    {
-        new ChangeLogFilter().Limit.ShouldBe(100);
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter ManagementContractTests`
-Expected: FAIL — types not defined.
-
-- [ ] **Step 3: Write the interfaces**
-
-```csharp
-// src/Custodex.Abstractions/Management.cs
-namespace Custodex.Abstractions;
-
-public sealed record TupleFilter(string? ObjectType = null, string? ObjectId = null, string? Relation = null,
-    string? SubjectType = null, string? SubjectId = null);
-public sealed record ChangeLogFilter(DateTimeOffset? Since = null, string? Actor = null, int Limit = 100);
-public sealed record ChangeLogEntry(long Id, string Actor, string Operation, string Target,
-    object? Before, object? After, DateTimeOffset OccurredAt);
-
-public interface IRelationManager
-{
-    Task WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default);
-    Task DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default);
-    Task WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default);
-    Task<IReadOnlyList<RelationTuple>> ReadTuplesAsync(TenantContext tenant, TupleFilter filter, CancellationToken ct = default);
-    Task<IReadOnlyList<ChangeLogEntry>> ReadChangeLogAsync(TenantContext tenant, ChangeLogFilter filter, CancellationToken ct = default);
-}
-
-public interface ISchemaManager
-{
-    SchemaValidationResult ValidateSchema(Schema schema);
-    Task SetActiveSchemaAsync(string store, Schema schema, CancellationToken ct = default);
-    Task<Schema?> GetActiveSchemaAsync(string store, CancellationToken ct = default);
-}
-
-public interface IStoreManager { Task CreateStoreAsync(string store, CancellationToken ct = default); }
-public interface ITenantManager { Task CreateTenantAsync(TenantContext tenant, CancellationToken ct = default); }
-```
-
-- [ ] **Step 4: Run to verify pass** (after Task 5 types exist)
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter ManagementContractTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Abstractions tests/Custodex.Abstractions.Tests
-git commit -m "feat: add management interfaces to abstractions"
-```
+**Done when:** build clean; defaults hold.
 
 ---
 
 ### Task 5: Schema AST and validation result
 
-**Files:**
-- Create: `src/Custodex.Abstractions/Schema.cs`
-- Test: `tests/Custodex.Abstractions.Tests/SchemaAstTests.cs`
+- [ ] **Files:** create `Schema.cs` and `ConditionExpr.cs`. Test: `tests/Custodex.Abstractions.Tests/SchemaAstTests.cs`.
 
-**Interfaces:**
-- Produces: `Schema`, `EntityTypeDef`, `RelationDef`, `SubjectTypeRef`, `PermissionDef`, `PermExpr` and subtypes (`RelationRef`, `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned`), `ConditionDef`, `ConditionParam`, `ConditionType`, `SchemaValidationResult`.
+**Produces:** `Schema`, `EntityTypeDef`, `RelationDef`, `SubjectTypeRef`, `PermissionDef`; the `PermExpr` hierarchy (`RelationRef`, `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned`); `ConditionDef`, `ConditionParam`, `ConditionType`; `SchemaValidationResult`; and the abstract `ConditionExpr` marker (its concrete body nodes are owned by m0/06).
+**Consumes (see README):** the AST shapes are in the contract.
 
-- [ ] **Step 1: Write the failing test**
+**Behavior:**
+- `PermExpr` is a sealed, closed set the engine switches over exhaustively; the abstract base plus six concrete nodes is the whole permission algebra. The AST is designed to serialize to jsonb and the DSL; the polymorphic JSON wiring is added when serialization lands, not in this task.
+- `ConditionExpr` ships here as an abstract marker only; m0/06 adds the concrete body nodes.
 
-```csharp
-// tests/Custodex.Abstractions.Tests/SchemaAstTests.cs
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Abstractions.Tests;
+| Setup | Expect |
+|---|---|
+| a `Union(RelationRef, Arrow)` value | pattern-matches as `Union`; subtypes are matchable |
 
-public class SchemaAstTests
-{
-    [Fact]
-    public void PermExpr_subtypes_are_pattern_matchable()
-    {
-        PermExpr expr = new Union(new RelationRef("medicator"), new Arrow("enclosure", "edit"));
-        var label = expr switch
-        {
-            Union => "union",
-            Arrow => "arrow",
-            _ => "other"
-        };
-        label.ShouldBe("union");
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter SchemaAstTests`
-Expected: FAIL — types not defined.
-
-- [ ] **Step 3: Write the AST**
-
-```csharp
-// src/Custodex.Abstractions/Schema.cs
-namespace Custodex.Abstractions;
-
-public sealed record Schema(string Version, IReadOnlyList<EntityTypeDef> Types, IReadOnlyList<ConditionDef> Conditions);
-
-public sealed record EntityTypeDef(string Name, IReadOnlyList<RelationDef> Relations, IReadOnlyList<PermissionDef> Permissions);
-
-public sealed record RelationDef(string Name, IReadOnlyList<SubjectTypeRef> AllowedSubjects);
-public sealed record SubjectTypeRef(string Type, string? Relation = null, bool Wildcard = false);
-
-public sealed record PermissionDef(string Name, PermExpr Expression);
-
-public abstract record PermExpr;
-public sealed record RelationRef(string Relation) : PermExpr;
-public sealed record Union(PermExpr Left, PermExpr Right) : PermExpr;
-public sealed record Intersect(PermExpr Left, PermExpr Right) : PermExpr;
-public sealed record Exclude(PermExpr Left, PermExpr Right) : PermExpr;
-public sealed record Arrow(string Relation, string Permission) : PermExpr;
-public sealed record Conditioned(PermExpr Inner, string ConditionName) : PermExpr;
-
-public sealed record ConditionDef(string Name, IReadOnlyList<ConditionParam> Parameters, ConditionExpr Body);
-public sealed record ConditionParam(string Name, ConditionType Type);
-public enum ConditionType { Bool, Int, Long, Double, String, Timestamp }
-
-public sealed record SchemaValidationResult(bool IsValid, IReadOnlyList<string> Errors);
-```
-
-> `ConditionExpr` is the condition body AST; it is defined in plan `m0/06`. For this task, add a placeholder marker type so the schema compiles:
-
-```csharp
-// src/Custodex.Abstractions/ConditionExpr.cs
-namespace Custodex.Abstractions;
-
-/// <summary>Marker base for the condition-body AST; concrete nodes are added in m0/06.</summary>
-public abstract record ConditionExpr;
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter SchemaAstTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Abstractions tests/Custodex.Abstractions.Tests
-git commit -m "feat: add schema AST records to abstractions"
-```
+**Done when:** build clean; subtypes pattern-match.
 
 ---
 
 ### Task 6: Storage provider interfaces, unit of work, cache, exceptions
 
-**Files:**
-- Create: `src/Custodex.Abstractions/Storage.cs`
-- Create: `src/Custodex.Abstractions/Exceptions.cs`
-- Test: `tests/Custodex.Abstractions.Tests/ExceptionsTests.cs`
+- [ ] **Files:** create `Storage.cs` and `Exceptions.cs`. Test: `tests/Custodex.Abstractions.Tests/ExceptionsTests.cs`.
 
-**Interfaces:**
-- Produces: `IRelationStore`, `ISchemaStore`, `IAttributeStore`, `IIndexStore`, `ICacheStore`, `CacheEntry`, `IChangeLogStore`, `IUnitOfWork`, `IUnitOfWorkFactory`, and the exception hierarchy.
+**Produces:** `IRelationStore`, `ISchemaStore`, `IAttributeStore`, `IIndexStore` (empty until M2), `ICacheStore` + `CacheEntry`, `IChangeLogStore`, `IUnitOfWork`, `IUnitOfWorkFactory`; the exception hierarchy (`SchemaValidationException`, `UnknownTypeException`, `UnknownRelationException`, `UnknownPermissionException`, `EvaluationLimitException`).
+**Consumes (see README):** all storage and exception signatures are in the contract.
 
-- [ ] **Step 1: Write the failing test**
+**Behavior:**
+- `IRelationStore` exposes `GetByObjectAsync`, `GetBySubjectAsync`, `ListObjectIdsAsync` (the type universe for the ListObjects oracle and wildcard grants), and a batched `WriteAsync(add, remove, uow)`. Every storage operation takes a `TenantContext` and filters on `(store, tenant)`.
+- `ICacheStore.GetAsync` returns a `CacheEntry` carrying the epoch it was written at; the caching layer (m0/08) compares it to the current tenant epoch and treats a mismatch as a miss.
+- Allow/deny is always a `CheckResult`; the exceptions signal caller or schema errors (unknown type/relation/permission, invalid schema, tripped depth/cycle guard) and carry the offending name.
 
-```csharp
-// tests/Custodex.Abstractions.Tests/ExceptionsTests.cs
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Abstractions.Tests;
+| Setup | Expect |
+|---|---|
+| construct `UnknownTypeException(type)` | the message contains the type name |
 
-public class ExceptionsTests
-{
-    [Fact]
-    public void UnknownTypeException_carries_the_type()
-    {
-        var ex = new UnknownTypeException("dragon");
-        ex.Message.ShouldContain("dragon");
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter ExceptionsTests`
-Expected: FAIL — type not defined.
-
-- [ ] **Step 3: Write storage interfaces and exceptions**
-
-```csharp
-// src/Custodex.Abstractions/Storage.cs
-namespace Custodex.Abstractions;
-
-public interface IUnitOfWork : IAsyncDisposable { Task CommitAsync(CancellationToken ct = default); }
-public interface IUnitOfWorkFactory { Task<IUnitOfWork> BeginAsync(CancellationToken ct = default); }
-
-public interface IRelationStore
-{
-    Task<IReadOnlyList<RelationTuple>> GetByObjectAsync(TenantContext t, EntityRef obj, string relation, CancellationToken ct = default);
-    Task<IReadOnlyList<RelationTuple>> GetBySubjectAsync(TenantContext t, SubjectRef subject, CancellationToken ct = default);
-    Task WriteAsync(TenantContext t, IReadOnlyList<RelationTuple> add, IReadOnlyList<RelationTuple> remove, IUnitOfWork uow, CancellationToken ct = default);
-}
-
-public interface ISchemaStore
-{
-    Task<Schema?> GetActiveAsync(string store, CancellationToken ct = default);
-    Task SetActiveAsync(string store, Schema schema, IUnitOfWork uow, CancellationToken ct = default);
-}
-
-public interface IAttributeStore
-{
-    Task<IReadOnlyDictionary<string, object?>?> GetAsync(TenantContext t, EntityRef obj, CancellationToken ct = default);
-    Task SetAsync(TenantContext t, EntityRef obj, IReadOnlyDictionary<string, object?> attrs, IUnitOfWork uow, CancellationToken ct = default);
-}
-
-public interface IIndexStore { }   // populated in M2
-
-public sealed record CacheEntry(byte[] Value, long Epoch);
-public interface ICacheStore
-{
-    Task<CacheEntry?> GetAsync(string key, CancellationToken ct = default);
-    Task SetAsync(string key, CacheEntry entry, TimeSpan ttl, CancellationToken ct = default);
-    Task<long> GetEpochAsync(TenantContext t, CancellationToken ct = default);
-    Task BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default);
-}
-
-public interface IChangeLogStore
-{
-    Task AppendAsync(TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default);
-    Task<IReadOnlyList<ChangeLogEntry>> ReadAsync(TenantContext t, ChangeLogFilter filter, CancellationToken ct = default);
-}
-```
-
-```csharp
-// src/Custodex.Abstractions/Exceptions.cs
-namespace Custodex.Abstractions;
-
-public sealed class SchemaValidationException(IReadOnlyList<string> errors)
-    : Exception("Schema validation failed: " + string.Join("; ", errors))
-{ public IReadOnlyList<string> Errors { get; } = errors; }
-
-public sealed class UnknownTypeException(string type) : Exception($"Unknown entity type '{type}'.")
-{ public string Type { get; } = type; }
-
-public sealed class UnknownRelationException(string type, string relation)
-    : Exception($"Unknown relation '{relation}' on type '{type}'.")
-{ public string Type { get; } = type; public string Relation { get; } = relation; }
-
-public sealed class UnknownPermissionException(string type, string permission)
-    : Exception($"Unknown permission '{permission}' on type '{type}'.")
-{ public string Type { get; } = type; public string Permission { get; } = permission; }
-
-public sealed class EvaluationLimitException(string detail) : Exception(detail);
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter ExceptionsTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Abstractions tests/Custodex.Abstractions.Tests
-git commit -m "feat: add storage interfaces, cache, unit of work, and exceptions"
-```
+**Done when:** build clean; exception carries its detail.
 
 ---
 
 ### Task 7: Diagnostics primitives
 
-**Files:**
-- Create: `src/Custodex.Abstractions/CustodexDiagnostics.cs`
-- Test: `tests/Custodex.Abstractions.Tests/DiagnosticsTests.cs`
+- [ ] **Files:** create `CustodexDiagnostics.cs`. Test: `tests/Custodex.Abstractions.Tests/DiagnosticsTests.cs`.
 
-**Interfaces:**
-- Produces: `CustodexDiagnostics.ActivitySource` (named `"Custodex"`) and `CustodexDiagnostics.Meter` (named `"Custodex"`) plus named instruments later plans record into.
+**Produces:** `CustodexDiagnostics` — the `ActivitySource` and `Meter` both named `"Custodex"`, plus the instruments later plans record into: `CheckDuration` (`Custodex.check.duration`, unit `ms`), `CacheHits` (`Custodex.cache.hits`), `CacheMisses` (`Custodex.cache.misses`).
+**Consumes (see README):** observability flows into the OTel pipeline via `Custodex.ServiceDefaults` and `AddCustodexInstrumentation()` (M1); this task owns only the source/meter/instruments.
 
-- [ ] **Step 1: Write the failing test**
+**Behavior:**
+- The library owns the `"Custodex"` `ActivitySource` and `Meter`; M0/05 and M0/08 populate the instruments. The integration point (registering them into OTel) is M1, not here.
 
-```csharp
-// tests/Custodex.Abstractions.Tests/DiagnosticsTests.cs
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Abstractions.Tests;
+| Setup | Expect |
+|---|---|
+| read the source/meter names | both are `"Custodex"` |
 
-public class DiagnosticsTests
-{
-    [Fact]
-    public void Diagnostics_sources_are_named_Custodex()
-    {
-        CustodexDiagnostics.ActivitySource.Name.ShouldBe("Custodex");
-        CustodexDiagnostics.Meter.Name.ShouldBe("Custodex");
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter DiagnosticsTests`
-Expected: FAIL — type not defined.
-
-- [ ] **Step 3: Write the diagnostics holder**
-
-```csharp
-// src/Custodex.Abstractions/CustodexDiagnostics.cs
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
-
-namespace Custodex.Abstractions;
-
-public static class CustodexDiagnostics
-{
-    public const string Name = "Custodex";
-    public static readonly ActivitySource ActivitySource = new(Name);
-    public static readonly Meter Meter = new(Name);
-
-    public static readonly Histogram<double> CheckDuration =
-        Meter.CreateHistogram<double>("Custodex.check.duration", unit: "ms");
-    public static readonly Counter<long> CacheHits = Meter.CreateCounter<long>("Custodex.cache.hits");
-    public static readonly Counter<long> CacheMisses = Meter.CreateCounter<long>("Custodex.cache.misses");
-}
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Abstractions.Tests --filter DiagnosticsTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Abstractions tests/Custodex.Abstractions.Tests
-git commit -m "feat: add Custodex diagnostics primitives"
-```
+**Done when:** build clean; names match.
 
 ---
 
-## Self-review checklist (run after all tasks)
+## Self-review checklist (after all tasks)
 
-- [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`.
-- [ ] Every type in `../README.md` → Canonical public contract exists with the exact signature, except `ConditionExpr` concrete nodes (owned by `m0/06`) and `IIndexStore` members (owned by M2).
-- [ ] No logic beyond computed members lives in `Custodex.Abstractions`.
+- [ ] `dotnet build` clean under TreatWarningsAsErrors.
+- [ ] Every type in `../README.md` → Canonical public contract exists with its exact signature, except the concrete `ConditionExpr` nodes (m0/06) and `IIndexStore` members (M2).
+- [ ] `IRelationStore` exposes `ListObjectIdsAsync` for the ListObjects oracle.
+- [ ] No logic beyond computed members on value types lives in `Custodex.Abstractions`.
+- [ ] Every public type and member carries an XML doc comment (this is the consumer-facing surface).
