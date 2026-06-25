@@ -83,7 +83,8 @@ builder.Services.AddAuthorization(opts =>
 builder.Services.AddScoped<TenantContextAccessor>();
 builder.Services.AddScoped<ITenantContextAccessor>(sp => sp.GetRequiredService<TenantContextAccessor>());
 
-var connectionString = builder.Configuration["Custodex:ConnectionString"]
+var connectionString = builder.Configuration.GetConnectionString("Custodex")
+    ?? builder.Configuration["Custodex:ConnectionString"]
     ?? throw new InvalidOperationException("Custodex:ConnectionString is required.");
 
 builder.Services.AddCustodex().UsePostgres(connectionString);

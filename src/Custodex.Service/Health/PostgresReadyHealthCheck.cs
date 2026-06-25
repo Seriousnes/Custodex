@@ -15,7 +15,8 @@ public sealed class PostgresReadyHealthCheck(IConfiguration configuration) : IHe
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
-        var connectionString = configuration["Custodex:ConnectionString"];
+        var connectionString = configuration.GetConnectionString("Custodex")
+            ?? configuration["Custodex:ConnectionString"];
         if (string.IsNullOrEmpty(connectionString))
             return HealthCheckResult.Unhealthy("Custodex:ConnectionString is not configured.");
 
