@@ -20,6 +20,8 @@ public sealed class ServiceFixture : IAsyncLifetime
     public GrpcChannel GrpcChannel { get; private set; } = null!;
     public string ConnectionString => _postgres.GetConnectionString();
 
+    internal const string AdminKey = "fixture-admin-key";
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
@@ -28,10 +30,14 @@ public sealed class ServiceFixture : IAsyncLifetime
             {
                 b.UseSetting("Custodex:ConnectionString", ConnectionString);
                 b.UseEnvironment("Development");
+                b.UseSetting("Custodex:ApiKeys:0:Key", AdminKey);
+                b.UseSetting("Custodex:ApiKeys:0:Store", "fixture-store");
+                b.UseSetting("Custodex:ApiKeys:0:Role", "admin");
             });
+        var handler = new ApiKeyHeaderHandler(AdminKey, Factory.Server.CreateHandler());
         GrpcChannel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions
         {
-            HttpHandler = Factory.Server.CreateHandler(),
+            HttpHandler = handler,
         });
     }
 

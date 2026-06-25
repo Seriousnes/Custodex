@@ -17,6 +17,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
+            b.UseAdminApiKey();
         });
 
     [Fact]
@@ -25,7 +26,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
         var req = new CheckRequestDto(
             Store: storeId,
             Tenant: tenantId,
@@ -49,7 +50,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
         var req = new CheckRequestDto(
             Store: storeId,
             Tenant: tenantId,
@@ -73,7 +74,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
         var req = new CheckRequestDto(
             Store: storeId,
             Tenant: tenantId,
@@ -99,7 +100,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
         var req = new ListObjectsRequestDto(
             Store: storeId,
             Tenant: tenantId,
@@ -123,7 +124,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
         var ctx = new RequestContextDto(
             Subject: new SubjectRefDto("user", "u-1", null),
             Now: null,

@@ -18,13 +18,11 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
+            b.UseAdminApiKey();
         });
 
     private static GrpcChannel CreateChannel(WebApplicationFactory<Program> factory) =>
-        GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions
-        {
-            HttpHandler = factory.Server.CreateHandler(),
-        });
+        factory.CreateAuthenticatedGrpcChannel();
 
     private static async Task<(string Store, string Tenant)> ProvisionAsync(
         IServiceProvider services, Schema schema)

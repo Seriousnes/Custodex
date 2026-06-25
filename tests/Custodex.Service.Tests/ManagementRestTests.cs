@@ -16,13 +16,14 @@ public sealed class ManagementRestTests(PostgresFixture pg)
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
+            b.UseAdminApiKey();
         });
 
     [Fact]
     public async Task Provision_set_schema_write_read_tuples_and_read_change_log()
     {
         await using var factory = CreateFactory();
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
 
         var storeId = $"store-{Guid.NewGuid():N}";
         var tenantId = $"tenant-{Guid.NewGuid():N}";
@@ -72,7 +73,7 @@ public sealed class ManagementRestTests(PostgresFixture pg)
     public async Task SetActive_schema_with_invalid_reference_returns_400()
     {
         await using var factory = CreateFactory();
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
 
         var storeId = $"store-{Guid.NewGuid():N}";
         var createStore = await client.PostAsJsonAsync("/v1/stores", new CreateStoreRequestDto(storeId));
@@ -92,7 +93,7 @@ public sealed class ManagementRestTests(PostgresFixture pg)
     public async Task Write_then_delete_tuple_leaves_query_empty()
     {
         await using var factory = CreateFactory();
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
 
         var storeId = $"store-{Guid.NewGuid():N}";
         var tenantId = $"tenant-{Guid.NewGuid():N}";

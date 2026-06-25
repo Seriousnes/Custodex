@@ -14,10 +14,10 @@ public static partial class RestEndpoints
     {
         var v1 = app.MapGroup("/v1");
 
-        var decision = v1.MapGroup(string.Empty).WithTags("decision");
+        var decision = v1.MapGroup(string.Empty).WithTags("decision").RequireAuthorization();
         MapDecisionEndpoints(decision);
 
-        var management = v1.MapGroup(string.Empty).WithTags("management");
+        var management = v1.MapGroup(string.Empty).WithTags("management").RequireAuthorization();
         MapManagementEndpoints(management);
 
         return app;

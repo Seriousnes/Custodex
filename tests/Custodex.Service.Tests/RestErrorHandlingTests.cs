@@ -16,13 +16,14 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
+            b.UseAdminApiKey();
         });
 
     [Fact]
     public async Task Check_against_undefined_permission_returns_400()
     {
         await using var factory = CreateFactory();
-        var client = factory.CreateClient();
+        var client = factory.CreateAuthenticatedClient();
 
         var storeId = $"store-{Guid.NewGuid():N}";
         var tenantId = $"tenant-{Guid.NewGuid():N}";
