@@ -1,4 +1,5 @@
 using Custodex.Core;
+using Custodex.Service.Services;
 using Custodex.Storage.Postgres;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,7 @@ builder.Services.AddCustodex().UsePostgres(connectionString);
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
+app.MapGrpcService<DecisionGrpcService>();
 
 app.Run();
 

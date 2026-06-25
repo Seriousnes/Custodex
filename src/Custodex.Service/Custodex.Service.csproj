@@ -17,7 +17,7 @@
 
 	<ItemGroup>
 		<Protobuf Include="Protos\custodex_common.proto" GrpcServices="None" />
-		<Protobuf Include="Protos\custodex_decision.proto" GrpcServices="Server" />
+		<Protobuf Include="Protos\custodex_decision.proto" GrpcServices="Both" />
 	</ItemGroup>
 
 	<ItemGroup>
