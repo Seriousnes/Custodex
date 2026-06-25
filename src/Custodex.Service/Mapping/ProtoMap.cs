@@ -92,10 +92,13 @@ public static class ProtoMap
 
     /// <summary>
     /// Converts a <see cref="Struct"/> to an <see cref="IReadOnlyDictionary{String, Object}"/>.
-    /// Numeric values arrive as <c>double</c> after the proto round-trip.
+    /// Numeric values arrive as <c>double</c> after the proto round-trip. A <see langword="null"/>
+    /// struct, which an omitted proto message field decodes to, maps to an empty dictionary.
     /// </summary>
-    public static IReadOnlyDictionary<string, object?> FromStruct(Struct s) =>
-        s.Fields.ToDictionary(kv => kv.Key, kv => FromValue(kv.Value));
+    public static IReadOnlyDictionary<string, object?> FromStruct(Struct? s) =>
+        s is null
+            ? new Dictionary<string, object?>()
+            : s.Fields.ToDictionary(kv => kv.Key, kv => FromValue(kv.Value));
 
     private static Value ToValue(object? v) => v switch
     {
