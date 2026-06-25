@@ -77,6 +77,55 @@ public class ParityTests
     }
 
     [Fact]
+    public void Parsed_schema_widget_relations_match_builder()
+    {
+        var parsed = SchemaParser.Parse(NeutralSchemaText);
+        var built = BuilderSchema();
+
+        var parsedWidget = parsed.Types.Single(t => t.Name == "widget");
+        var builtWidget = built.Types.Single(t => t.Name == "widget");
+
+        parsedWidget.Relations.Count.ShouldBe(builtWidget.Relations.Count);
+        for (var i = 0; i < parsedWidget.Relations.Count; i++)
+        {
+            var pr = parsedWidget.Relations[i];
+            var br = builtWidget.Relations[i];
+            pr.Name.ShouldBe(br.Name);
+            pr.AllowedSubjects.Count.ShouldBe(br.AllowedSubjects.Count);
+            for (var j = 0; j < pr.AllowedSubjects.Count; j++)
+                pr.AllowedSubjects[j].ShouldBe(br.AllowedSubjects[j]);
+        }
+    }
+
+    [Fact]
+    public void Parsed_schema_container_type_matches_builder()
+    {
+        var parsed = SchemaParser.Parse(NeutralSchemaText);
+        var built = BuilderSchema();
+
+        var parsedContainer = parsed.Types.Single(t => t.Name == "container");
+        var builtContainer = built.Types.Single(t => t.Name == "container");
+
+        parsedContainer.Relations.Count.ShouldBe(builtContainer.Relations.Count);
+        for (var i = 0; i < parsedContainer.Relations.Count; i++)
+        {
+            var pr = parsedContainer.Relations[i];
+            var br = builtContainer.Relations[i];
+            pr.Name.ShouldBe(br.Name);
+            pr.AllowedSubjects.Count.ShouldBe(br.AllowedSubjects.Count);
+            for (var j = 0; j < pr.AllowedSubjects.Count; j++)
+                pr.AllowedSubjects[j].ShouldBe(br.AllowedSubjects[j]);
+        }
+
+        parsedContainer.Permissions.Count.ShouldBe(builtContainer.Permissions.Count);
+        for (var i = 0; i < parsedContainer.Permissions.Count; i++)
+        {
+            parsedContainer.Permissions[i].Name.ShouldBe(builtContainer.Permissions[i].Name);
+            parsedContainer.Permissions[i].Expression.ShouldBe(builtContainer.Permissions[i].Expression);
+        }
+    }
+
+    [Fact]
     public void Parsed_schema_widget_permission_expression_matches_builder()
     {
         var parsed = SchemaParser.Parse(NeutralSchemaText);
