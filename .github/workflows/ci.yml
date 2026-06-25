@@ -37,11 +37,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project:
-          - Custodex.Abstractions.Tests
-          - Custodex.Core.Tests
-          - Custodex.Storage.InMemory.Tests
-          - Custodex.Storage.Postgres.Tests
+        include:
+          - project: Custodex.Abstractions.Tests
+            filter: ""
+          - project: Custodex.Core.Tests
+            filter: ""
+          - project: Custodex.Storage.InMemory.Tests
+            filter: ""
+          - project: Custodex.Storage.Postgres.Tests
+            filter: "category!=aspire&category!=container"
+          - project: Custodex.Service.Tests
+            filter: ""
+          - project: Custodex.Client.Tests
+            filter: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,10 +60,17 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Test
+        env:
+          FILTER: ${{ matrix.filter }}
         run: |
           set -o pipefail
+          FILTER_ARG=""
+          if [ -n "$FILTER" ]; then
+            FILTER_ARG="--filter $FILTER"
+          fi
           dotnet test tests/${{ matrix.project }}/${{ matrix.project }}.csproj \
-            --configuration Release --verbosity normal | tee test-output.txt
+            --configuration Release --verbosity normal $FILTER_ARG \
+            | tee test-output.txt
           if ! grep -qE 'Passed!|Total tests: [1-9]' test-output.txt; then
             echo "::error::No tests were executed for ${{ matrix.project }}"
             exit 1
