@@ -12,12 +12,9 @@ namespace Custodex.Storage.Postgres.Index;
 /// makes incremental maintenance produce results identical to a full rebuild by construction.
 /// </summary>
 public sealed class ObjectRowRecomputer(
-    string connectionString,
     IRelationStore relations,
     IAttributeStore attributes)
 {
-    private readonly string _connectionString = connectionString;
-
     /// <summary>
     /// Returns the structural reverse-index rows that should exist for <paramref name="obj"/>
     /// under <paramref name="t"/>, computed by probing every (permission, subject) pair via the

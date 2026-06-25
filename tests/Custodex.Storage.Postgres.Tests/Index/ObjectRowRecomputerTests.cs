@@ -61,7 +61,7 @@ public class ObjectRowRecomputerTests(PostgresFixture fx) : IAsyncLifetime
             await u.CommitAsync();
         }
 
-        var recomputer = new ObjectRowRecomputer(fx.ConnectionString, _relations, _attributes);
+        var recomputer = new ObjectRowRecomputer(_relations, _attributes);
         var rows = await recomputer.RecomputeAsync(new SchemaIndex(Build()), _schemas, t,
             new EntityRef("doc", "alpha"), ["alice", "bob"]);
 

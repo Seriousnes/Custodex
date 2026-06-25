@@ -53,7 +53,7 @@ public static partial class DifferentialHarness
             await u.CommitAsync(ct);
         }
 
-        var maintainer = new ReverseIndexMaintainer(fx.ConnectionString, pgSchema, pgRelations, pgAttributes, index);
+        var maintainer = new ReverseIndexMaintainer(pgSchema, pgRelations, pgAttributes, index);
         foreach (var op in ops)
         {
             RelationTuple[] add = op.Add ? [op.Tuple] : [];
