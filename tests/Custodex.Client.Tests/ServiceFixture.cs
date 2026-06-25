@@ -1,0 +1,44 @@
+extern alias ServiceHost;
+
+using Grpc.Net.Client;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Testcontainers.PostgreSql;
+
+namespace Custodex.Client.Tests;
+
+[CollectionDefinition("client-parity")]
+public sealed class ClientParityCollection : ICollectionFixture<ServiceFixture> { }
+
+public sealed class ServiceFixture : IAsyncLifetime
+{
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+        .WithImage("postgres:16-alpine")
+        .Build();
+
+    public WebApplicationFactory<ServiceHost::Program> Factory { get; private set; } = null!;
+    public GrpcChannel GrpcChannel { get; private set; } = null!;
+    public string ConnectionString => _postgres.GetConnectionString();
+
+    public async Task InitializeAsync()
+    {
+        await _postgres.StartAsync();
+        Factory = new WebApplicationFactory<ServiceHost::Program>()
+            .WithWebHostBuilder(b =>
+            {
+                b.UseSetting("Custodex:ConnectionString", ConnectionString);
+                b.UseEnvironment("Development");
+            });
+        GrpcChannel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions
+        {
+            HttpHandler = Factory.Server.CreateHandler(),
+        });
+    }
+
+    public async Task DisposeAsync()
+    {
+        GrpcChannel.Dispose();
+        await Factory.DisposeAsync();
+        await _postgres.DisposeAsync();
+    }
+}
