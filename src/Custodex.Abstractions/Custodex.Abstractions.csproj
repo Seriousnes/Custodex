@@ -5,6 +5,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<RootNamespace>Custodex</RootNamespace>
+		<IsPackable>true</IsPackable>
+		<Description>Public contracts (interfaces and records) for the Custodex authorization engine — the dependency for consumers and third-party storage and condition providers.</Description>
 	</PropertyGroup>
 
 </Project>
