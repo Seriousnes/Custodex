@@ -16,7 +16,7 @@ internal static class ReachabilityCte
     private const string Sql = """
         WITH RECURSIVE reach (object_type, object_id, relation) AS (
             -- base: the requested (object, relation)
-            SELECT @ot::text, @oid::text, @rel::text
+            SELECT @ot::text COLLATE "C", @oid::text COLLATE "C", @rel::text COLLATE "C"
           UNION
             -- step: for each frontier tuple whose subject is a subject-set group:G#srel,
             -- follow into G's srel tuples (one more hop of nested membership).

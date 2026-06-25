@@ -28,7 +28,7 @@ public sealed partial class NpgsqlCteAuthorizer : IAuthorizer
         string connectionString, ISchemaStore schemaStore, IAttributeStore attributes,
         IConditionEvaluator conditions, EvaluationOptions? options = null)
     {
-        _connectionString = connectionString;
+        _connectionString = CustodexSchema.Apply(connectionString);
         _schemaStore = schemaStore;
         _attributes = attributes;
         _conditions = conditions;

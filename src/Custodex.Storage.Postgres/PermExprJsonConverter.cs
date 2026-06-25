@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Custodex.Abstractions;
+using Custodex.Core;
 
 namespace Custodex.Storage.Postgres;
 
@@ -22,6 +23,11 @@ public sealed class PermExprJsonConverter : JsonConverterFactory
         ["conditioned"] = typeof(Conditioned),
     };
 
+    private static readonly IReadOnlyDictionary<string, Type> ConditionTypes = new Dictionary<string, Type>
+    {
+        ["empty"] = typeof(EmptyConditionBody),
+    };
+
     /// <inheritdoc />
     public override bool CanConvert(Type typeToConvert) =>
         typeToConvert == typeof(PermExpr) || typeToConvert == typeof(ConditionExpr);
@@ -31,7 +37,7 @@ public sealed class PermExprJsonConverter : JsonConverterFactory
     {
         if (typeToConvert == typeof(PermExpr))
             return new DiscriminatedConverter<PermExpr>(PermTypes);
-        return new DiscriminatedConverter<ConditionExpr>(new Dictionary<string, Type>());
+        return new DiscriminatedConverter<ConditionExpr>(ConditionTypes);
     }
 
     private sealed class DiscriminatedConverter<TBase>(IReadOnlyDictionary<string, Type> byTag)

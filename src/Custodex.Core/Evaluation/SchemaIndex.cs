@@ -48,6 +48,8 @@ public sealed class SchemaIndex
     public bool TryRelation(string type, string rel, out RelationDef def) =>
         _relations.TryGetValue((type, rel), out def!);
 
+    public bool TryType(string name, out EntityTypeDef def) => _types.TryGetValue(name, out def!);
+
     public ConditionDef Condition(string name) =>
         _conditions.TryGetValue(name, out var c)
             ? c : throw new UnknownPermissionException("condition", name);

@@ -13,13 +13,15 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class NpgsqlAttributeStore(string connectionString) : IAttributeStore
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, object?>?> GetAsync(
         TenantContext t, EntityRef obj, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         var json = await conn.ExecuteScalarAsync<string?>(new CommandDefinition("""
-            SELECT attributes::text FROM object_attributes
+            SELECT attributes::text FROM custodex.object_attributes
             WHERE store_id = @store AND tenant_id = @tenant
               AND object_type = @ot AND object_id = @oid
             """,
@@ -36,7 +38,7 @@ public sealed class NpgsqlAttributeStore(string connectionString) : IAttributeSt
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await using var cmd = new NpgsqlCommand("""
-            INSERT INTO object_attributes (store_id, tenant_id, object_type, object_id, attributes)
+            INSERT INTO custodex.object_attributes (store_id, tenant_id, object_type, object_id, attributes)
             VALUES (@store, @tenant, @ot, @oid, @attrs)
             ON CONFLICT (store_id, tenant_id, object_type, object_id)
             DO UPDATE SET attributes = EXCLUDED.attributes

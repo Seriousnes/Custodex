@@ -13,4 +13,5 @@ public static class CustodexDiagnostics
         Meter.CreateHistogram<double>("Custodex.check.duration", unit: "ms");
     public static readonly Counter<long> CacheHits = Meter.CreateCounter<long>("Custodex.cache.hits");
     public static readonly Counter<long> CacheMisses = Meter.CreateCounter<long>("Custodex.cache.misses");
+    public static readonly Counter<long> CacheSwept = Meter.CreateCounter<long>("Custodex.cache.swept");
 }

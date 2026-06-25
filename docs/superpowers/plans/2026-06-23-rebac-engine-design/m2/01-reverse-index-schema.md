@@ -2,7 +2,7 @@
 
 **Goal:** Populate the `IIndexStore` contract (empty in the foundation README today) and implement `NpgsqlIndexStore` over the `reverse_index` table from m1/01, plus the `ReverseIndexRow` row value. This is the storage seam the full rebuild (m2/02) and incremental maintenance (m2/03) write through, and the index-backed `ListObjects` (m2/04) reads through.
 
-**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — write the failing test (Red), make it pass (Green), then one Conventional-Commit per task with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [ ]` checkboxes.
+**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — write the failing test (Red), make it pass (Green), then one Conventional-Commit per task with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [x]` checkboxes.
 
 **Architecture/approach:** The `reverse_index` table holds resolved **structural (unconditioned) grants**: `(store_id, tenant_id, schema_version, subject, permission, object_type, object_id, conditioned)`. A row asserts "`subject` holds `permission` on `object_type:object_id` structurally; when `conditioned` is true, a request-time condition was reached on the grant path and must be re-evaluated before the grant is honoured." `subject` is the canonical `SubjectRef` string (`user:alice`, `group:vets#member`, `user:*`). The store is a thin, mechanical CRUD seam — no algebra lives here; the expansion that decides which rows exist lives in m2/02/m2/03. Every operation hard-filters `(store_id, tenant_id, schema_version)` (spec §6.3, §7.3).
 
@@ -25,7 +25,7 @@ These M2 plans share the index table and its row shape:
 
 ### Task 1: `reverse_index` natural-key unique index (migration 002)
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/Migrations/002_reverse_index_unique.sql`; test `…Tests/Index/ReverseIndexSchemaTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/Migrations/002_reverse_index_unique.sql`; test `…Tests/Index/ReverseIndexSchemaTests.cs`.
 
 **Produces:** a unique index `ux_reverse_index_natural` on the locked natural key, giving Task 4's upsert a conflict target. Applied by the existing `MigrationRunner` (m1/01), which picks up embedded `Migrations/*.sql` in name order.
 **Consumes (see README):** `MigrationRunner`, `PostgresFixture` (m1/01).
@@ -45,7 +45,7 @@ These M2 plans share the index table and its row shape:
 
 ### Task 2: `IIndexStore` members + `ReverseIndexRow`
 
-- [ ] **Files:** modify `src/Custodex.Abstractions/Storage.cs`; create `src/Custodex.Abstractions/ReverseIndexRow.cs`; test `tests/Custodex.Abstractions.Tests/IndexStoreContractTests.cs`.
+- [x] **Files:** modify `src/Custodex.Abstractions/Storage.cs`; create `src/Custodex.Abstractions/ReverseIndexRow.cs`; test `tests/Custodex.Abstractions.Tests/IndexStoreContractTests.cs`.
 
 **Produces:** the populated `IIndexStore` interface (README ships it empty) and the `ReverseIndexRow` record. This plan is the **definer** of the full `IIndexStore` member set; the README "Post-dispatch contract reconciliations" §4 is its canonical home, and §4's enumerated core (`UpsertAsync` / `DeleteForObjectAsync` / a query scan / rebuild markers) is the contract this realizes. The members, all `(store, tenant, schema_version)`-scoped and `async` with a trailing `ct`:
   - upsert rows in-place on the natural key, setting `conditioned`;
@@ -74,7 +74,7 @@ These M2 plans share the index table and its row shape:
 
 ### Task 3: `index_build_markers` table (migration 003)
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/Migrations/003_index_build_markers.sql`; test `…Tests/Index/IndexBuildMarkerSchemaTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/Migrations/003_index_build_markers.sql`; test `…Tests/Index/IndexBuildMarkerSchemaTests.cs`.
 
 **Produces:** `index_build_markers(store_id, tenant_id, schema_version, built_at, PK(store_id, tenant_id, schema_version))`, the table backing the is-built / mark-built members.
 **Consumes (see README):** `MigrationRunner`, `PostgresFixture`; FK to `tenants(store_id, tenant_id)`.
@@ -93,7 +93,7 @@ These M2 plans share the index table and its row shape:
 
 ### Task 4: `NpgsqlIndexStore`
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/NpgsqlIndexStore.cs`; test `…Tests/Index/NpgsqlIndexStoreTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/NpgsqlIndexStore.cs`; test `…Tests/Index/NpgsqlIndexStoreTests.cs`.
 
 **Produces:** `NpgsqlIndexStore(string connectionString) : IIndexStore` — every member in Dapper over `reverse_index` and `index_build_markers`.
 **Consumes (see README):** `IIndexStore` / `ReverseIndexRow` / `TenantContext` (Task 2); `NpgsqlUnitOfWork.From` (m1/03); Dapper.
@@ -118,12 +118,12 @@ These M2 plans share the index table and its row shape:
 
 ## Self-review checklist (after all tasks)
 
-- [ ] `dotnet build` clean under `TreatWarningsAsErrors=true`.
-- [ ] `IIndexStore` is no longer empty: it declares the upsert, delete-for-object, delete-rows, query-objects, read-for-object, clear, is-built, and mark-built members (reported as a contract addition for README §4).
-- [ ] `ReverseIndexRow(Subject, Permission, ObjectType, ObjectId, Conditioned)` exists in `Custodex.Abstractions`.
-- [ ] `reverse_index` has `ux_reverse_index_natural` (natural key, `conditioned` excluded) and keeps `ix_reverse_index_scan`.
-- [ ] `index_build_markers` exists; presence marks the index current for a `(store, tenant, schema_version)`.
-- [ ] `NpgsqlIndexStore` upserts in-place, scans ordinal-sorted with a cursor, and hard-filters `(store, tenant[, schema_version])` on every statement.
+- [x] `dotnet build` clean under `TreatWarningsAsErrors=true`.
+- [x] `IIndexStore` is no longer empty: it declares the upsert, delete-for-object, delete-rows, query-objects, read-for-object, clear, is-built, and mark-built members (reported as a contract addition for README §4).
+- [x] `ReverseIndexRow(Subject, Permission, ObjectType, ObjectId, Conditioned)` exists in `Custodex.Abstractions`.
+- [x] `reverse_index` has `ux_reverse_index_natural` (natural key, `conditioned` excluded) and keeps `ix_reverse_index_scan`.
+- [x] `index_build_markers` exists; presence marks the index current for a `(store, tenant, schema_version)`.
+- [x] `NpgsqlIndexStore` upserts in-place, scans ordinal-sorted with a cursor, and hard-filters `(store, tenant[, schema_version])` on every statement.
 
 ## Contract gaps / additions (reported, not changed)
 

@@ -85,6 +85,18 @@ public class CteListObjectsTests(PostgresFixture fx) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Lists_objects_in_ordinal_order_regardless_of_server_collation()
+    {
+        var (auth, t) = await SetupAsync("lo-collation",
+            Tup("asset", "alpha", "editor", new SubjectRef("user", "*")),
+            Tup("asset", "Bravo", "editor", new SubjectRef("user", "*")),
+            Tup("asset", "Zulu", "editor", new SubjectRef("user", "*")));
+
+        var result = await auth.ListObjectsAsync(Req(t, "anyone"));
+        result.ObjectIds.ShouldBe(["Bravo", "Zulu", "alpha"]);
+    }
+
+    [Fact]
     public async Task Paginates_to_exact_page_size_with_resumable_cursor()
     {
         var (auth, t) = await SetupAsync("lo-page",

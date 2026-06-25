@@ -2,7 +2,7 @@
 
 **Goal:** Harden the existing `PostgresCacheStore` (built in m1/07 over the `UNLOGGED` `cache_entries` table with epoch + get/set + lazy expiry) for production across horizontally scaled instances. Add (1) a **per-tenant scoping fix** via a `PostgresCacheStoreFactory` yielding a correctly scoped store per `TenantContext`; (2) a **background TTL sweep** (`CacheSweep` + `CacheSweepService`) deleting expired rows on an interval, complementing the lazy read-time expiry; and (3) a guard test proving the m0/08 `CacheValueCodec` round-trips a `bool` decision through `SetAsync`/`GetAsync`.
 
-**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [ ]` checkboxes.
+**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [x]` checkboxes.
 
 **Architecture/approach:** m1/07 left `PostgresCacheStore(connectionString, scope)` correct for epochs and entries but scoped to a single `(store, tenant)` at construction — wrong for a multi-tenant process registering one cache in DI. A `PostgresCacheStoreFactory(connectionString)` yields a store scoped to a given tenant, so each request resolves its own; the underlying `cache_entries` rows stay keyed by `(store_id, tenant_id, key)` so two store instances for the same tenant share rows (a shared cache across instances). The epoch methods already take an explicit `TenantContext`, so only the `key`-only get/set needed the scope, and the factory supplies it. `CacheSweepService : BackgroundService` periodically runs a whole-table delete of rows past `expires_at` (the `ix_cache_entries_expiry` index from m1/01 makes it cheap), keeping the `UNLOGGED` table from accumulating dead rows that lazy expiry alone never reclaims. `CacheValueCodec` (m0/08) stays the value boundary: `CachingAuthorizer` encodes the `bool` before `SetAsync` and decodes after `GetAsync`; this plan keeps the store value-opaque (`byte[]`) and proves the codec round-trips through it.
 
@@ -23,7 +23,7 @@
 
 ### Task 1: `PostgresCacheStoreFactory` — per-tenant scoped stores over shared rows
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/PostgresCacheStoreFactory.cs`; test `…Tests/Cache/PostgresCacheStoreFactoryTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/PostgresCacheStoreFactory.cs`; test `…Tests/Cache/PostgresCacheStoreFactoryTests.cs`.
 
 **Produces:** `PostgresCacheStoreFactory(string connectionString)` with `ICacheStore For(TenantContext)` returning a `PostgresCacheStore` scoped to that tenant. The factory is the process-wide DI singleton; per-request code calls `For(tenant)`.
 **Consumes (see README):** `PostgresCacheStore(connectionString, scope)` (m1/07), `TenantContext`, `ICacheStore` (m0/01).
@@ -43,7 +43,7 @@
 
 ### Task 2: `CacheSweep` — delete expired rows
 
-- [ ] **Files:** create `src/Custodex.Storage.Postgres/CacheSweep.cs`; test `…Tests/Cache/CacheSweepTests.cs`.
+- [x] **Files:** create `src/Custodex.Storage.Postgres/CacheSweep.cs`; test `…Tests/Cache/CacheSweepTests.cs`.
 
 **Produces:** `static Task<int> CacheSweep.RunAsync(connectionString, ct)` — deletes every `cache_entries` row whose `expires_at <= now()` across all tenants and returns the rows reclaimed. Isolated from the hosted service so it is testable directly.
 **Consumes (see README):** `cache_entries` + `ix_cache_entries_expiry` (m1/01).
@@ -63,7 +63,7 @@
 
 ### Task 3: `CacheSweepService` — the background TTL sweep job
 
-- [ ] **Files:** modify `src/Custodex.Storage.Postgres/Custodex.Storage.Postgres.csproj` (add `Microsoft.Extensions.Hosting.Abstractions`); create `src/Custodex.Storage.Postgres/CacheSweepOptions.cs` and `…/CacheSweepService.cs`; add a `Custodex.cache.swept` counter to `src/Custodex.Abstractions/CustodexDiagnostics.cs`; test `…Tests/Cache/CacheSweepServiceTests.cs`.
+- [x] **Files:** modify `src/Custodex.Storage.Postgres/Custodex.Storage.Postgres.csproj` (add `Microsoft.Extensions.Hosting.Abstractions`); create `src/Custodex.Storage.Postgres/CacheSweepOptions.cs` and `…/CacheSweepService.cs`; add a `Custodex.cache.swept` counter to `src/Custodex.Abstractions/CustodexDiagnostics.cs`; test `…Tests/Cache/CacheSweepServiceTests.cs`.
 
 **Produces:** `CacheSweepOptions { required string ConnectionString; TimeSpan Interval = 5 min }` and `CacheSweepService(CacheSweepOptions) : BackgroundService` running the sweep every `Interval` until the host stops, recording each sweep's reclaimed-row count to a new `CustodexDiagnostics.CacheSwept` counter (spec §11.4 observability).
 **Consumes (see README):** `CacheSweep.RunAsync` (Task 2); `BackgroundService`/`IHostedService` from `Microsoft.Extensions.Hosting.Abstractions` (MIT — permitted); `CustodexDiagnostics.Meter` (m0/01).
@@ -85,7 +85,7 @@
 
 ### Task 4: `CacheValueCodec` round-trip through the Postgres store
 
-- [ ] **Files:** ensure `tests/Custodex.Storage.Postgres.Tests` references `Custodex.Core` (idempotent); test `…Tests/Cache/PostgresCacheCodecTests.cs` — no new production code.
+- [x] **Files:** ensure `tests/Custodex.Storage.Postgres.Tests` references `Custodex.Core` (idempotent); test `…Tests/Cache/PostgresCacheCodecTests.cs` — no new production code.
 
 **Produces:** a guard test proving the m0/08 `CacheValueCodec` round-trips a `bool` decision through `PostgresCacheStore.SetAsync`/`GetAsync` (the value boundary `CachingAuthorizer` owns) and that an **epoch mismatch reads as a miss** at the caching-layer level.
 **Consumes (see README):** `CacheValueCodec` (`Custodex.Core.Caching`, m0/08), `PostgresCacheStore` (m1/07).
@@ -105,12 +105,12 @@
 
 ## Self-review checklist (after all tasks)
 
-- [ ] `dotnet build` clean under `TreatWarningsAsErrors=true`.
-- [ ] The existing m1/07 `PostgresCacheStore` is unchanged — this plan only adds the factory, sweep, service, codec test, and one diagnostics counter.
-- [ ] `PostgresCacheStoreFactory.For(tenant)` yields a tenant-scoped store; same-tenant instances share rows; different tenants are isolated (Task 1).
-- [ ] `CacheSweep.RunAsync` deletes expired rows and leaves live ones (Task 2).
-- [ ] `CacheSweepService` sweeps on its interval (first sweep immediate) and stops with the host; reclaimed rows feed `Custodex.cache.swept` (Task 3).
-- [ ] `CacheValueCodec` round-trips a `bool` through the Postgres store; an epoch-mismatch entry is recognized as a miss by the stamp comparison (Task 4).
+- [x] `dotnet build` clean under `TreatWarningsAsErrors=true`.
+- [x] The existing m1/07 `PostgresCacheStore` is unchanged — this plan only adds the factory, sweep, service, codec test, and one diagnostics counter.
+- [x] `PostgresCacheStoreFactory.For(tenant)` yields a tenant-scoped store; same-tenant instances share rows; different tenants are isolated (Task 1).
+- [x] `CacheSweep.RunAsync` deletes expired rows and leaves live ones (Task 2).
+- [x] `CacheSweepService` sweeps on its interval (first sweep immediate) and stops with the host; reclaimed rows feed `Custodex.cache.swept` (Task 3).
+- [x] `CacheValueCodec` round-trips a `bool` through the Postgres store; an epoch-mismatch entry is recognized as a miss by the stamp comparison (Task 4).
 
 ## Contract gaps (reported, not changed)
 

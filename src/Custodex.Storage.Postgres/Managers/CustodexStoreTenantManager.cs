@@ -10,12 +10,14 @@ namespace Custodex.Storage.Postgres.Managers;
 /// </summary>
 public sealed class CustodexStoreManager(string connectionString) : IStoreManager
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     /// <inheritdoc />
     public async Task CreateStoreAsync(string store, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         await conn.ExecuteAsync(new CommandDefinition(
-            "INSERT INTO stores (id) VALUES (@store) ON CONFLICT DO NOTHING",
+            "INSERT INTO custodex.stores (id) VALUES (@store) ON CONFLICT DO NOTHING",
             new { store }, cancellationToken: ct));
     }
 }
@@ -26,12 +28,14 @@ public sealed class CustodexStoreManager(string connectionString) : IStoreManage
 /// </summary>
 public sealed class CustodexTenantManager(string connectionString) : ITenantManager
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     /// <inheritdoc />
     public async Task CreateTenantAsync(TenantContext tenant, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         await conn.ExecuteAsync(new CommandDefinition(
-            "INSERT INTO tenants (store_id, tenant_id) VALUES (@store, @tenant) ON CONFLICT DO NOTHING",
+            "INSERT INTO custodex.tenants (store_id, tenant_id) VALUES (@store, @tenant) ON CONFLICT DO NOTHING",
             new { store = tenant.Store, tenant = tenant.Tenant }, cancellationToken: ct));
     }
 }
