@@ -31,6 +31,7 @@ if (app.Configuration.GetValue("Custodex:ApplyMigrationsOnStartup", true))
 
 app.UseSwagger();
 app.UseSwaggerUI();
+app.UseCustodexProblemDetails();
 
 app.MapDefaultEndpoints();
 app.MapGrpcService<DecisionGrpcService>();
