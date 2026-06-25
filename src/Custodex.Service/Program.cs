@@ -1,6 +1,7 @@
 using Custodex.Core;
 using Custodex.Service.Services;
 using Custodex.Storage.Postgres;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,13 @@ var connectionString = builder.Configuration["Custodex:ConnectionString"]
 builder.Services.AddCustodex().UsePostgres(connectionString);
 
 var app = builder.Build();
+
+if (app.Configuration.GetValue("Custodex:ApplyMigrationsOnStartup", true))
+{
+    await using var conn = new NpgsqlConnection(connectionString);
+    await conn.OpenAsync();
+    await MigrationRunner.ApplyAsync(conn);
+}
 
 app.MapDefaultEndpoints();
 app.MapGrpcService<DecisionGrpcService>();

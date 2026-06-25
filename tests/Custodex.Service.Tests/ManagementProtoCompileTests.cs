@@ -33,14 +33,14 @@ public sealed class ManagementProtoCompileTests
         {
             Object = new EntityRef { Type = "widget", Id = "1" },
             Relation = "owner",
-            Subject = new SubjectRef { Type = "group", Id = "vets", Relation = "member" },
+            Subject = new SubjectRef { Type = "group", Id = "grp-7", Relation = "member" },
         };
 
         msg.Object.Type.ShouldBe("widget");
         msg.Object.Id.ShouldBe("1");
         msg.Relation.ShouldBe("owner");
         msg.Subject.Type.ShouldBe("group");
-        msg.Subject.Id.ShouldBe("vets");
+        msg.Subject.Id.ShouldBe("grp-7");
         msg.Subject.Relation.ShouldBe("member");
     }
 }

@@ -32,7 +32,7 @@ public sealed class ProtoMapTests
     [Fact]
     public void SubjectRef_with_relation_round_trips()
     {
-        var record = new Abstractions.SubjectRef("group", "vets", "member");
+        var record = new Abstractions.SubjectRef("group", "grp-7", "member");
         var proto = ProtoMap.ToProto(record);
         var back = ProtoMap.FromProto(proto);
 
