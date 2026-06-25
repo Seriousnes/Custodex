@@ -15,6 +15,8 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogStore
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     private sealed record Row(
         long Id, string Actor, string Operation, string Target,
         string? Before, string? After, DateTime OccurredAt);
@@ -44,7 +46,7 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
     public async Task<IReadOnlyList<ChangeLogEntry>> ReadAsync(
         TenantContext t, ChangeLogFilter filter, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition("""
             SELECT id, actor, operation, target, before::text AS before, after::text AS after, occurred_at
             FROM change_log

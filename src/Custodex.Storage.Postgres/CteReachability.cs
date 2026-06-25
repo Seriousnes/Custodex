@@ -17,7 +17,7 @@ public static class CteReachability
 
     private const string SubjectsSql = """
         WITH RECURSIVE reach (object_type, object_id, relation) AS (
-            SELECT @ot::text, @oid::text, @rel::text
+            SELECT @ot::text COLLATE "C", @oid::text COLLATE "C", @rel::text COLLATE "C"
           UNION
             SELECT rt.subject_type, rt.subject_id, rt.subject_relation
             FROM reach r

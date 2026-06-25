@@ -76,6 +76,24 @@ public class NpgsqlIndexStoreTests(PostgresFixture fx) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Query_orders_and_paginates_object_ids_ordinally_regardless_of_server_collation()
+    {
+        var t = new TenantContext("idx", "collation");
+        await SeedTenantAsync(t);
+
+        await UpsertAsync(t,
+            Row("user:alice", "edit", "doc", "alpha"),
+            Row("user:alice", "edit", "doc", "Bravo"),
+            Row("user:alice", "edit", "doc", "Zulu"));
+
+        var all = await _index.QueryObjectsAsync(t, V, "user:alice", "edit", "doc", 100, null);
+        all.Select(r => r.ObjectId).ShouldBe(["Bravo", "Zulu", "alpha"]);
+
+        var afterZulu = await _index.QueryObjectsAsync(t, V, "user:alice", "edit", "doc", 100, "Zulu");
+        afterZulu.Select(r => r.ObjectId).ShouldBe(["alpha"]);
+    }
+
+    [Fact]
     public async Task Upsert_updates_conditioned_in_place_on_the_natural_key()
     {
         var t = new TenantContext("idx", "cond");

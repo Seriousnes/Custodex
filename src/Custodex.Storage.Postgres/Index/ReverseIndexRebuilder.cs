@@ -19,6 +19,8 @@ public sealed class ReverseIndexRebuilder(
     IAttributeStore attributes,
     IIndexStore index)
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     /// <summary>
     /// Rebuilds the reverse index for <paramref name="t"/> transactionally within
     /// <paramref name="uow"/>. Throws <see cref="UnknownTypeException"/> when no active schema
@@ -32,7 +34,7 @@ public sealed class ReverseIndexRebuilder(
 
         await index.ClearAsync(t, uow, ct);
 
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
         var inputs = await RebuildEnumeration.LoadAsync(conn, t, ct);
 

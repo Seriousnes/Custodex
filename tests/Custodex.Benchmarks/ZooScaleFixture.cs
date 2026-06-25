@@ -129,9 +129,10 @@ public sealed class ZooScaleFixture
     /// <summary>Starts the container, applies migrations, seeds the dataset, rebuilds the reverse index, and constructs the three authorizer variants.</summary>
     public async Task InitializeAsync()
     {
-        _container = new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
+        _container = new PostgreSqlBuilder().WithImage("postgres:18").Build();
         await _container.StartAsync();
-        ConnectionString = _container.GetConnectionString();
+        ConnectionString =
+            new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { SearchPath = "custodex" }.ToString();
 
         await using (var conn = new NpgsqlConnection(ConnectionString))
         {

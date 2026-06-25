@@ -13,11 +13,13 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class NpgsqlAttributeStore(string connectionString) : IAttributeStore
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, object?>?> GetAsync(
         TenantContext t, EntityRef obj, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         var json = await conn.ExecuteScalarAsync<string?>(new CommandDefinition("""
             SELECT attributes::text FROM object_attributes
             WHERE store_id = @store AND tenant_id = @tenant

@@ -25,7 +25,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
     private readonly string _connectionString;
     private readonly NpgsqlUnitOfWork? _bound;
 
-    public NpgsqlRelationStore(string connectionString) => _connectionString = connectionString;
+    public NpgsqlRelationStore(string connectionString) => _connectionString = CustodexSchema.Apply(connectionString);
 
     private NpgsqlRelationStore(string connectionString, NpgsqlUnitOfWork bound)
     {

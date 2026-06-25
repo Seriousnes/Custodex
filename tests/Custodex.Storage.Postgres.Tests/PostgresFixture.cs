@@ -6,10 +6,11 @@ namespace Custodex.Storage.Postgres.Tests;
 public sealed class PostgresFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _container =
-        new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
+        new PostgreSqlBuilder().WithImage("postgres:18").Build();
 
-    /// <summary>Gets the connection string for the running Postgres container.</summary>
-    public string ConnectionString => _container.GetConnectionString();
+    /// <summary>Gets the connection string for the running Postgres container, scoped to the Custodex schema.</summary>
+    public string ConnectionString =>
+        new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { SearchPath = "custodex" }.ToString();
 
     /// <inheritdoc />
     public async Task InitializeAsync() => await _container.StartAsync();

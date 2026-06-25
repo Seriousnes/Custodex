@@ -19,7 +19,7 @@ public sealed partial class PostgresCacheStore : ICacheStore
     /// <summary>Initializes a new <see cref="PostgresCacheStore"/> for the given store/tenant scope.</summary>
     public PostgresCacheStore(string connectionString, TenantContext scope)
     {
-        _connectionString = connectionString;
+        _connectionString = CustodexSchema.Apply(connectionString);
         _scope = scope;
     }
 

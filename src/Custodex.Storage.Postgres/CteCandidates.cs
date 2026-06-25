@@ -14,7 +14,7 @@ public static class CteCandidates
     private const string ReachableSql = """
         WITH RECURSIVE principals (ptype, pid, prelation) AS (
             -- base: the subject itself as a plain leaf principal
-            SELECT @stype::text, @sid::text, @srel::text
+            SELECT @stype::text COLLATE "C", @sid::text COLLATE "C", @srel::text COLLATE "C"
           UNION
             -- climb: any object whose tuple subject matches a current principal becomes the next principal
             SELECT rt.object_type, rt.object_id, rt.relation

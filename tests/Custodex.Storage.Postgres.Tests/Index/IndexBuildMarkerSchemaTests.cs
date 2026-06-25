@@ -15,7 +15,7 @@ public class IndexBuildMarkerSchemaTests(PostgresFixture fx)
 
         var exists = await conn.ExecuteScalarAsync<bool>(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables " +
-            "WHERE table_schema='public' AND table_name='index_build_markers')");
+            "WHERE table_schema='custodex' AND table_name='index_build_markers')");
         exists.ShouldBeTrue();
     }
 }

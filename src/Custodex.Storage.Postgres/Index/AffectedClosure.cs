@@ -16,7 +16,7 @@ public static class AffectedClosure
 {
     private const string InboundSql = """
         WITH RECURSIVE reached (otype, oid) AS (
-            SELECT * FROM unnest(@types::text[], @ids::text[]) AS s(otype, oid)
+            SELECT s.otype COLLATE "C", s.oid COLLATE "C" FROM unnest(@types::text[], @ids::text[]) AS s(otype, oid)
           UNION
             SELECT rt.object_type, rt.object_id
             FROM reached r

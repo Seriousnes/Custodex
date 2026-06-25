@@ -14,7 +14,7 @@ public class ReverseIndexSchemaTests(PostgresFixture fx)
         await MigrationRunner.ApplyAsync(conn);
 
         var indexes = (await conn.QueryAsync<string>(
-            "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'reverse_index'"))
+            "SELECT indexname FROM pg_indexes WHERE schemaname = 'custodex' AND tablename = 'reverse_index'"))
             .ToHashSet();
 
         indexes.ShouldContain("ux_reverse_index_natural");

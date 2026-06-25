@@ -12,6 +12,8 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     private const string UpsertSql = """
         INSERT INTO reverse_index
             (store_id, tenant_id, schema_version, subject, permission, object_type, object_id, conditioned)
@@ -77,7 +79,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
         string subject, string permission, string objectType, int limit, string? afterObjectId,
         CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition("""
             SELECT subject AS Subject, permission AS Permission, object_type AS ObjectType,
@@ -100,7 +102,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
     public async Task<IReadOnlyList<ReverseIndexRow>> ReadForObjectAsync(TenantContext t, string schemaVersion,
         string objectType, string objectId, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition("""
             SELECT subject AS Subject, permission AS Permission, object_type AS ObjectType,
@@ -128,7 +130,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
     /// <inheritdoc />
     public async Task<bool> IsBuiltAsync(TenantContext t, string schemaVersion, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
         return await conn.ExecuteScalarAsync<bool>(new CommandDefinition("""
             SELECT EXISTS (SELECT 1 FROM index_build_markers

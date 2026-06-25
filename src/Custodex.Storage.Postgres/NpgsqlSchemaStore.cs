@@ -13,10 +13,12 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class NpgsqlSchemaStore(string connectionString) : ISchemaStore
 {
+    private readonly string _cs = CustodexSchema.Apply(connectionString);
+
     /// <inheritdoc />
     public async Task<Schema?> GetActiveAsync(string store, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = new NpgsqlConnection(_cs);
         var json = await conn.ExecuteScalarAsync<string?>(new CommandDefinition("""
             SELECT definition::text FROM schema_versions
             WHERE store_id = @store AND is_active
