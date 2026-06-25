@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Custodex.Core;
 using Custodex.Service.Auth;
+using Custodex.Service.Health;
 using Custodex.Service.Rest;
 using Custodex.Service.Services;
 using Custodex.Service.Tenancy;
@@ -9,10 +10,15 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Npgsql;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddCustodexInstrumentation())
+    .WithMetrics(m => m.AddCustodexInstrumentation());
 builder.Services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
 builder.Services.AddSingleton<CustodexExceptionInterceptor>();
 builder.Services.AddEndpointsApiExplorer();
@@ -81,6 +87,8 @@ var connectionString = builder.Configuration["Custodex:ConnectionString"]
     ?? throw new InvalidOperationException("Custodex:ConnectionString is required.");
 
 builder.Services.AddCustodex().UsePostgres(connectionString);
+builder.Services.AddHealthChecks()
+    .AddCheck<PostgresReadyHealthCheck>("postgres", tags: ["ready"]);
 
 var app = builder.Build();
 
