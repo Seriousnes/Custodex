@@ -32,4 +32,21 @@ public static class RestMap
 
     /// <summary>Builds a <see cref="TenantContext"/> from separate store and tenant strings.</summary>
     public static TenantContext Tenant(string store, string tenant) => new(store, tenant);
+
+    /// <summary>Converts a <see cref="ConditionRefDto"/> to the contract record.</summary>
+    public static ConditionRef FromDto(ConditionRefDto dto) => new(dto.Name, dto.Parameters);
+
+    /// <summary>Converts a contract <see cref="ConditionRef"/> to its DTO.</summary>
+    public static ConditionRefDto ToDto(ConditionRef r) =>
+        new(r.Name, r.Parameters.ToDictionary(kv => kv.Key, kv => kv.Value));
+
+    /// <summary>Converts a <see cref="RelationTupleDto"/> to the contract record.</summary>
+    public static RelationTuple FromDto(RelationTupleDto dto) =>
+        new(FromDto(dto.Object), dto.Relation, FromDto(dto.Subject),
+            dto.Condition is not null ? FromDto(dto.Condition) : null);
+
+    /// <summary>Converts a contract <see cref="RelationTuple"/> to its DTO.</summary>
+    public static RelationTupleDto ToDto(RelationTuple t) =>
+        new(ToDto(t.Object), t.Relation, ToDto(t.Subject),
+            t.Condition is not null ? ToDto(t.Condition) : null);
 }
