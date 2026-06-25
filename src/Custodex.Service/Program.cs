@@ -67,7 +67,13 @@ builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
     .Configure<IConfiguration>((opts, config) =>
         config.GetSection("Custodex:ApiKeys").Bind(opts.Keys));
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(opts =>
+{
+    opts.AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()
+        .RequireClaim("Custodex:role", "reader", "admin"));
+    opts.AddPolicy("Custodex:manage", p => p.RequireAuthenticatedUser()
+        .RequireClaim("Custodex:role", "admin"));
+});
 builder.Services.AddScoped<TenantContextAccessor>();
 builder.Services.AddScoped<ITenantContextAccessor>(sp => sp.GetRequiredService<TenantContextAccessor>());
 
@@ -94,10 +100,10 @@ app.UseAuthorization();
 app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.MapDefaultEndpoints();
-app.MapGrpcService<DecisionGrpcService>().RequireAuthorization();
-app.MapGrpcService<RelationsGrpcService>().RequireAuthorization();
-app.MapGrpcService<SchemaGrpcService>().RequireAuthorization();
-app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization();
+app.MapGrpcService<DecisionGrpcService>().RequireAuthorization("Custodex:decide");
+app.MapGrpcService<RelationsGrpcService>().RequireAuthorization("Custodex:manage");
+app.MapGrpcService<SchemaGrpcService>().RequireAuthorization("Custodex:manage");
+app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapCustodexRest();
 
 app.Run();

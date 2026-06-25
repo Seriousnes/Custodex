@@ -14,10 +14,10 @@ public static partial class RestEndpoints
     {
         var v1 = app.MapGroup("/v1");
 
-        var decision = v1.MapGroup(string.Empty).WithTags("decision").RequireAuthorization();
+        var decision = v1.MapGroup(string.Empty).WithTags("decision").RequireAuthorization("Custodex:decide");
         MapDecisionEndpoints(decision);
 
-        var management = v1.MapGroup(string.Empty).WithTags("management").RequireAuthorization();
+        var management = v1.MapGroup(string.Empty).WithTags("management").RequireAuthorization("Custodex:manage");
         MapManagementEndpoints(management);
 
         return app;
