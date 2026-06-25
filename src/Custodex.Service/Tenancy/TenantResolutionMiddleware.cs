@@ -11,6 +11,8 @@ internal sealed class TenantResolutionMiddleware(RequestDelegate next)
         var store = context.User.FindFirstValue("Custodex:store");
         if (!string.IsNullOrEmpty(store))
         {
+            accessor.Store = store;
+
             context.Request.Headers.TryGetValue(TenantHeader, out var tenantValues);
             var tenant = tenantValues.FirstOrDefault()
                 ?? context.User.FindFirstValue("Custodex:tenant");

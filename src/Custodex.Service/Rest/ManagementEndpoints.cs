@@ -78,8 +78,11 @@ public static partial class RestEndpoints
         .WithSummary("Validate a schema without activating it.");
 
         group.MapPut("/schema/{store}", async (
-            string store, SetActiveSchemaRequestDto req, ISchemaManager schemas, CancellationToken ct) =>
+            string store, SetActiveSchemaRequestDto req, ISchemaManager schemas, ITenantContextAccessor tc, CancellationToken ct) =>
         {
+            if (!string.Equals(store, tc.AuthenticatedStore, StringComparison.Ordinal))
+                return Results.Forbid();
+
             var schema = SchemaJson.Deserialize(req.SchemaJson);
             if (schema is null)
                 return Results.ValidationProblem(new Dictionary<string, string[]>
@@ -104,8 +107,11 @@ public static partial class RestEndpoints
         .WithSummary("Validate and activate a schema for a store.");
 
         group.MapGet("/schema/{store}", async (
-            string store, ISchemaManager schemas, CancellationToken ct) =>
+            string store, ISchemaManager schemas, ITenantContextAccessor tc, CancellationToken ct) =>
         {
+            if (!string.Equals(store, tc.AuthenticatedStore, StringComparison.Ordinal))
+                return Results.Forbid();
+
             var schema = await schemas.GetActiveSchemaAsync(store, ct);
             if (schema is null)
                 return Results.Ok(new GetActiveSchemaResponseDto(false, null));
@@ -124,8 +130,11 @@ public static partial class RestEndpoints
         .WithSummary("Provision a new store.");
 
         group.MapPost("/tenants", async (
-            CreateTenantRequestDto req, ITenantManager tenants, CancellationToken ct) =>
+            CreateTenantRequestDto req, ITenantManager tenants, ITenantContextAccessor tc, CancellationToken ct) =>
         {
+            if (!string.Equals(req.Store, tc.AuthenticatedStore, StringComparison.Ordinal))
+                return Results.Forbid();
+
             await tenants.CreateTenantAsync(new TenantContext(req.Store, req.Tenant), ct);
             return Results.Created();
         })
