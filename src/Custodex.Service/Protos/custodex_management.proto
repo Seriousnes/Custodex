@@ -1,0 +1,139 @@
+syntax = "proto3";
+
+package custodex.v1;
+
+option csharp_namespace = "Custodex.V1";
+
+import "Protos/custodex_common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+service Relations {
+  rpc WriteTuples (WriteTuplesRequest) returns (WriteTuplesResponse);
+  rpc DeleteTuples (DeleteTuplesRequest) returns (DeleteTuplesResponse);
+  rpc WriteAttributes (WriteAttributesRequest) returns (WriteAttributesResponse);
+  rpc ReadTuples (ReadTuplesRequest) returns (ReadTuplesResponse);
+  rpc ReadChangeLog (ReadChangeLogRequest) returns (ReadChangeLogResponse);
+}
+
+service Schema {
+  rpc Validate (ValidateSchemaRequest) returns (ValidateSchemaResponse);
+  rpc SetActive (SetActiveSchemaRequest) returns (SetActiveSchemaResponse);
+  rpc GetActive (GetActiveSchemaRequest) returns (GetActiveSchemaResponse);
+}
+
+service Provisioning {
+  rpc CreateStore (CreateStoreRequest) returns (CreateStoreResponse);
+  rpc CreateTenant (CreateTenantRequest) returns (CreateTenantResponse);
+}
+
+message RelationTuple {
+  EntityRef object = 1;
+  string relation = 2;
+  SubjectRef subject = 3;
+  ConditionRef condition = 4;
+}
+
+message TupleFilter {
+  string object_type = 1;
+  string object_id = 2;
+  string relation = 3;
+  string subject_type = 4;
+  string subject_id = 5;
+}
+
+message ChangeLogEntry {
+  int64 id = 1;
+  string actor = 2;
+  string operation = 3;
+  string target = 4;
+  string before_json = 5;
+  string after_json = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+}
+
+message WriteTuplesRequest {
+  TenantContext tenant = 1;
+  string actor = 2;
+  repeated RelationTuple tuples = 3;
+}
+
+message WriteTuplesResponse {
+  int32 count = 1;
+}
+
+message DeleteTuplesRequest {
+  TenantContext tenant = 1;
+  string actor = 2;
+  repeated RelationTuple tuples = 3;
+}
+
+message DeleteTuplesResponse {
+  int32 count = 1;
+}
+
+message WriteAttributesRequest {
+  TenantContext tenant = 1;
+  string actor = 2;
+  EntityRef object = 3;
+  google.protobuf.Struct attributes = 4;
+}
+
+message WriteAttributesResponse {}
+
+message ReadTuplesRequest {
+  TenantContext tenant = 1;
+  TupleFilter filter = 2;
+}
+
+message ReadTuplesResponse {
+  repeated RelationTuple tuples = 1;
+}
+
+message ReadChangeLogRequest {
+  TenantContext tenant = 1;
+  google.protobuf.Timestamp since = 2;
+  string actor = 3;
+  int32 limit = 4;
+}
+
+message ReadChangeLogResponse {
+  repeated ChangeLogEntry entries = 1;
+}
+
+message ValidateSchemaRequest {
+  string schema_json = 1;
+}
+
+message ValidateSchemaResponse {
+  bool is_valid = 1;
+  repeated string errors = 2;
+}
+
+message SetActiveSchemaRequest {
+  string store = 1;
+  string schema_json = 2;
+}
+
+message SetActiveSchemaResponse {}
+
+message GetActiveSchemaRequest {
+  string store = 1;
+}
+
+message GetActiveSchemaResponse {
+  bool found = 1;
+  string schema_json = 2;
+}
+
+message CreateStoreRequest {
+  string store = 1;
+}
+
+message CreateStoreResponse {}
+
+message CreateTenantRequest {
+  TenantContext tenant = 1;
+}
+
+message CreateTenantResponse {}
