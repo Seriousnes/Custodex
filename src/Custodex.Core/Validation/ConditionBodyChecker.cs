@@ -3,11 +3,19 @@ using Custodex.Core.Conditions;
 
 namespace Custodex.Core.Validation;
 
+/// <summary>
+/// Statically type-checks a condition body. Confirms every referenced parameter is declared,
+/// that operators are applied to compatible kinds, and that the body as a whole evaluates to a
+/// boolean. Kinds carried only by attributes are treated as unknown and pass these checks.
+/// </summary>
 public static class ConditionBodyChecker
 {
     // Inferred static kind; null means "unknown until request time" (attributes).
     private enum K { Bool, Number, String, Timestamp, Unknown }
 
+    /// <summary>Type-checks a condition's body.</summary>
+    /// <param name="definition">The condition whose parameters and body are checked.</param>
+    /// <returns>One message per problem found, or an empty list when the body is well-typed.</returns>
     public static IReadOnlyList<string> Check(ConditionDef definition)
     {
         var errors = new List<string>();

@@ -2,10 +2,23 @@ using Custodex.Abstractions;
 
 namespace Custodex.Core.Conditions;
 
+/// <summary>
+/// Evaluates a condition's expression tree over its bound parameters, the object's attribute bag,
+/// and the request context. The body must reduce to a boolean; anything else — a type mismatch,
+/// a missing parameter or attribute, division by zero — yields a denial carrying a diagnostic.
+/// </summary>
 public static class ConditionEvaluator
 {
     private sealed class EvalException(string message) : Exception(message);
 
+    /// <summary>
+    /// Evaluates <paramref name="definition"/>'s body and reports whether it held.
+    /// </summary>
+    /// <param name="definition">The condition's declared parameters and body.</param>
+    /// <param name="attributes">The object's attribute bag the body may read.</param>
+    /// <param name="context">The request context, supplying ambient values such as the time and subject.</param>
+    /// <param name="parameters">The values bound to the condition's declared parameters.</param>
+    /// <returns>An allow if the body evaluated to <see langword="true"/>; otherwise a deny, with a diagnostic when evaluation failed.</returns>
     public static ConditionResult Evaluate(
         ConditionDef definition,
         IReadOnlyDictionary<string, object?> attributes,

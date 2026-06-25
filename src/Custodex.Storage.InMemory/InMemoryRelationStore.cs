@@ -2,6 +2,7 @@ using Custodex.Abstractions;
 
 namespace Custodex.Storage.InMemory;
 
+/// <summary>An in-memory <see cref="IRelationStore"/>: holds relation tuples in process memory for tests and local development. Thread-safe; data lives only for the lifetime of the process.</summary>
 public sealed class InMemoryRelationStore : IRelationStore
 {
     private readonly record struct Key(string Store, string Tenant);
@@ -20,6 +21,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         tuple.Object.Type, tuple.Object.Id, tuple.Relation,
         tuple.Subject.Type, tuple.Subject.Id, tuple.Subject.Relation, tuple.Condition?.Name);
 
+    /// <inheritdoc/>
     public Task<IReadOnlyList<RelationTuple>> GetByObjectAsync(
         TenantContext t, EntityRef obj, string relation, CancellationToken ct = default)
     {
@@ -36,6 +38,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         }
     }
 
+    /// <inheritdoc/>
     public Task<IReadOnlyList<RelationTuple>> GetBySubjectAsync(
         TenantContext t, SubjectRef subject, CancellationToken ct = default)
     {
@@ -52,7 +55,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         }
     }
 
-    /// <summary>Type universe for the ListObjects oracle: distinct object ids of a type in this tenant.</summary>
+    /// <inheritdoc/>
     public Task<IReadOnlyList<string>> ListObjectIdsAsync(
         TenantContext t, string objectType, CancellationToken ct = default)
     {
@@ -70,6 +73,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         }
     }
 
+    /// <inheritdoc/>
     public Task WriteAsync(
         TenantContext t, IReadOnlyList<RelationTuple> add, IReadOnlyList<RelationTuple> remove,
         IUnitOfWork uow, CancellationToken ct = default)

@@ -11,6 +11,7 @@ namespace Custodex.Storage.Postgres;
 /// </summary>
 public sealed class CacheSweepService(CacheSweepOptions options) : BackgroundService
 {
+    /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(options.Interval);

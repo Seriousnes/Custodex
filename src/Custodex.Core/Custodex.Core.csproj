@@ -10,6 +10,7 @@
 		<Nullable>enable</Nullable>
 		<RootNamespace>Custodex</RootNamespace>
 		<IsPackable>true</IsPackable>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<PackageId>Custodex</PackageId>
 		<Description>The runtime-configurable ReBAC + ABAC authorization engine — the portable, dependency-light evaluation core.</Description>
 	</PropertyGroup>
