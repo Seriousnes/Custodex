@@ -121,8 +121,11 @@ public static partial class RestEndpoints
         .WithSummary("Get the active schema for a store.");
 
         group.MapPost("/stores", async (
-            CreateStoreRequestDto req, IStoreManager stores, CancellationToken ct) =>
+            CreateStoreRequestDto req, IStoreManager stores, ITenantContextAccessor tc, CancellationToken ct) =>
         {
+            if (!string.Equals(req.Store, tc.AuthenticatedStore, StringComparison.Ordinal))
+                return Results.Forbid();
+
             await stores.CreateStoreAsync(req.Store, ct);
             return Results.Created($"/v1/schema/{req.Store}", null);
         })

@@ -4,6 +4,12 @@ using Custodex.Core.Conditions;
 
 namespace Custodex.Core.Evaluation;
 
+/// <summary>
+/// Portable, engine-driven <see cref="IAuthorizer"/>: a C# walk over each permission's
+/// expression that issues batched indexed lookups through the relation and attribute stores.
+/// It runs the same decision semantics on any storage provider and serves as the reference
+/// implementation other authorizers are validated against.
+/// </summary>
 public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuthorizer
 {
     private readonly ISchemaStore _schemaStore;
@@ -12,6 +18,12 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuth
     private readonly IConditionEvaluator _conditions;
     private readonly EvaluationOptions _options;
 
+    /// <summary>Creates an authorizer over the given stores and condition evaluator.</summary>
+    /// <param name="schemaStore">Supplies the active schema for the request's store.</param>
+    /// <param name="relations">The relation tuple store queried during evaluation.</param>
+    /// <param name="attributes">The attribute store read when evaluating conditions.</param>
+    /// <param name="conditions">Evaluates the predicate carried by a conditioned tuple.</param>
+    /// <param name="options">Evaluation limits such as the maximum recursion depth; defaults are used when omitted.</param>
     public EngineDrivenAuthorizer(
         ISchemaStore schemaStore,
         IRelationStore relations,
@@ -33,17 +45,13 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuth
         return new SchemaIndex(schema);
     }
 
+    /// <inheritdoc/>
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
         var (allowed, _, explain) = await RunCheckAsync(request, ct);
         return new CheckResult(allowed, explain);
     }
 
-    /// <summary>
-    /// Internal entry point used by the m0/08 caching decorator: returns the decision
-    /// together with whether any condition was reached, so the cache can avoid storing
-    /// condition-dependent results. Never emits an Explain tree (caching path).
-    /// </summary>
     internal async Task<(bool Allowed, bool ConditionTouched)> CheckInternalAsync(
         CheckRequest request, CancellationToken ct = default)
     {
@@ -152,11 +160,6 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuth
         }
     }
 
-    /// <summary>
-    /// Evaluates a tuple's carried condition. A tuple with no condition is always
-    /// satisfied. Reaching a condition latches <see cref="EvalContext.ConditionTouched"/>
-    /// so the m0/08 cache never caches this decision.
-    /// </summary>
     private async Task<bool> ConditionSatisfiedAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, RelationTuple tuple,
         RequestContext context, EvalContext ctx, CancellationToken ct)

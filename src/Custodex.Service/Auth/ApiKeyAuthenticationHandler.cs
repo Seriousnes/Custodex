@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
@@ -23,9 +25,14 @@ public sealed class ApiKeyAuthenticationHandler(
         if (!Request.Headers.TryGetValue(Options.HeaderName, out var headerValues))
             return Task.FromResult(AuthenticateResult.NoResult());
 
-        var rawKey = headerValues.ToString();
-        var entry = Options.Keys.FirstOrDefault(k =>
-            string.Equals(k.Key, rawKey, StringComparison.Ordinal));
+        var presented = SHA256.HashData(Encoding.UTF8.GetBytes(headerValues.ToString()));
+        ApiKeyEntry? entry = null;
+        foreach (var candidate in Options.Keys)
+        {
+            var stored = SHA256.HashData(Encoding.UTF8.GetBytes(candidate.Key));
+            if (CryptographicOperations.FixedTimeEquals(presented, stored))
+                entry = candidate;
+        }
 
         if (entry is null)
             return Task.FromResult(AuthenticateResult.Fail("Unrecognized API key."));

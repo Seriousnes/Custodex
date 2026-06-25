@@ -4,6 +4,7 @@ namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
+    /// <inheritdoc/>
     public async Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
     {
         var index = await LoadSchemaAsync(request.Tenant.Store, ct);

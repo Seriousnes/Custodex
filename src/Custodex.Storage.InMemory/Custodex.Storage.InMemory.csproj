@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Description>In-memory storage providers for Custodex — a database-free path for tests, local development, and demos.</Description>
   </PropertyGroup>
 

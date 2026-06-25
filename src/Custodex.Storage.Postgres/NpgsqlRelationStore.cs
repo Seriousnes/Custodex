@@ -25,6 +25,8 @@ public sealed class NpgsqlRelationStore : IRelationStore
     private readonly string _connectionString;
     private readonly NpgsqlUnitOfWork? _bound;
 
+    /// <summary>Creates a relation store that opens connections from the given Postgres connection string.</summary>
+    /// <param name="connectionString">The Postgres connection string the store reads and writes through.</param>
     public NpgsqlRelationStore(string connectionString) => _connectionString = CustodexSchema.Apply(connectionString);
 
     private NpgsqlRelationStore(string connectionString, NpgsqlUnitOfWork bound)

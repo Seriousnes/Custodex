@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Custodex.Core;
 using Custodex.Service.Rest;
 using Microsoft.AspNetCore.Hosting;
@@ -54,5 +55,37 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
 
         var resp = await tenantClient.PostAsJsonAsync("/v1/check", req);
         resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Internal_error_does_not_leak_exception_detail_in_500_response()
+    {
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Custodex:ConnectionString",
+                "Host=127.0.0.1;Port=1;Database=nope;Username=u;Password=p;Timeout=1;Command Timeout=1");
+            b.UseSetting("Custodex:ApplyMigrationsOnStartup", "false");
+            b.UseEnvironment("Development");
+            b.UseAdminApiKey();
+        });
+
+        var client = factory.CreateAuthenticatedClient();
+        client.DefaultRequestHeaders.Add("X-Custodex-Tenant", "t-1");
+
+        var req = new CheckRequestDto(
+            Store: TestAuthHelper.AdminStore,
+            Tenant: "t-1",
+            Object: new EntityRefDto("doc", "d-1"),
+            Permission: "view",
+            Context: new RequestContextDto(
+                Subject: new SubjectRefDto("user", "u-1", null),
+                Now: null,
+                Attributes: null));
+
+        var resp = await client.PostAsJsonAsync("/v1/check", req);
+
+        resp.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        var problem = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        problem.GetProperty("detail").GetString().ShouldBe("An unexpected error occurred.");
     }
 }

@@ -2,9 +2,13 @@ using Custodex.Abstractions;
 
 namespace Custodex.Core.Conditions;
 
-/// <summary>Treats every condition as satisfied. Used before m0/06 and in pure-ReBAC tests.</summary>
+/// <summary>
+/// An <see cref="IConditionEvaluator"/> that treats every condition as satisfied. Use it where
+/// conditions are ignored, such as pure relationship-only authorization.
+/// </summary>
 public sealed class NullConditionEvaluator : IConditionEvaluator
 {
+    /// <inheritdoc/>
     public bool Evaluate(
         ConditionDef definition,
         ConditionRef invocation,

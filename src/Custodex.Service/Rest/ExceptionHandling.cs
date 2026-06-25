@@ -1,5 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Service.Tenancy;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Custodex.Service.Rest;
 
@@ -34,6 +36,14 @@ public static partial class RestEndpoints
                     _ => (500, "An unexpected error occurred."),
                 };
 
+                if (status == 500)
+                {
+                    context.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Custodex.Service.Rest.ProblemDetails")
+                        .LogError(ex, "Unhandled exception in the REST request pipeline.");
+                }
+
                 context.Response.StatusCode = status;
                 context.Response.ContentType = "application/problem+json";
 
@@ -42,7 +52,7 @@ public static partial class RestEndpoints
                     type = $"https://custodex.dev/errors/{status}",
                     title,
                     status,
-                    detail = ex.Message,
+                    detail = status == 500 ? title : ex.Message,
                 };
 
                 await context.Response.WriteAsJsonAsync(problem);

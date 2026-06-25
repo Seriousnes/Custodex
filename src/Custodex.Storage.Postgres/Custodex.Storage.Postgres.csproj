@@ -6,6 +6,7 @@
 		<Nullable>enable</Nullable>
 		<IsPackable>true</IsPackable>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<Description>PostgreSQL storage provider for Custodex, built on Npgsql and Dapper.</Description>
 	</PropertyGroup>
 

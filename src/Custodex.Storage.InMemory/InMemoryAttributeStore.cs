@@ -2,6 +2,7 @@ using Custodex.Abstractions;
 
 namespace Custodex.Storage.InMemory;
 
+/// <summary>An in-memory <see cref="IAttributeStore"/>: holds per-object attribute bags in process memory for tests and local development. Thread-safe; data lives only for the lifetime of the process.</summary>
 public sealed class InMemoryAttributeStore : IAttributeStore
 {
     private readonly record struct Key(string Store, string Tenant, string ObjType, string ObjId);
@@ -11,6 +12,7 @@ public sealed class InMemoryAttributeStore : IAttributeStore
 
     private static Key KeyOf(TenantContext t, EntityRef obj) => new(t.Store, t.Tenant, obj.Type, obj.Id);
 
+    /// <inheritdoc/>
     public Task<IReadOnlyDictionary<string, object?>?> GetAsync(
         TenantContext t, EntityRef obj, CancellationToken ct = default)
     {
@@ -24,6 +26,7 @@ public sealed class InMemoryAttributeStore : IAttributeStore
         }
     }
 
+    /// <inheritdoc/>
     public Task SetAsync(
         TenantContext t, EntityRef obj, IReadOnlyDictionary<string, object?> attrs,
         IUnitOfWork uow, CancellationToken ct = default)

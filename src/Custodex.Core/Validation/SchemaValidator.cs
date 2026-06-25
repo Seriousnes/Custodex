@@ -2,8 +2,17 @@ using Custodex.Abstractions;
 
 namespace Custodex.Core.Validation;
 
+/// <summary>
+/// Validates a schema before it is activated. Checks that names resolve and are unique, that
+/// permission expressions reference declared relations, permissions, conditions, and arrow
+/// targets, that condition bodies are well-typed, and that no permission depends on itself
+/// through a non-terminating cycle.
+/// </summary>
 public static class SchemaValidator
 {
+    /// <summary>Validates a schema and collects every problem found.</summary>
+    /// <param name="schema">The schema to check.</param>
+    /// <returns>The outcome, valid only when no errors were found, together with any error messages.</returns>
     public static SchemaValidationResult Validate(Schema schema)
     {
         var errors = new List<string>();
