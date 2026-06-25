@@ -204,4 +204,24 @@ public sealed class ClientParityTests(ServiceFixture fx)
         (await remote.CheckAsync(req)).Allowed.ShouldBeTrue();
         (await remote.CheckAsync(req)).Allowed.ShouldBe((await inProcess.CheckAsync(req)).Allowed);
     }
+
+    [Fact]
+    public async Task Unknown_permission_via_remote_throws_UnknownPermissionException()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("res", t => t
+                .Relation("owner", s => s.Type("user"))
+                .Permission("read", p => p.Relation("owner")))
+            .Build();
+        var objId = $"obj-{Guid.NewGuid():N}";
+        var userId = $"u-{Guid.NewGuid():N}";
+        var (remote, _, tc) = await SetupAsync(schema, [
+            new RelationTuple(new EntityRef("res", objId), "owner", new SubjectRef("user", userId, null), null),
+        ]);
+
+        var req = new CheckRequest(tc, new EntityRef("res", objId), "nonexistent_permission",
+            new SubjectRef("user", userId, null), Ctx(new SubjectRef("user", userId, null)));
+
+        await Should.ThrowAsync<UnknownPermissionException>(() => remote.CheckAsync(req));
+    }
 }

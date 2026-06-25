@@ -8,7 +8,8 @@ using Npgsql;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
-builder.Services.AddGrpc();
+builder.Services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
+builder.Services.AddSingleton<CustodexExceptionInterceptor>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
