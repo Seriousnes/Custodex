@@ -59,7 +59,6 @@ public sealed record ListSubjectsRequestDto(
     string Tenant,
     EntityRefDto Object,
     string Permission,
-    string SubjectType,
     RequestContextDto Context,
     int PageSize = 50,
     string? ContinuationToken = null);
