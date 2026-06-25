@@ -1,249 +1,74 @@
-# M3/07 — AppHost & ServiceDefaults Integration Plan
+# M3/07 — AppHost & ServiceDefaults Integration
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Goal:** Wire `Custodex.Service` into the existing Aspire `Custodex.ServiceDefaults` (OpenTelemetry, health, discovery) — including the `"Custodex"` source/meter and a Postgres readiness check — and orchestrate Postgres + the service for local development through `Custodex.AppHost`.
 
-**Goal:** Wire `Custodex.Service` into the existing Aspire `Custodex.ServiceDefaults` (OpenTelemetry, health, discovery) including the `"Custodex"` source/meter and a Postgres readiness check, and orchestrate Postgres + the service for local development through `Custodex.AppHost`.
+**For implementers:** drive this plan with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each task is TDD where a test exists — Red → Green → Commit — tracked by its `- [ ]` checkbox. One Conventional Commit per green task with the co-author trailer (see `../README.md` → Global Constraints).
 
-**Architecture:** `Custodex.ServiceDefaults` already provides `AddServiceDefaults()` (OTel traces/metrics/logs + OTLP export, `/health` + `/alive`, service discovery, HTTP resilience) and `MapDefaultEndpoints()`. This plan plugs the library's own telemetry and a database readiness check into that pipeline, and adds the `AppHost` that provisions Postgres and runs the service against it. This replaces docker-compose for local development; the production image stays in `m3/06`.
+**Architecture:** `Custodex.ServiceDefaults` already provides `AddServiceDefaults()` (OTel traces/metrics/logs + OTLP export, `/health` + `/alive`, service discovery, HTTP resilience) and `MapDefaultEndpoints()`. This plan plugs the library's own telemetry (the `"Custodex"` `ActivitySource` + `Meter`) and a database readiness check into that pipeline, and adds the `AppHost` that provisions Postgres and runs the service against it — replacing docker-compose *for development* (the production image stays in `m3/06`).
 
-**Tech Stack:** .NET 10, .NET Aspire (`Aspire.Hosting.AppHost`, `Aspire.Hosting.PostgreSQL`, `Aspire.Hosting.Testing`), OpenTelemetry, ASP.NET health checks, xUnit, Shouldly.
+**Tech stack:** .NET 10, .NET Aspire (`Aspire.Hosting.AppHost`, `Aspire.Hosting.PostgreSQL`, `Aspire.Hosting.Testing`), OpenTelemetry, ASP.NET health checks, xUnit + Shouldly.
 
-## Global Constraints
+**Global Constraints:** see `../README.md` → Global Constraints and → Aspire integration. The `Custodex.Service`, `Custodex.AppHost`, and `Custodex.ServiceDefaults` projects **already exist** — do not scaffold them.
 
-See `../README.md` → Global Constraints and → Aspire integration. The `Custodex.Service`, `Custodex.AppHost`, and `Custodex.ServiceDefaults` projects **already exist** (Aspire scaffold); do not `dotnet new` them. Depends on `m1/09` (`AddCustodex().UsePostgres().UseSchema()`, `AddCustodexInstrumentation()`), `m0/01` (`CustodexDiagnostics`), `m1/01` (`MigrationRunner`), `m3/01` (the `Custodex.Service` host). The Aspire integration tests require Docker.
+**Dependencies (see README):** `AddCustodex().UsePostgres().UseSchema()` and `AddCustodexInstrumentation()`; `CustodexDiagnostics` (the `"Custodex"` source/meter); `MigrationRunner`; the `Custodex.Service` host (`m3/01`). The Aspire integration tests require Docker.
 
 ---
 
-### Task 1: Wire ServiceDefaults + Custodex telemetry + Postgres readiness into Custodex.Service
+### Task 1: Wire ServiceDefaults + Custodex telemetry + Postgres readiness into the service
 
-**Files:**
-- Modify: `src/Custodex.Service/Program.cs`
-- Create: `src/Custodex.Service/Health/PostgresReadyHealthCheck.cs`
-- Test: `tests/Custodex.Service.Tests/Defaults/ServiceDefaultsWiringTests.cs`
+- [ ] **Files:** modify `src/Custodex.Service/Program.cs`; add `src/Custodex.Service/Health/PostgresReadyHealthCheck.cs`; test `…Tests/Defaults/ServiceDefaultsWiringTests.cs`.
 
-**Interfaces:**
-- Consumes: `AddServiceDefaults`/`MapDefaultEndpoints` (ServiceDefaults), `AddCustodex().UsePostgres().UseSchema()` and `AddCustodexInstrumentation()` (m1/09), `CustodexDiagnostics` (m0/01).
-- Produces: a `Custodex.Service` host whose `/health` includes a `"postgres"` readiness check and whose OTel pipeline exports the `"Custodex"` source/meter.
+**Produces:** a `Custodex.Service` host whose `/health` includes a `"postgres"` readiness check and whose OTel pipeline exports the `"Custodex"` source/meter.
+**Consumes (see README):** `AddServiceDefaults()`/`MapDefaultEndpoints()`; `AddCustodex().UsePostgres().UseSchema()` and `AddCustodexInstrumentation()`; `CustodexDiagnostics`.
 
-- [ ] **Step 1: Write the failing test**
+**Behavior:** the host calls `AddServiceDefaults()` (no parallel OTel pipeline) and `MapDefaultEndpoints()`. The library telemetry registers into that pipeline via `AddCustodexInstrumentation()` — equivalently `tracing.AddSource("Custodex")` + `metrics.AddMeter("Custodex")` — called once, not both. The readiness check probes Postgres + applied migrations (the same `SELECT 1 FROM schema_migrations LIMIT 1` shape as `m3/06`) and is registered tagged `"ready"` so `/health` includes it and `/alive` does not.
 
-```csharp
-// tests/Custodex.Service.Tests/Defaults/ServiceDefaultsWiringTests.cs
-using System.Net;
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Service.Tests.Defaults;
+| Setup | Expect |
+|---|---|
+| GET `/health` | 200, names the `postgres` check |
+| GET `/alive` | 200 |
 
-public class ServiceDefaultsWiringTests(CustodexServiceFactory factory) : IClassFixture<CustodexServiceFactory>
-{
-    [Fact]
-    public async Task Health_endpoint_reports_postgres_check()
-    {
-        var resp = await factory.CreateClient().GetAsync("/health");
-        resp.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await resp.Content.ReadAsStringAsync()).ShouldContain("postgres");
-    }
-
-    [Fact]
-    public async Task Alive_endpoint_is_ok()
-    {
-        var resp = await factory.CreateClient().GetAsync("/alive");
-        resp.StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Service.Tests --filter ServiceDefaultsWiringTests`
-Expected: FAIL — endpoints/checks not wired.
-
-- [ ] **Step 3: Implement the readiness check**
-
-```csharp
-// src/Custodex.Service/Health/PostgresReadyHealthCheck.cs
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Npgsql;
-
-namespace Custodex.Service.Health;
-
-public sealed class PostgresReadyHealthCheck(NpgsqlDataSource dataSource) : IHealthCheck
-{
-    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default)
-    {
-        try
-        {
-            await using var cmd = dataSource.CreateCommand("SELECT 1 FROM schema_migrations LIMIT 1");
-            await cmd.ExecuteScalarAsync(ct);
-            return HealthCheckResult.Healthy();
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("Postgres not ready", ex);
-        }
-    }
-}
-```
-
-- [ ] **Step 4: Wire the host** (`Program.cs`)
-
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.AddServiceDefaults();                              // OTel + /health,/alive + discovery + resilience
-
-builder.AddCustodex()
-    .UsePostgres(builder.Configuration.GetConnectionString("Custodex")!)
-    .UseSchema(ZooSchema.Build());                          // the app's schema builder
-
-// register the library's telemetry into the ServiceDefaults OTel pipeline
-builder.Services.AddOpenTelemetry()
-    .WithTracing(t => t.AddSource(Custodex.Abstractions.CustodexDiagnostics.Name))
-    .WithMetrics(m => m.AddMeter(Custodex.Abstractions.CustodexDiagnostics.Name));
-
-builder.Services.AddHealthChecks()
-    .AddCheck<Custodex.Service.Health.PostgresReadyHealthCheck>("postgres", tags: ["ready"]);
-
-var app = builder.Build();
-
-app.MapDefaultEndpoints();                                  // /health (all) + /alive (live-tagged)
-// ... gRPC (m3/01) + REST (m3/02) + auth (m3/03) mapping ...
-app.Run();
-```
-
-> `AddCustodexInstrumentation()` (m1/09) MAY encapsulate the `AddSource`/`AddMeter` calls; if so, call it here instead of the inline `AddOpenTelemetry()` block. Keep one or the other, not both.
-
-- [ ] **Step 5: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Service.Tests --filter ServiceDefaultsWiringTests`
-Expected: PASS.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/Custodex.Service tests/Custodex.Service.Tests/Defaults
-git commit -m "feat: wire ServiceDefaults, Custodex telemetry, and Postgres readiness"
-```
+**Done when:** build clean; cases pass; the `"Custodex"` source/meter register exactly once and `/health` includes the readiness check.
 
 ---
 
 ### Task 2: AppHost orchestration — Postgres + Service
 
-**Files:**
-- Modify: `src/Custodex.AppHost/AppHost.cs`
-- Modify: `src/Custodex.AppHost/Custodex.AppHost.csproj` (add `Aspire.Hosting.PostgreSQL`)
+- [ ] **Files:** modify `src/Custodex.AppHost/AppHost.cs`; add the `Aspire.Hosting.PostgreSQL` package to `src/Custodex.AppHost/Custodex.AppHost.csproj`.
 
-**Interfaces:**
-- Produces: a distributed application graph: a Postgres resource with a `Custodex` database, and `Custodex.Service` referencing it and waiting for it.
+**Produces:** a distributed application graph — a Postgres resource with a `Custodex` database, and `Custodex.Service` referencing it and waiting for it.
+**Consumes (see README):** `Aspire.Hosting.PostgreSQL`; the generated `Projects.Custodex_Service` reference.
 
-- [ ] **Step 1: Add the Postgres hosting package**
+**Behavior:** the AppHost adds a Postgres resource (with a data volume to persist across dev runs) and a `Custodex` database, then adds the service project with `WithReference(postgres)` (injecting `ConnectionStrings:Custodex`) and `WaitFor(postgres)`. This is the local-dev orchestration that replaces docker-compose.
 
-Run:
-```bash
-dotnet add src/Custodex.AppHost package Aspire.Hosting.PostgreSQL
-```
-
-- [ ] **Step 2: Write the app graph**
-
-```csharp
-// src/Custodex.AppHost/AppHost.cs
-var builder = DistributedApplication.CreateBuilder(args);
-
-var postgres = builder.AddPostgres("postgres")
-    .WithDataVolume()                 // persist across dev runs
-    .AddDatabase("Custodex");
-
-builder.AddProject<Projects.Custodex_Service>("Custodex-service")
-    .WithReference(postgres)          // injects ConnectionStrings:Custodex
-    .WaitFor(postgres);
-
-builder.Build().Run();
-```
-
-- [ ] **Step 3: Verify the AppHost builds**
-
-Run: `dotnet build src/Custodex.AppHost`
-Expected: build succeeds; `Projects.Custodex_Service` resolves (generated from the project reference).
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/Custodex.AppHost
-git commit -m "feat: orchestrate Postgres and Custodex.Service in the AppHost"
-```
+**Done when:** `dotnet build src/Custodex.AppHost` succeeds and `Projects.Custodex_Service` resolves from the project reference.
 
 ---
 
 ### Task 3: Aspire integration smoke test
 
-**Files:**
-- Create: `tests/Custodex.Storage.Postgres.Tests/Aspire/AppHostSmokeTests.cs`
-- Modify: `tests/Custodex.Storage.Postgres.Tests/Custodex.Storage.Postgres.Tests.csproj` (add `Aspire.Hosting.Testing`)
+- [ ] **Files:** add `tests/Custodex.Storage.Postgres.Tests/Aspire/AppHostSmokeTests.cs`, traited `[Trait("category","aspire")]` (requires Docker; excluded from the fast suite); add `Aspire.Hosting.Testing` to that test project.
 
-**Interfaces:**
-- Consumes: `Aspire.Hosting.Testing.DistributedApplicationTestingBuilder` to start the real `Custodex.AppHost`.
+**Produces:** a smoke test that starts the real `Custodex.AppHost`, waits for the service to be healthy, then seeds a grant and checks it.
+**Consumes (see README):** `Aspire.Hosting.Testing.DistributedApplicationTestingBuilder` over `Projects.Custodex_AppHost`; the REST `/v1/tuples` + `/v1/check`; the seeded admin key + tenant header.
 
-- [ ] **Step 1: Add the testing package**
+**Behavior:** the test builds and starts the AppHost, obtains the service's HTTP client, waits for the resource to report healthy, then (with the admin key + tenant header) writes a direct grant and checks it returns `allowed:true` — proving the orchestrated stack (Postgres + migrated service) answers end-to-end. Behind the `aspire` trait so the unit suite never requires Docker.
 
-Run:
-```bash
-dotnet add tests/Custodex.Storage.Postgres.Tests package Aspire.Hosting.Testing
-```
+**Cases to pin:**
 
-- [ ] **Step 2: Write the smoke test**
+| Setup | Expect |
+|---|---|
+| AppHost-orchestrated service, write a grant then check it | `allowed:true` |
 
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Aspire/AppHostSmokeTests.cs
-using System.Net.Http.Json;
-using Aspire.Hosting;
-using Aspire.Hosting.Testing;
-using Shouldly;
-using Xunit;
-
-namespace Custodex.Storage.Postgres.Tests.Aspire;
-
-[Trait("category", "aspire")]   // requires Docker; excluded from the fast suite
-public class AppHostSmokeTests
-{
-    [Fact]
-    public async Task Orchestrated_service_answers_a_check()
-    {
-        var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Custodex_AppHost>();
-        await using var app = await appHost.BuildAsync();
-        await app.StartAsync();
-
-        var http = app.CreateHttpClient("Custodex-service");
-        await app.ResourceNotifications.WaitForResourceHealthyAsync("Custodex-service");
-
-        // direct grant then check (admin key seeded via AppHost config)
-        http.DefaultRequestHeaders.Add("X-Custodex-Key", "admin-key");
-        http.DefaultRequestHeaders.Add("X-Custodex-Tenant", "sydney-zoo");
-        await http.PostAsJsonAsync("/v1/tuples", SampleWrite.GrantCarolManageEl001);
-        var resp = await http.PostAsJsonAsync("/v1/check", SampleCheck.CarolManageEl001);
-        var result = await resp.Content.ReadFromJsonAsync<CheckResponseDto>();
-        result!.Allowed.ShouldBeTrue();
-    }
-}
-```
-
-- [ ] **Step 3: Run the Aspire smoke test** (Docker required)
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter "category=aspire"`
-Expected: PASS — the AppHost starts Postgres + the service, applies migrations, and the orchestrated service grants `carol` manage on `EL-001`.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add tests/Custodex.Storage.Postgres.Tests/Aspire
-git commit -m "test: Aspire AppHost smoke test for the orchestrated service"
-```
+**Done when:** the traited smoke test passes with Docker available and is excluded from the fast suite.
 
 ---
 
-## Self-review checklist (run after all tasks)
+## Self-review checklist
 
 - [ ] `Custodex.Service` calls `AddServiceDefaults()` and `MapDefaultEndpoints()`; no parallel OTel pipeline is created.
-- [ ] The `"Custodex"` ActivitySource and Meter are registered into the ServiceDefaults OTel pipeline exactly once.
+- [ ] The `"Custodex"` `ActivitySource` and `Meter` register into the ServiceDefaults OTel pipeline exactly once.
 - [ ] `/health` includes the `postgres` readiness check; `/alive` reflects only live-tagged checks.
 - [ ] The AppHost provisions Postgres and the service waits for it; the Aspire smoke test is excluded from the fast unit suite via the `aspire` trait.

@@ -1,465 +1,104 @@
-# M0/02 — Schema Model & Fluent Builder Implementation Plan
-
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+# M0/02 — Schema Model & Fluent Builder
 
 **Goal:** Stand up `Custodex.Core` and a fluent `SchemaBuilder` that produces the `Schema` AST defined in `Custodex.Abstractions`.
 
-**Architecture:** The AST records live in `Custodex.Abstractions` (built in `m0/01`). The builder is construction logic and lives in `Custodex.Core`. Default chaining of permission terms is **union**; `Exclude`/`Intersect`/`Conditioned` wrap the accumulated expression.
+**For implementers:** drive this with `superpowers:subagent-driven-development` or `superpowers:executing-plans`; follow TDD (Red → Green → Commit) per task; tasks are tracked with `- [ ]`; one conventional-commit per green task (co-author trailer per `../README.md` → Global Constraints).
 
-**Tech Stack:** .NET 10, C# 14, xUnit, Shouldly.
+**Architecture/approach:** the AST records live in `Custodex.Abstractions` (m0/01); the builder is construction logic in `Custodex.Core`. Permission terms chain by **union** by default; `Exclude`/`Intersect`/`Conditioned` wrap the accumulated expression. The builders are small, composable, and exist only to produce the canonical AST — they hold no evaluation logic.
 
-## Global Constraints
+**Tech stack:** .NET 10 (`net10.0`), C# 14, xUnit, Shouldly.
 
-See `../README.md` → Global Constraints. Depends on `m0/01` (the AST records and `Custodex.Abstractions`).
+**Global Constraints:** see `../README.md` → Global Constraints.
+
+**Dependencies:** builds on m0/01 — the `Schema` AST records, `ConditionExpr` marker, and `Custodex.Abstractions` (see README).
 
 ---
 
 ### Task 1: Create `Custodex.Core` and reference Abstractions
 
-**Files:**
-- Create: `src/Custodex.Core/Custodex.Core.csproj`
-- Create: `tests/Custodex.Core.Tests/Custodex.Core.Tests.csproj`
-- Test: `tests/Custodex.Core.Tests/CoreWiringTests.cs`
+- [ ] **Files:** wire `src/Custodex.Core` → `src/Custodex.Abstractions` reference, and `tests/Custodex.Core.Tests` → `Custodex.Core` + Shouldly; remove template leftovers. Test: `tests/Custodex.Core.Tests/CoreWiringTests.cs`.
 
-**Interfaces:**
-- Produces: the `Custodex.Core` assembly referencing `Custodex.Abstractions`.
+**Produces:** the `Custodex.Core` assembly referencing `Custodex.Abstractions`.
+**Consumes (see README):** the project shells already exist in `Custodex.slnx`.
 
-- [ ] **Step 1: Create projects and references**
+**Behavior:** the engine project depends only on Abstractions (zero domain concepts, zero DB code). A placeholder type proves the reference resolves.
 
-Run:
-```bash
-dotnet new classlib -n Custodex.Core -o src/Custodex.Core -f net10.0
-dotnet new xunit -n Custodex.Core.Tests -o tests/Custodex.Core.Tests -f net10.0
-rm src/Custodex.Core/Class1.cs tests/Custodex.Core.Tests/UnitTest1.cs
-dotnet sln add src/Custodex.Core tests/Custodex.Core.Tests
-dotnet add src/Custodex.Core reference src/Custodex.Abstractions
-dotnet add tests/Custodex.Core.Tests reference src/Custodex.Core
-dotnet add tests/Custodex.Core.Tests package Shouldly
-```
+**Cases to pin:**
 
-- [ ] **Step 2: Write the wiring test**
+| Setup | Expect |
+|---|---|
+| reference `Custodex.Core` from the test project | the assembly is loadable and named `Custodex.Core` |
 
-```csharp
-// tests/Custodex.Core.Tests/CoreWiringTests.cs
-using Shouldly;
-using Xunit;
-
-namespace Custodex.Core.Tests;
-
-public class CoreWiringTests
-{
-    [Fact]
-    public void Core_references_abstractions()
-    {
-        typeof(Custodex.Core.SchemaBuilder).Assembly.GetName().Name.ShouldBe("Custodex.Core");
-    }
-}
-```
-
-- [ ] **Step 3: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Core.Tests`
-Expected: FAIL — `SchemaBuilder` does not exist.
-
-- [ ] **Step 4: Add a placeholder `SchemaBuilder`** (filled in Task 2–4)
-
-```csharp
-// src/Custodex.Core/SchemaBuilder.cs
-namespace Custodex.Core;
-public sealed partial class SchemaBuilder { }
-```
-
-- [ ] **Step 5: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Core.Tests`
-Expected: PASS.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/Custodex.Core tests/Custodex.Core.Tests
-git commit -m "chore: scaffold Custodex.Core project"
-```
+**Done when:** build clean under TreatWarningsAsErrors; wiring test passes.
 
 ---
 
-### Task 2: Permission expression builder
+### Task 2: Permission-expression builder
 
-**Files:**
-- Create: `src/Custodex.Core/PermExprBuilder.cs`
-- Test: `tests/Custodex.Core.Tests/PermExprBuilderTests.cs`
+- [ ] **Files:** create `src/Custodex.Core/PermExprBuilder.cs`. Test: `tests/Custodex.Core.Tests/PermExprBuilderTests.cs`.
 
-**Interfaces:**
-- Produces: `PermExprBuilder` with `Relation(string)`, `Arrow(string,string)`, `Union(Action<PermExprBuilder>)`, `Intersect(Action<PermExprBuilder>)`, `Exclude(Action<PermExprBuilder>)`, `Conditioned(string)`, and `PermExpr Build()`.
-- Consumes: `PermExpr`, `RelationRef`, `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned` from `Custodex.Abstractions`.
+**Produces:** `PermExprBuilder` with `Relation(string)`, `Arrow(string, string)`, `Union(Action<PermExprBuilder>)`, `Intersect(Action<PermExprBuilder>)`, `Exclude(Action<PermExprBuilder>)`, `Conditioned(string)`, and `PermExpr Build()`.
+**Consumes (see README):** `PermExpr`, `RelationRef`, `Union`, `Intersect`, `Exclude`, `Arrow`, `Conditioned`.
 
-- [ ] **Step 1: Write the failing tests**
+**Behavior:**
+- Default chaining is **union**: each `Relation`/`Arrow` term unions onto the accumulated expression. `Intersect`/`Exclude` wrap the accumulated expression on the left with the sub-built expression on the right; `Conditioned(name)` wraps the accumulated expression. Sub-builders (`Union`/`Intersect`/`Exclude` taking an `Action`) build a nested expression. `Build()` on an empty builder throws `InvalidOperationException` (a permission must have at least one term).
 
-```csharp
-// tests/Custodex.Core.Tests/PermExprBuilderTests.cs
-using Custodex.Abstractions;
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Core.Tests;
+| Setup | Expect |
+|---|---|
+| `.Relation(a).Arrow(rel, perm).Exclude(x => x.Relation(b))` | `Exclude(Union(RelationRef a, Arrow rel→perm), RelationRef b)` |
+| `.Relation(a).Intersect(x => x.Relation(b)).Conditioned(c)` | `Conditioned(Intersect(RelationRef a, RelationRef b), c)` |
+| `Build()` with no terms | throws `InvalidOperationException` |
 
-public class PermExprBuilderTests
-{
-    [Fact]
-    public void Chained_terms_union_then_exclude_wraps_accumulated()
-    {
-        var expr = new PermExprBuilder()
-            .Relation("medicator")
-            .Arrow("enclosure", "edit")
-            .Exclude(x => x.Relation("blocked"))
-            .Build();
-
-        // Expect: Exclude(Union(RelationRef medicator, Arrow enclosure->edit), RelationRef blocked)
-        var exclude = expr.ShouldBeOfType<Exclude>();
-        exclude.Right.ShouldBeOfType<RelationRef>().Relation.ShouldBe("blocked");
-        var union = exclude.Left.ShouldBeOfType<Union>();
-        union.Left.ShouldBeOfType<RelationRef>().Relation.ShouldBe("medicator");
-        var arrow = union.Right.ShouldBeOfType<Arrow>();
-        arrow.Relation.ShouldBe("enclosure");
-        arrow.Permission.ShouldBe("edit");
-    }
-
-    [Fact]
-    public void Intersect_and_conditioned_wrap_in_order()
-    {
-        var expr = new PermExprBuilder()
-            .Relation("a")
-            .Intersect(x => x.Relation("b"))
-            .Conditioned("within_hours")
-            .Build();
-
-        var cond = expr.ShouldBeOfType<Conditioned>();
-        cond.ConditionName.ShouldBe("within_hours");
-        var inter = cond.Inner.ShouldBeOfType<Intersect>();
-        inter.Left.ShouldBeOfType<RelationRef>().Relation.ShouldBe("a");
-        inter.Right.ShouldBeOfType<RelationRef>().Relation.ShouldBe("b");
-    }
-
-    [Fact]
-    public void Build_with_no_terms_throws()
-    {
-        Should.Throw<InvalidOperationException>(() => new PermExprBuilder().Build());
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Core.Tests --filter PermExprBuilderTests`
-Expected: FAIL — `PermExprBuilder` not defined.
-
-- [ ] **Step 3: Implement the builder**
-
-```csharp
-// src/Custodex.Core/PermExprBuilder.cs
-using Custodex.Abstractions;
-
-namespace Custodex.Core;
-
-public sealed class PermExprBuilder
-{
-    private PermExpr? _current;
-
-    private PermExprBuilder Add(PermExpr node)
-    {
-        _current = _current is null ? node : new Union(_current, node);
-        return this;
-    }
-
-    public PermExprBuilder Relation(string relation) => Add(new RelationRef(relation));
-    public PermExprBuilder Arrow(string relation, string permission) => Add(new Arrow(relation, permission));
-
-    public PermExprBuilder Union(Action<PermExprBuilder> build) => Add(BuildSub(build));
-
-    public PermExprBuilder Intersect(Action<PermExprBuilder> build)
-    {
-        _current = new Intersect(Require(), BuildSub(build));
-        return this;
-    }
-
-    public PermExprBuilder Exclude(Action<PermExprBuilder> build)
-    {
-        _current = new Exclude(Require(), BuildSub(build));
-        return this;
-    }
-
-    public PermExprBuilder Conditioned(string conditionName)
-    {
-        _current = new Conditioned(Require(), conditionName);
-        return this;
-    }
-
-    public PermExpr Build() => Require();
-
-    private PermExpr Require() => _current ?? throw new InvalidOperationException("Permission expression has no terms.");
-
-    private static PermExpr BuildSub(Action<PermExprBuilder> build)
-    {
-        var sub = new PermExprBuilder();
-        build(sub);
-        return sub.Build();
-    }
-}
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Core.Tests --filter PermExprBuilderTests`
-Expected: PASS (3 tests).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Core tests/Custodex.Core.Tests
-git commit -m "feat: add permission expression builder"
-```
+**Done when:** build clean; the wrapping order holds.
 
 ---
 
-### Task 3: Relation-filler and condition-param builders
+### Task 3: Subject-filler and condition-param builders
 
-**Files:**
-- Create: `src/Custodex.Core/SubjectFillerBuilder.cs`
-- Create: `src/Custodex.Core/ConditionParamBuilder.cs`
-- Test: `tests/Custodex.Core.Tests/FillerAndParamBuilderTests.cs`
+- [ ] **Files:** create `src/Custodex.Core/SubjectFillerBuilder.cs`, `src/Custodex.Core/ConditionParamBuilder.cs`. Test: `tests/Custodex.Core.Tests/FillerAndParamBuilderTests.cs`.
 
-**Interfaces:**
-- Produces: `SubjectFillerBuilder` with `User()`, `Type(string)`, `SubjectSet(string type, string relation)`, `Wildcard(string type)`, `IReadOnlyList<SubjectTypeRef> Build()`; `ConditionParamBuilder` with `Bool/Int/Long/Double/String/Timestamp(string name)` and `IReadOnlyList<ConditionParam> Build()`.
+**Produces:** `SubjectFillerBuilder` with `User()`, `Type(string)`, `SubjectSet(string type, string relation)`, `Wildcard(string type)`, `Build()`; `ConditionParamBuilder` with `Bool/Int/Long/Double/String/Timestamp(string name)` and `Build()`.
+**Consumes (see README):** `SubjectTypeRef`, `ConditionParam`, `ConditionType`.
 
-- [ ] **Step 1: Write the failing tests**
+**Behavior:**
+- `User()` is sugar for `Type("user")`. `SubjectSet(type, relation)` records a subject-set filler (`Relation` set); `Wildcard(type)` records a wildcard filler (`Wildcard = true`). The param builder maps each typed method to the matching `ConditionType`.
 
-```csharp
-// tests/Custodex.Core.Tests/FillerAndParamBuilderTests.cs
-using Custodex.Abstractions;
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Core.Tests;
+| Setup | Expect |
+|---|---|
+| `.User().SubjectSet(g, m).Wildcard(u)` | fillers contain a plain `user`, a `g#m` subject-set, and a `u` wildcard |
+| `.Int(start).Int(end)` | two `Int` `ConditionParam`s in order |
 
-public class FillerAndParamBuilderTests
-{
-    [Fact]
-    public void Filler_builder_collects_user_subjectset_and_wildcard()
-    {
-        var fillers = new SubjectFillerBuilder().User().SubjectSet("group", "member").Wildcard("user").Build();
-        fillers.ShouldContain(new SubjectTypeRef("user", null, false));
-        fillers.ShouldContain(new SubjectTypeRef("group", "member", false));
-        fillers.ShouldContain(new SubjectTypeRef("user", null, true));
-    }
-
-    [Fact]
-    public void Param_builder_collects_typed_params()
-    {
-        var ps = new ConditionParamBuilder().Int("start").Int("end").Build();
-        ps.ShouldBe(new[] { new ConditionParam("start", ConditionType.Int), new ConditionParam("end", ConditionType.Int) });
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Core.Tests --filter FillerAndParamBuilderTests`
-Expected: FAIL — builders not defined.
-
-- [ ] **Step 3: Implement the builders**
-
-```csharp
-// src/Custodex.Core/SubjectFillerBuilder.cs
-using Custodex.Abstractions;
-
-namespace Custodex.Core;
-
-public sealed class SubjectFillerBuilder
-{
-    private readonly List<SubjectTypeRef> _fillers = [];
-    public SubjectFillerBuilder User() { _fillers.Add(new SubjectTypeRef("user")); return this; }
-    public SubjectFillerBuilder Type(string type) { _fillers.Add(new SubjectTypeRef(type)); return this; }
-    public SubjectFillerBuilder SubjectSet(string type, string relation) { _fillers.Add(new SubjectTypeRef(type, relation)); return this; }
-    public SubjectFillerBuilder Wildcard(string type) { _fillers.Add(new SubjectTypeRef(type, null, true)); return this; }
-    public IReadOnlyList<SubjectTypeRef> Build() => _fillers;
-}
-```
-
-```csharp
-// src/Custodex.Core/ConditionParamBuilder.cs
-using Custodex.Abstractions;
-
-namespace Custodex.Core;
-
-public sealed class ConditionParamBuilder
-{
-    private readonly List<ConditionParam> _params = [];
-    private ConditionParamBuilder Add(string name, ConditionType type) { _params.Add(new ConditionParam(name, type)); return this; }
-    public ConditionParamBuilder Bool(string name) => Add(name, ConditionType.Bool);
-    public ConditionParamBuilder Int(string name) => Add(name, ConditionType.Int);
-    public ConditionParamBuilder Long(string name) => Add(name, ConditionType.Long);
-    public ConditionParamBuilder Double(string name) => Add(name, ConditionType.Double);
-    public ConditionParamBuilder String(string name) => Add(name, ConditionType.String);
-    public ConditionParamBuilder Timestamp(string name) => Add(name, ConditionType.Timestamp);
-    public IReadOnlyList<ConditionParam> Build() => _params;
-}
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Core.Tests --filter FillerAndParamBuilderTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Core tests/Custodex.Core.Tests
-git commit -m "feat: add subject-filler and condition-param builders"
-```
+**Done when:** build clean; fillers/params collected correctly.
 
 ---
 
 ### Task 4: Type and schema builders
 
-**Files:**
-- Create: `src/Custodex.Core/EntityTypeBuilder.cs`
-- Modify: `src/Custodex.Core/SchemaBuilder.cs`
-- Test: `tests/Custodex.Core.Tests/SchemaBuilderTests.cs`
+- [ ] **Files:** create `src/Custodex.Core/EntityTypeBuilder.cs`; modify `src/Custodex.Core/SchemaBuilder.cs`. Test: `tests/Custodex.Core.Tests/SchemaBuilderTests.cs`.
 
-**Interfaces:**
-- Produces: `EntityTypeBuilder` with `Relation(string name, Action<SubjectFillerBuilder>)` and `Permission(string name, Action<PermExprBuilder>)`; `SchemaBuilder(string version)` with `Type(string name, Action<EntityTypeBuilder>)`, `Condition(string name, Action<ConditionParamBuilder>)`, and `Schema Build()`. (Condition bodies are attached in `m0/06`; here a condition is declared with params and an empty body marker.)
-- Consumes: all builders above; `Schema`, `EntityTypeDef`, `RelationDef`, `PermissionDef`, `ConditionDef`, `ConditionExpr`.
+**Produces:** `EntityTypeBuilder` with `Relation(string, Action<SubjectFillerBuilder>)` and `Permission(string, Action<PermExprBuilder>)`; `SchemaBuilder(string version)` with `Type(string, Action<EntityTypeBuilder>)`, a params-only `Condition(string, Action<ConditionParamBuilder>)`, and `Schema Build()`. Also the `EmptyConditionBody` placeholder record (`: ConditionExpr`) used by the params-only condition overload.
+**Consumes (see README):** all builders above; `Schema`, `EntityTypeDef`, `RelationDef`, `PermissionDef`, `ConditionDef`, `ConditionExpr`.
 
-- [ ] **Step 1: Write the failing test** (builds the animal schema from the contract)
+**Behavior:**
+- The builder produces the canonical `Schema` AST exactly as the contract's fluent example shows. The params-only `Condition` overload attaches `EmptyConditionBody` (a condition declared with parameters but no body); m0/06 adds the body-carrying overload alongside it.
 
-```csharp
-// tests/Custodex.Core.Tests/SchemaBuilderTests.cs
-using Custodex.Abstractions;
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Core.Tests;
+| Setup | Expect |
+|---|---|
+| build the contract's animal schema | version, relation names in order, the `edit` permission resolves to an `Exclude`, the condition has two params |
 
-public class SchemaBuilderTests
-{
-    [Fact]
-    public void Builds_animal_schema_with_relations_permission_and_condition()
-    {
-        var schema = new SchemaBuilder("v1")
-            .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
-            .Type("animal", t => t
-                .Relation("medicator", s => s.User().SubjectSet("group", "member"))
-                .Relation("enclosure", s => s.Type("enclosure"))
-                .Relation("blocked", s => s.User().SubjectSet("group", "member"))
-                .Permission("edit", p => p.Relation("medicator").Arrow("enclosure", "edit").Exclude(x => x.Relation("blocked"))))
-            .Condition("within_hours", c => c.Int("start").Int("end"))
-            .Build();
-
-        schema.Version.ShouldBe("v1");
-        var animal = schema.Types.Single(x => x.Name == "animal");
-        animal.Relations.Select(r => r.Name).ShouldBe(new[] { "medicator", "enclosure", "blocked" });
-        animal.Permissions.Single().Name.ShouldBe("edit");
-        animal.Permissions.Single().Expression.ShouldBeOfType<Exclude>();
-        schema.Conditions.Single().Name.ShouldBe("within_hours");
-        schema.Conditions.Single().Parameters.Count.ShouldBe(2);
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Core.Tests --filter SchemaBuilderTests`
-Expected: FAIL — `Type`/`Permission`/`Condition` not defined.
-
-- [ ] **Step 3: Implement the type builder**
-
-```csharp
-// src/Custodex.Core/EntityTypeBuilder.cs
-using Custodex.Abstractions;
-
-namespace Custodex.Core;
-
-public sealed class EntityTypeBuilder
-{
-    private readonly List<RelationDef> _relations = [];
-    private readonly List<PermissionDef> _permissions = [];
-
-    public EntityTypeBuilder Relation(string name, Action<SubjectFillerBuilder> fillers)
-    {
-        var b = new SubjectFillerBuilder();
-        fillers(b);
-        _relations.Add(new RelationDef(name, b.Build()));
-        return this;
-    }
-
-    public EntityTypeBuilder Permission(string name, Action<PermExprBuilder> expr)
-    {
-        var b = new PermExprBuilder();
-        expr(b);
-        _permissions.Add(new PermissionDef(name, b.Build()));
-        return this;
-    }
-
-    internal (IReadOnlyList<RelationDef> Relations, IReadOnlyList<PermissionDef> Permissions) Build() => (_relations, _permissions);
-}
-```
-
-- [ ] **Step 4: Implement the schema builder**
-
-```csharp
-// src/Custodex.Core/SchemaBuilder.cs
-using Custodex.Abstractions;
-
-namespace Custodex.Core;
-
-/// <summary>Empty condition body placeholder; m0/06 replaces this with the real body AST.</summary>
-public sealed record EmptyConditionBody : ConditionExpr;
-
-public sealed partial class SchemaBuilder
-{
-    private readonly string _version;
-    private readonly List<EntityTypeDef> _types = [];
-    private readonly List<ConditionDef> _conditions = [];
-
-    public SchemaBuilder(string version) => _version = version;
-
-    public SchemaBuilder Type(string name, Action<EntityTypeBuilder> build)
-    {
-        var b = new EntityTypeBuilder();
-        build(b);
-        var (relations, permissions) = b.Build();
-        _types.Add(new EntityTypeDef(name, relations, permissions));
-        return this;
-    }
-
-    public SchemaBuilder Condition(string name, Action<ConditionParamBuilder> build)
-    {
-        var b = new ConditionParamBuilder();
-        build(b);
-        _conditions.Add(new ConditionDef(name, b.Build(), new EmptyConditionBody()));
-        return this;
-    }
-
-    public Schema Build() => new(_version, _types, _conditions);
-}
-```
-
-- [ ] **Step 5: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Core.Tests --filter SchemaBuilderTests`
-Expected: PASS.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/Custodex.Core tests/Custodex.Core.Tests
-git commit -m "feat: add entity-type and schema builders"
-```
+**Done when:** build clean; the contract's fluent example produces the expected AST.
 
 ---
 
-## Self-review checklist (run after all tasks)
+## Self-review checklist (after all tasks)
 
+- [ ] `dotnet build` clean under TreatWarningsAsErrors.
 - [ ] The contract's fluent example in `../README.md` compiles and produces the expected AST.
-- [ ] Default chaining is union; `Exclude`/`Intersect`/`Conditioned` wrap the accumulated expression.
-- [ ] `m0/06` will replace `EmptyConditionBody`; leave a clear note (done) so the condition-evaluator plan knows to attach real bodies via a `Condition(name, params, bodyExpr)` overload.
+- [ ] Default chaining is union; `Exclude`/`Intersect`/`Conditioned` wrap the accumulated expression; empty `Build()` throws.
+- [ ] The params-only `Condition` overload attaches `EmptyConditionBody`; m0/06 attaches real bodies via a `Condition(name, params, body)` overload.

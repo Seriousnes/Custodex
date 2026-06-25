@@ -1,293 +1,73 @@
-# M2/06 — Differential: Reverse Index ≡ Oracle Implementation Plan
+# M2/06 — Differential: Reverse Index ≡ Oracle
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Goal:** Prove the maintained reverse index returns the same answers as the engine-driven oracle — for fresh rebuilds *and* after arbitrary sequences of writes — so incremental maintenance can never silently drift.
 
-**Goal:** Prove the maintained reverse index returns the same answers as the engine-driven oracle — for fresh rebuilds *and* after arbitrary sequences of writes (so incremental maintenance can never silently drift).
+**For implementers:** drive this with `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). Each `### Task` is one TDD unit — Red → Green → one Conventional-Commit with the co-author trailer (see `../README.md` → Global Constraints). Tasks are tracked with `- [ ]` checkboxes.
 
-**Architecture:** Three-way agreement. For random valid schemas + tuples + write sequences, assert `index-backed ListObjects ≡ full-rebuild index ≡ EngineDrivenAuthorizer oracle`. The oracle (m0/05, m0/07) is ground truth; the full rebuild (m2/02) is the always-correct index; incremental maintenance (m2/03) is the fast path under test.
+**Architecture/approach:** three-way agreement. For random valid schemas + tuples + write sequences, assert `index-backed ListObjects ≡ full-rebuild index ≡ EngineDrivenAuthorizer oracle`. The oracle (m0/05, m0/07) is ground truth; the full rebuild (m2/02) is the always-correct index; incremental maintenance (m2/03) is the fast path under test. This harness is the correctness mechanism for m2/03 (see the README Calibration note): a shrunk CsCheck counterexample points at m2/03 (the code under test), not at the test.
 
-**Tech Stack:** .NET 10, xUnit, Shouldly, CsCheck, Dapper/Npgsql, Testcontainers.PostgreSql.
+**Tech stack:** .NET 10, xUnit, Shouldly, CsCheck, Dapper/Npgsql, Testcontainers.PostgreSql.
 
-## Global Constraints
+**Global Constraints:** see `../README.md` → Global Constraints, and its Calibration note.
 
-See `../README.md` → Global Constraints and the Calibration section. Depends on: `m0/05`+`m0/07` (`EngineDrivenAuthorizer` oracle), `m2/01` (`IIndexStore`), `m2/02` (full rebuild), `m2/03` (incremental maintenance), `m2/04` (index-backed `ListObjects`). Reuses the model generator from `m1/08`.
+**Dependencies:** builds on m0/05+m0/07 (`EngineDrivenAuthorizer` oracle); m2/01 (`IIndexStore`/`NpgsqlIndexStore`); m2/02 (`ReverseIndexRebuilder` full rebuild); m2/03 (`ReverseIndexMaintainer` incremental maintenance + `IndexedWritePath`); m2/04 (`IndexedAuthorizer`). Reuses the model generator and the differential harness scaffold from m1/08.
 
 ---
 
-### Task 1: Reuse the valid-model generator and add a write-sequence generator
+### Task 1: Reuse the valid-model generator; add a write-sequence generator
 
-**Files:**
-- Create: `tests/Custodex.Storage.Postgres.Tests/Differential/IndexModelGenerators.cs`
-- Test: `tests/Custodex.Storage.Postgres.Tests/Differential/GeneratorSanityTests.cs`
+- [ ] **Files:** create `tests/Custodex.Storage.Postgres.Tests/Differential/IndexModelGenerators.cs`; test `…/Differential/GeneratorSanityTests.cs`.
 
-**Interfaces:**
-- Consumes: `ModelGenerator` from `m1/08` (curated valid-schema skeletons + tuple generator) and `SchemaValidator` (m0/03).
-- Produces: `IndexModelGenerators.WriteSequence` — a CsCheck `Gen<IReadOnlyList<WriteOp>>` where `WriteOp` is `record WriteOp(bool Add, RelationTuple Tuple)`, biased to include `blocked`/exclusion tuples and arrow-relevant tuples so exclusion-closure paths are exercised.
+**Produces:** `IndexModelGenerators.WriteSequence` — a CsCheck `Gen` of write-op lists (each op is an add-or-remove of a `RelationTuple`), biased to include `blocked`/exclusion tuples and arrow-relevant tuples so exclusion-closure paths are exercised. A write-op record (`Add` flag + `Tuple`) is the unit.
+**Consumes (see README):** the m1/08 `ModelGenerator` (curated valid-schema skeletons + tuple generator) and m0/03 schema validation.
 
-- [ ] **Step 1: Write the failing sanity test**
+**Behavior:** generate over m1/08's curated tuples for the active skeleton; for each tuple emit an add op, and sometimes follow a `blocked` add with a later remove op so the re-add closure (the exclusion landmine reversal) is exercised. The bias toward `blocked` and arrow tuples is what makes the harness probe the hard paths.
 
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Differential/GeneratorSanityTests.cs
-using CsCheck;
-using Shouldly;
-using Xunit;
+**Cases to pin — generator property:**
 
-namespace Custodex.Storage.Postgres.Tests.Differential;
+- Sampling `WriteSequence` over ~200 iterations yields at least one sequence containing a `blocked` (exclusion) tuple.
 
-public class GeneratorSanityTests
-{
-    [Fact]
-    public void Write_sequences_include_exclusion_tuples()
-    {
-        var sawBlocked = false;
-        IndexModelGenerators.WriteSequence.Sample(ops =>
-        {
-            if (ops.Any(o => o.Tuple.Relation == "blocked")) sawBlocked = true;
-        }, iter: 200);
-        sawBlocked.ShouldBeTrue();
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter GeneratorSanityTests`
-Expected: FAIL — `IndexModelGenerators` not defined.
-
-- [ ] **Step 3: Implement the generators**
-
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Differential/IndexModelGenerators.cs
-using CsCheck;
-using Custodex.Abstractions;
-
-namespace Custodex.Storage.Postgres.Tests.Differential;
-
-public sealed record WriteOp(bool Add, RelationTuple Tuple);
-
-public static class IndexModelGenerators
-{
-    // Reuse m1/08's curated tuple generator for the active schema skeleton.
-    public static readonly Gen<IReadOnlyList<WriteOp>> WriteSequence =
-        Gen.Select(ModelGenerator.Tuples, Gen.Bool, (tuples, _) =>
-        {
-            var ops = new List<WriteOp>();
-            foreach (var t in tuples)
-            {
-                ops.Add(new WriteOp(Add: true, t));
-                // Sometimes add then later remove a blocked tuple to exercise re-add closure.
-                if (t.Relation == "blocked") ops.Add(new WriteOp(Add: false, t));
-            }
-            return (IReadOnlyList<WriteOp>)ops;
-        });
-}
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter GeneratorSanityTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tests/Custodex.Storage.Postgres.Tests/Differential
-git commit -m "test: add reverse-index differential model generators"
-```
+**Done when:** build clean; the sanity property passes.
 
 ---
 
 ### Task 2: Fresh-rebuild ≡ oracle
 
-**Files:**
-- Create: `tests/Custodex.Storage.Postgres.Tests/Differential/IndexRebuildEquivalenceTests.cs`
+- [ ] **Files:** create `…/Differential/IndexRebuildEquivalenceTests.cs`; extend the m1/08 differential harness with an index path (`…/Differential/DifferentialHarness.Index.cs`).
 
-**Interfaces:**
-- Consumes: `IndexBackedAuthorizer` (m2/04) over a rebuilt index; `EngineDrivenAuthorizer` (oracle); `ReverseIndexRebuilder` (m2/02). Both authorizers built over the same Testcontainers Postgres model via the m1/08 dual-seed helper, extended with an index path.
+**Produces:** the property test plus the harness extension that builds an `IndexedAuthorizer` over a rebuilt index and exposes a rebuild entry point. The m1/08 `SeedAsync` partial is updated to also construct the `ReverseIndexRebuilder` and the `IndexedAuthorizer` (the one-line wiring change shown in the extension).
+**Consumes (see README):** `IndexedAuthorizer` (m2/04) over a rebuilt index; `EngineDrivenAuthorizer` (oracle); `ReverseIndexRebuilder.RebuildAsync` (m2/02); the m1/08 dual-seed helper extended with an index path. Both authorizers are built over the same Testcontainers Postgres model.
 
-- [ ] **Step 1: Write the failing property test**
+**Behavior — the invariant being asserted:** for random valid models, after a full rebuild, the index-backed `ListObjects` equals the oracle `ListObjects` for every `(subject, type, permission)` probe (compared sorted). The rebuild runs on a unit of work and commits before probing.
 
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Differential/IndexRebuildEquivalenceTests.cs
-using CsCheck;
-using Shouldly;
-using Xunit;
+**Cases to pin — property/invariant:**
 
-namespace Custodex.Storage.Postgres.Tests.Differential;
+- For ~50 generated models: `IndexedAuthorizer.ListObjectsAsync ≡ EngineDrivenAuthorizer.ListObjectsAsync` (sorted object-ids) across all list probes, after a full rebuild.
 
-[Collection("postgres")]   // shares the Testcontainers fixture
-public class IndexRebuildEquivalenceTests(PostgresFixture fx)
-{
-    [Fact]
-    public async Task Index_listobjects_equals_oracle_after_full_rebuild()
-    {
-        await ModelGenerator.Model.SampleAsync(async model =>
-        {
-            await using var h = await DifferentialHarness.SeedAsync(fx, model);   // from m1/08, extended
-            await h.RebuildIndexAsync();                                          // m2/02
-
-            foreach (var (subject, type, permission) in h.ListProbes())
-            {
-                var oracle = await h.Oracle.ListObjectsAsync(h.ListReq(subject, type, permission));
-                var index  = await h.IndexBacked.ListObjectsAsync(h.ListReq(subject, type, permission));
-                index.ObjectIds.OrderBy(x => x).ShouldBe(oracle.ObjectIds.OrderBy(x => x));
-            }
-        }, iter: 50);
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexRebuildEquivalenceTests`
-Expected: FAIL — `DifferentialHarness.RebuildIndexAsync`/`IndexBacked` not present until the harness is extended.
-
-- [ ] **Step 3: Extend the m1/08 harness with an index path**
-
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Differential/DifferentialHarness.Index.cs
-using Custodex.Abstractions;
-
-namespace Custodex.Storage.Postgres.Tests.Differential;
-
-public partial class DifferentialHarness
-{
-    public IndexBackedAuthorizer IndexBacked { get; private set; } = default!;
-    private ReverseIndexRebuilder _rebuilder = default!;
-
-    public async Task RebuildIndexAsync()
-    {
-        await using var uow = await UowFactory.BeginAsync();
-        await _rebuilder.RebuildAsync(Tenant, ActiveSchema.Version, uow);
-        await uow.CommitAsync();
-    }
-}
-```
-
-> The `SeedAsync` partial (in m1/08) is updated to also construct `_rebuilder` and `IndexBacked`; show that one-line wiring change as part of this step.
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexRebuildEquivalenceTests`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tests/Custodex.Storage.Postgres.Tests/Differential
-git commit -m "test: assert rebuilt reverse index equals oracle"
-```
+**Done when:** build clean; the property passes over the configured iteration count; requires Docker.
 
 ---
 
 ### Task 3: Incremental ≡ rebuild ≡ oracle after write sequences
 
-**Files:**
-- Create: `tests/Custodex.Storage.Postgres.Tests/Differential/IndexIncrementalEquivalenceTests.cs`
+- [ ] **Files:** create `…/Differential/IndexIncrementalEquivalenceTests.cs`; add the write-application and scratch-rebuild helpers to the harness (`…/Differential/DifferentialHarness.Incremental.cs`).
 
-**Interfaces:**
-- Consumes: `IncrementalIndexMaintainer` (m2/03) invoked inside each write's unit of work; the rebuild and oracle paths for comparison.
+**Produces:** the property test that proves incremental maintenance under exclusion/arrow changes is correct — the real correctness mechanism for m2/03. The harness gains: apply-one-write (writes the tuple + runs `ReverseIndexMaintainer.MaintainAsync` in the same uow, exactly as `IndexedWritePath` does) and rebuild-a-scratch-index (an independent full rebuild of the final state into a **separate** `reverse_index` namespace/scope so the two indexes do not collide) plus a second `IndexedAuthorizer` over that scratch index. `SeedEmptyAsync` wires the maintainer, the scratch rebuilder, and the scratch indexed authorizer.
+**Consumes (see README):** `ReverseIndexMaintainer.MaintainAsync` (m2/03) invoked inside each write's unit of work; the rebuild and oracle paths for comparison; `IndexModelGenerators.WriteSequence` (Task 1).
 
-This is the test that proves incremental maintenance under exclusion/arrow changes is correct. It is the real correctness mechanism for `m2/03` (see Calibration in `../README.md`).
+**Behavior — the invariant being asserted:** generate a schema skeleton + a write sequence; apply each write through the normal path (incremental maintenance runs in-transaction); then independently full-rebuild the same final state into a scratch index. For every `(subject, type, permission)` probe, the incrementally-maintained index, the scratch-rebuilt index, and the oracle all return the same sorted object-ids. KEY DECISION: all three are compared **against the oracle**, not merely against each other — so a bug shared by rebuild and incremental cannot hide. A failing CsCheck case prints the minimal shrunk write-sequence; fix m2/03, not this test.
 
-- [ ] **Step 1: Write the failing property test**
+**Cases to pin — property/invariant:**
 
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Differential/IndexIncrementalEquivalenceTests.cs
-using CsCheck;
-using Shouldly;
-using Xunit;
+- For ~50 generated (schema, write-sequence) pairs: after applying the sequence, `incremental ≡ oracle` AND `scratch-rebuild ≡ oracle` for every list probe.
+- The write sequences exercise add/remove of `blocked` (exclusion) and arrow-reachable tuples (from Task 1's bias).
 
-namespace Custodex.Storage.Postgres.Tests.Differential;
-
-[Collection("postgres")]
-public class IndexIncrementalEquivalenceTests(PostgresFixture fx)
-{
-    [Fact]
-    public async Task Incrementally_maintained_index_matches_rebuild_and_oracle()
-    {
-        var gen = Gen.Select(ModelGenerator.SchemaSkeleton, IndexModelGenerators.WriteSequence,
-            (schema, ops) => (schema, ops));
-
-        await gen.SampleAsync(async pair =>
-        {
-            await using var h = await DifferentialHarness.SeedEmptyAsync(fx, pair.schema);
-
-            // Apply each write through the normal path; incremental maintenance runs in-transaction.
-            foreach (var op in pair.ops)
-                await h.ApplyWriteAsync(op);          // writes tuple + runs IncrementalIndexMaintainer
-
-            // Independent full rebuild into a scratch index for the same final state.
-            await h.RebuildScratchIndexAsync();
-
-            foreach (var (subject, type, permission) in h.ListProbes())
-            {
-                var oracle      = (await h.Oracle.ListObjectsAsync(h.ListReq(subject, type, permission))).ObjectIds.OrderBy(x => x).ToList();
-                var incremental = (await h.IndexBacked.ListObjectsAsync(h.ListReq(subject, type, permission))).ObjectIds.OrderBy(x => x).ToList();
-                var rebuilt     = (await h.ScratchIndexBacked.ListObjectsAsync(h.ListReq(subject, type, permission))).ObjectIds.OrderBy(x => x).ToList();
-
-                incremental.ShouldBe(oracle);
-                rebuilt.ShouldBe(oracle);
-            }
-        }, iter: 50);
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexIncrementalEquivalenceTests`
-Expected: FAIL — `ApplyWriteAsync`/`RebuildScratchIndexAsync`/`ScratchIndexBacked` not present.
-
-- [ ] **Step 3: Add the write-application and scratch-rebuild helpers**
-
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Differential/DifferentialHarness.Incremental.cs
-using Custodex.Abstractions;
-
-namespace Custodex.Storage.Postgres.Tests.Differential;
-
-public partial class DifferentialHarness
-{
-    public IndexBackedAuthorizer ScratchIndexBacked { get; private set; } = default!;
-
-    public async Task ApplyWriteAsync(WriteOp op)
-    {
-        await using var uow = await UowFactory.BeginAsync();
-        var add = op.Add ? new[] { op.Tuple } : Array.Empty<RelationTuple>();
-        var remove = op.Add ? Array.Empty<RelationTuple>() : new[] { op.Tuple };
-        await RelationStore.WriteAsync(Tenant, add, remove, uow);
-        await Maintainer.OnTuplesChangedAsync(Tenant, ActiveSchema, add, remove, uow);  // m2/03
-        await uow.CommitAsync();
-    }
-
-    public async Task RebuildScratchIndexAsync()
-    {
-        await using var uow = await UowFactory.BeginAsync();
-        await _scratchRebuilder.RebuildAsync(Tenant, ActiveSchema.Version, uow);   // writes to a second index table/namespace
-        await uow.CommitAsync();
-    }
-}
-```
-
-> Show the `SeedEmptyAsync` wiring that constructs `Maintainer`, `_scratchRebuilder`, and `ScratchIndexBacked` (pointing at a separate `reverse_index` namespace/schema so the two indexes do not collide).
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter IndexIncrementalEquivalenceTests`
-Expected: PASS. Any failing CsCheck case prints the minimal shrunk write-sequence that broke incremental maintenance — fix `m2/03`, not this test.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tests/Custodex.Storage.Postgres.Tests/Differential
-git commit -m "test: assert incremental reverse index equals rebuild and oracle"
-```
+**Done when:** build clean; the property passes; a shrunk counterexample points at m2/03 (the code under test); requires Docker.
 
 ---
 
-## Self-review checklist (run after all tasks)
+## Self-review checklist (after all tasks)
 
 - [ ] Both rebuild and incremental paths are compared against the oracle, not just against each other.
 - [ ] Write sequences exercise add/remove of `blocked` (exclusion) and arrow-reachable tuples.
-- [ ] A shrunk counterexample points at `m2/03` (incremental maintenance), which is the code under test — this harness is the proof obligation for that plan.
+- [ ] A shrunk counterexample points at m2/03 (incremental maintenance), the code under test — this harness is the proof obligation for that plan.

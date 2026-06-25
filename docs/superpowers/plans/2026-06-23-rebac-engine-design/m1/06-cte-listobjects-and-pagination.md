@@ -1,744 +1,93 @@
-# M1/06 — CTE ListObjects, ListSubjects & Pagination Implementation Plan
+# M1/06 — CTE ListObjects, ListSubjects & Pagination
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Goal:** Implement `NpgsqlCteAuthorizer.ListObjectsAsync` and `ListSubjectsAsync` (spec §7.3 Milestone 1 / §7.5) over the recursive-CTE path, with the over-fetch/refill pagination contract and the same `ContinuationCursor` shape M0/07 uses (reused from `Custodex.Core.Evaluation`). Candidate generation runs in SQL; each candidate is confirmed by the pointwise CTE Check from M1/05, so exclusion/intersection/conditions are honoured — identical results to the M0/07 oracle.
 
-**Goal:** Implement `NpgsqlCteAuthorizer.ListObjectsAsync` and `ListSubjectsAsync` (spec §7.3 Milestone 1 / §7.5) over the Postgres recursive-CTE path, with the **over-fetch/refill** pagination contract and the **same `ContinuationCursor`** shape `m0/07` uses (reused verbatim from `Custodex.Core.Evaluation`). Candidate generation (reverse reachability, type universe for wildcard grants) runs in SQL via recursive CTEs; each candidate is **confirmed by the pointwise CTE Check** from `m1/05`, so exclusion/intersection/conditions are honoured — identical results to the `m0/07` `EngineDrivenAuthorizer` oracle.
+**For implementers:** drive with `superpowers:subagent-driven-development` or `superpowers:executing-plans`; TDD (Red → Green → Commit) per task; checkboxes track progress; one conventional-commit per green task with the co-author trailer (see `../README.md` → Global Constraints).
 
-**Architecture (the seam decided in `m1/02`, reproduced):** The recursive CTE computes **reachability only** — here, the reverse direction: the distinct objects of the target type reachable from the subject (subject's tuples, the tuples of every group it transitively belongs to, structural-reference edges). That candidate set is a **superset**; correctness comes from re-confirming each candidate with the full pointwise `NpgsqlCteAuthorizer.CheckPermissionAsync` from `m1/05` (which composes the algebra in C#). `ListObjects` is the oracle's Milestone-1 strategy (spec §7.3) ported to Postgres: SQL gathers candidates fast, C# confirms them correctly. `ListSubjects` forward-collects candidate leaf users (relations, nested groups, arrow targets) then confirms each with Check. Pagination is **over-fetch and refill** (spec §7.5): scan candidates in a deterministic ordinal-id order, confirm, return exactly `PageSize` (or fewer only at the true end) with an opaque `ContinuationCursor` encoding the last-confirmed id.
+**Architecture/approach (the M1/02 seam, reverse direction):** the recursive CTE computes a candidate **superset**; correctness comes from re-confirming each candidate with the full pointwise `CheckPermissionAsync` from M1/05. `ListObjects` is the oracle's Milestone-1 strategy (spec §7.3) ported to Postgres: SQL gathers candidates fast, C# confirms them correctly. `ListSubjects` forward-collects candidate leaf users (relations, nested groups, arrow targets) via the reachability CTE + a recursive C# walk, then confirms each with Check. Pagination is over-fetch and refill (spec §7.5): scan candidates in ordinal-id order, confirm, return exactly `PageSize` (or fewer only at the true end) with an opaque `ContinuationCursor` encoding the last-confirmed id; a null token means end of results. This is the M0/07 contract — sets, not order, are the comparison basis.
 
-**Tech Stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Custodex.Core` (`ContinuationCursor`, `EvalContext`, `SchemaIndex`).
+**Tech stack:** .NET 10 (`net10.0`), C# 14, Npgsql, Dapper, xUnit, Shouldly, `Testcontainers.PostgreSql`. Reuses `Custodex.Core` (`ContinuationCursor`, `EvalContext`, `EvalFrame`, `SchemaIndex`).
 
-## Global Constraints
+**Global Constraints:** see `../README.md` → Global Constraints.
 
-See `../README.md` → Global Constraints. All I/O methods are `async` with a trailing `CancellationToken ct = default`; identifiers are non-empty ordinal strings; id `"*"` is the wildcard; no `DateTime.Now`/`Guid.NewGuid()` in evaluation. Depends on `m0/01` (Abstractions), `m0/07` (`ContinuationCursor` shape, the oracle's ListObjects/ListSubjects semantics this must match), `m1/01` (`relation_tuples`, `MigrationRunner`, `PostgresFixture`), `m1/03` (`NpgsqlUnitOfWorkFactory`), `m1/04` (`NpgsqlRelationStore`/`SchemaStore`/`AttributeStore` for seeding), `m1/05` (`NpgsqlCteAuthorizer`, `CheckPermissionAsync`, `CteReachability`).
+**Dependencies:** builds on `m0/01` (Abstractions), `m0/07` (`ContinuationCursor` shape + the oracle's list semantics this must match — see README), M1/01–M1/04 (schema, UoW, stores), M1/05 (`NpgsqlCteAuthorizer`, `CheckPermissionAsync`, `CteReachability`).
 
-**Pagination contract (spec §7.5).** Conditioned candidates are re-checked and may be dropped after the scan, so storage-level paging alone yields unpredictable page sizes. The contract is **over-fetch and refill**: scan candidates in a deterministic order (ordinal by object id), confirm the permission and conditions per candidate, and return exactly `PageSize` confirmed ids (or fewer only at the true end). The returned `ContinuationToken` is the opaque `ContinuationCursor` encoding the last-confirmed id; a null token means the end of results. This is byte-for-byte the `m0/07` contract; `ListObjects`/`ListSubjects` reuse `ContinuationCursor.Encode`/`DecodeAfter` from `Custodex.Core.Evaluation`.
-
-> **CALIBRATION (critical).** The candidate-generation CTEs are the hardest, least-certain SQL after the check path. The **tests are the spec**: every test here pins behaviour the `m0/07` oracle proves. The SQL is the **approach validated by the `m1/08` differential harness** — candidate generation must never miss a true positive (the confirm-by-Check step removes false positives, never adds them); if `m1/08` finds a missed candidate, widen the CTE, the test is right. `NpgsqlCteAuthorizer ≡ EngineDrivenAuthorizer` for ListObjects/ListSubjects is the correctness claim, proven by `m1/08`.
+> **Calibration.** The candidate-generation CTEs are the hardest SQL after the check path. The **tests are the spec**. Candidate generation must never miss a true positive (the confirm-by-Check step removes false positives, never adds them); if M1/08 finds a missed candidate, widen the CTE — the test is right.
 
 ---
 
 ### Task 1: Reverse-reachability candidate CTE + the type universe
 
-**Files:**
-- Create: `src/Custodex.Storage.Postgres/CteCandidates.cs`
-- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteCandidatesTests.cs`
+- [ ] **Files:** create `src/Custodex.Storage.Postgres/CteCandidates.cs`; test `…Tests/Cte/CteCandidatesTests.cs`.
 
-**Interfaces:**
-- Produces: `CteCandidates` with:
-  - `Task<IReadOnlyList<string>> ReachableObjectIdsAsync(NpgsqlConnection conn, TenantContext t, SubjectRef subject, string objectType, CancellationToken ct)` — the distinct, **ordinal-id-sorted** ids of objects of `objectType` reverse-reachable from `subject` (subject's inbound tuples, the inbound tuples of every group it transitively belongs to, and objects reachable by following structural edges). A complete superset of the ListObjects answer; each is confirmed later by Check.
-  - `Task<IReadOnlyList<string>> TypeUniverseAsync(NpgsqlConnection conn, TenantContext t, string objectType, CancellationToken ct)` — all object ids of `objectType` appearing as an object in any tuple (covers `type:*` wildcard grants, which reverse traversal does not reach from a concrete subject).
-- Consumes: `relation_tuples` (`m1/01`); `SubjectRef`/`TenantContext`.
+**Produces:** `CteCandidates` with two static methods:
+- `ReachableObjectIdsAsync` — the distinct, **ordinal-sorted** ids of objects of a type reverse-reachable from a subject (a complete superset of the ListObjects answer; each confirmed later by Check).
+- `TypeUniverseAsync` — all object ids of a type appearing as an object in any tuple (covers `type:*` wildcard grants, which reverse traversal does not reach from a concrete subject).
 
-> **Why reverse reachability + type universe.** Reverse traversal cheaply gathers objects the subject is plausibly connected to but does not by itself respect intersection/exclusion — correctness is the confirm-by-Check step (Task 2). The candidate set must be *complete*: it climbs group membership upward (subject → groups → groups-of-groups) and follows structural edges. The **type universe** is unioned in so a wildcard `viewer@user:*` grant — which no reverse edge from a concrete user reaches — still surfaces every object of the type. This mirrors the oracle's `CandidateObjectsAsync ∪ UniverseOfTypeAsync` (`m0/07`).
+**Consumes (see README):** the `relation_tuples` schema (M1/01); `SubjectRef`/`TenantContext`.
 
-- [ ] **Step 1: Write the failing tests**
+**Behavior:** the reverse-reachability CTE climbs the subject → ancestors graph: the base principal is the subject, and the recursive step follows inbound tuples upward by treating **any object whose tuple subject matches a current principal as the next principal** (using `rt.relation` as the climbed principal's relation, and matching `COALESCE(subject_relation,'')`) — a *general* subject-set climb, not restricted to `group#member`, so non-group subject-set nesting (e.g. `team#owner`) is also followed. From every reached principal it collects the objects it appears on; a second recursive arm follows structural edges transitively (objects whose null-subject-relation tuples point at an already-reached object). All results are distinct, ordinal-sorted (so cursors are stable) and hard-filter `store + tenant`. The type universe is a simple distinct-and-sorted select.
 
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Cte/CteCandidatesTests.cs
-using Custodex.Abstractions;
-using Custodex.Storage.Postgres;
-using Shouldly;
-using Xunit;
+**Cases to pin:**
 
-namespace Custodex.Storage.Postgres.Tests.Cte;
+| Setup | Expect |
+|---|---|
+| grants via a nested group the subject belongs to | the reachable object ids, sorted, excluding objects granted only to others |
+| any tuples of a type | the full sorted set of that type's object ids |
 
-[Collection("postgres")]
-public class CteCandidatesTests(PostgresFixture fx) : IAsyncLifetime
-{
-    private NpgsqlUnitOfWorkFactory _factory = null!;
-    private NpgsqlRelationStore _relations = null!;
-    private static readonly TenantContext T = new("cte", "candidates");
-
-    public async ValueTask InitializeAsync()
-    {
-        await using var conn = await fx.OpenAsync();
-        await MigrationRunner.ApplyAsync(conn);
-        _factory = new NpgsqlUnitOfWorkFactory(fx.ConnectionString);
-        _relations = new NpgsqlRelationStore(fx.ConnectionString);
-
-        await using var u = await _factory.BeginAsync();
-        var uow = NpgsqlUnitOfWork.From(u);
-        await uow.Connection.ExecuteAsync("INSERT INTO stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
-            new { s = T.Store }, uow.Transaction);
-        await uow.Connection.ExecuteAsync("INSERT INTO tenants (store_id, tenant_id) VALUES (@s, @t) ON CONFLICT DO NOTHING",
-            new { s = T.Store, t = T.Tenant }, uow.Transaction);
-        await _relations.WriteAsync(T,
-        [
-            new RelationTuple(new EntityRef("species", "kangaroo"), "editor", new SubjectRef("group", "macropods", "member")),
-            new RelationTuple(new EntityRef("species", "wallaby"), "editor", new SubjectRef("group", "macropods", "member")),
-            new RelationTuple(new EntityRef("species", "emu"), "editor", new SubjectRef("user", "someone-else")),
-            new RelationTuple(new EntityRef("group", "macropods"), "member", new SubjectRef("user", "alice")),
-        ], [], u);
-        await u.CommitAsync();
-    }
-
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    [Fact]
-    public async Task Reachable_gathers_objects_via_direct_and_nested_group_grants_sorted()
-    {
-        await using var conn = await fx.OpenAsync();
-        var ids = await CteCandidates.ReachableObjectIdsAsync(conn, T, new SubjectRef("user", "alice"), "species");
-        ids.ShouldBe(["kangaroo", "wallaby"]);   // sorted, distinct, excludes emu (someone-else's)
-    }
-
-    [Fact]
-    public async Task Type_universe_returns_every_object_of_the_type()
-    {
-        await using var conn = await fx.OpenAsync();
-        var ids = await CteCandidates.TypeUniverseAsync(conn, T, "species");
-        ids.ShouldBe(["emu", "kangaroo", "wallaby"]);   // sorted, all three
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteCandidatesTests`
-Expected: FAIL — `CteCandidates` does not exist.
-
-- [ ] **Step 3: Implement candidate generation**
-
-> **Calibration:** these CTEs are the candidate validated by the `m1/08` harness. The reverse-reachability CTE climbs the subject → groups graph: the base frontier is the subject (as a leaf and, if it is a group member, as a group-as-member), and the recursive step follows inbound `group#member` tuples upward. From every reached principal it collects inbound tuples whose object is of the target type. Structural edges are followed by a second recursive arm (objects whose tuples point at an already-reached object). Hard-filters `store_id + tenant_id`.
-
-```csharp
-// src/Custodex.Storage.Postgres/CteCandidates.cs
-using Dapper;
-using Npgsql;
-using Custodex.Abstractions;
-
-namespace Custodex.Storage.Postgres;
-
-/// <summary>
-/// Reverse-reachability candidate generation (the seam decided by m1/02, validated by m1/08).
-/// Produces a COMPLETE superset of ListObjects answers; the confirm-by-Check step (m1/06 Task 2)
-/// removes false positives. Sorted, distinct, ordinal — so pagination cursors are stable.
-/// </summary>
-public static class CteCandidates
-{
-    // Reverse reachability: from the subject, climb nested group membership and follow structural
-    // edges, collecting objects of the target type. The `principal` frontier is a (type,id,relation?)
-    // triple; relation IS NOT NULL marks a subject-set principal (group-as-member) to climb further.
-    private const string ReachableSql = """
-        WITH RECURSIVE principals (ptype, pid, prelation) AS (
-            -- base: the subject itself (as a plain leaf principal)
-            SELECT @stype::text, @sid::text, @srel::text
-          UNION
-            -- climb: any group whose `member` names a current principal becomes a group-as-member principal
-            SELECT rt.object_type, rt.object_id, 'member'
-            FROM principals p
-            JOIN relation_tuples rt
-              ON rt.store_id = @store AND rt.tenant_id = @tenant
-             AND rt.subject_type = p.ptype AND rt.subject_id = p.pid
-             AND COALESCE(rt.subject_relation, '') = COALESCE(p.prelation, '')
-            WHERE rt.object_type = 'group' AND rt.relation = 'member'
-        ),
-        reached_objects (otype, oid) AS (
-            -- objects any principal appears on, plus structural-edge climbing
-            SELECT rt.object_type, rt.object_id
-            FROM principals p
-            JOIN relation_tuples rt
-              ON rt.store_id = @store AND rt.tenant_id = @tenant
-             AND rt.subject_type = p.ptype AND rt.subject_id = p.pid
-             AND COALESCE(rt.subject_relation, '') = COALESCE(p.prelation, '')
-          UNION
-            -- follow structural edges: an object whose tuple points at an already-reached object
-            SELECT rt.object_type, rt.object_id
-            FROM reached_objects ro
-            JOIN relation_tuples rt
-              ON rt.store_id = @store AND rt.tenant_id = @tenant
-             AND rt.subject_type = ro.otype AND rt.subject_id = ro.oid
-             AND rt.subject_relation IS NULL
-        )
-        SELECT DISTINCT oid
-        FROM reached_objects
-        WHERE otype = @objtype
-        ORDER BY oid
-        """;
-
-    private const string UniverseSql = """
-        SELECT DISTINCT object_id
-        FROM relation_tuples
-        WHERE store_id = @store AND tenant_id = @tenant AND object_type = @objtype
-        ORDER BY object_id
-        """;
-
-    public static async Task<IReadOnlyList<string>> ReachableObjectIdsAsync(
-        NpgsqlConnection conn, TenantContext t, SubjectRef subject, string objectType, CancellationToken ct = default)
-    {
-        var ids = await conn.QueryAsync<string>(new CommandDefinition(ReachableSql,
-            new { store = t.Store, tenant = t.Tenant, stype = subject.Type, sid = subject.Id, srel = subject.Relation, objtype = objectType },
-            cancellationToken: ct));
-        return ids.ToList();
-    }
-
-    public static async Task<IReadOnlyList<string>> TypeUniverseAsync(
-        NpgsqlConnection conn, TenantContext t, string objectType, CancellationToken ct = default)
-    {
-        var ids = await conn.QueryAsync<string>(new CommandDefinition(UniverseSql,
-            new { store = t.Store, tenant = t.Tenant, objtype = objectType }, cancellationToken: ct));
-        return ids.ToList();
-    }
-}
-```
-
-> **Completeness over a deep structural chain.** The `reached_objects` arm follows structural edges one hop at a time and is transitive (it recurses on itself), so a chain `animal#enclosure@enclosure → enclosure#site@site` surfaces the animal when a grant lands on the site. If the `m1/08` harness ever finds a missed candidate through a shape this misses, widen the arm — the test is the spec.
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteCandidatesTests`
-Expected: PASS (2 tests).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
-git commit -m "feat: add reverse-reachability candidate and type-universe CTEs"
-```
+**Done when:** build clean; both cases pass (Postgres required); also exercised by the M1/08 harness.
 
 ---
 
 ### Task 2: `ListObjectsAsync` — over-fetch, confirm, refill, paginate
 
-**Files:**
-- Create: `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListObjects.cs`
-- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteListObjectsTests.cs`
+- [ ] **Files:** create `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListObjects.cs` (remove the M1/05 stub); test `…Tests/Cte/CteListObjectsTests.cs`.
 
-**Interfaces:**
-- Produces: `ListObjectsAsync` (replaces the `m1/05` stub) — builds the candidate set (`ReachableObjectIdsAsync ∪ TypeUniverseAsync`), sorts distinct by ordinal id, skips strictly after the decoded cursor, confirms each via the full pointwise `CheckPermissionAsync`, and returns exactly `PageSize` confirmed ids with a resumable `ContinuationCursor`. Reuses one open connection for candidate generation and all confirms in the page.
-- Consumes: `CteCandidates` (Task 1); `CheckPermissionAsync`/`EvalContext`/`SchemaIndex` (`m1/05`); `ContinuationCursor` (`Custodex.Core.Evaluation`, from `m0/07`).
+**Produces:** `ListObjectsAsync` — builds the candidate set (`ReachableObjectIdsAsync ∪ TypeUniverseAsync`), keeps it ordinal-sorted and distinct, skips strictly after the decoded cursor, confirms each via the full pointwise `CheckPermissionAsync` (fresh `EvalContext` per candidate), and returns exactly `PageSize` confirmed ids with a resumable `ContinuationCursor`. One open connection serves candidate generation and all confirms.
+**Consumes (see README):** `CteCandidates` (Task 1); `CheckPermissionAsync`/`EvalContext`/`SchemaIndex` (M1/05); `ContinuationCursor` (`Custodex.Core.Evaluation`); `ListObjectsRequest`/`ListObjectsResult`.
 
-> **Algorithm (mirrors `m0/07` Task 3).** (1) candidates = reverse-reachable ∪ type universe, distinct, ordinal-sorted. (2) skip to strictly after the decoded cursor id. (3) walk candidates; for each, run the full pointwise Check under a **fresh** `EvalContext` (each candidate is an independent membership question; conditions are evaluated). (4) stop once `PageSize` confirm; the token is the last-confirmed id, null only if no confirmable candidate remains beyond it.
+**Behavior** (spec §7.3, §7.5): validates the request type/permission first (throws `Unknown*Exception` on bad input). The cursor encodes the last *confirmed* id; a token is emitted only when a further candidate confirms beyond the page, so resumption never re-serves or drops.
 
-- [ ] **Step 1: Write the failing tests** (the `m0/07` ListObjects cases, over Postgres)
+**Cases to pin:**
 
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Cte/CteListObjectsTests.cs
-using Custodex.Abstractions;
-using Custodex.Core;
-using Custodex.Core.Conditions;
-using Custodex.Storage.Postgres;
-using Shouldly;
-using Xunit;
+| Setup | Expect |
+|---|---|
+| two objects granted via a group, one of them also blocked for the subject | only the unblocked id; null token |
+| three objects granted via `editor@user:*` | every object of the type, sorted |
+| five wildcard grants, pageSize 2 | `[a,b]`, `[c,d]`, `[e]`; resumable; null token last |
+| drain all pages over a small range, pageSize 2 | union equals the full set, no overlaps or gaps |
 
-namespace Custodex.Storage.Postgres.Tests.Cte;
-
-[Collection("postgres")]
-public class CteListObjectsTests(PostgresFixture fx) : IAsyncLifetime
-{
-    private NpgsqlUnitOfWorkFactory _factory = null!;
-    private NpgsqlRelationStore _relations = null!;
-    private NpgsqlSchemaStore _schemas = null!;
-    private NpgsqlAttributeStore _attributes = null!;
-
-    private static Schema Build() => new SchemaBuilder("v1")
-        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
-        .Type("species", t => t
-            .Relation("editor", s => s.User().SubjectSet("group", "member").Wildcard("user"))
-            .Relation("blocked", s => s.User())
-            .Permission("edit", p => p.Relation("editor").Exclude(x => x.Relation("blocked"))))
-        .Build();
-
-    public async ValueTask InitializeAsync()
-    {
-        await using var conn = await fx.OpenAsync();
-        await MigrationRunner.ApplyAsync(conn);
-        _factory = new NpgsqlUnitOfWorkFactory(fx.ConnectionString);
-        _relations = new NpgsqlRelationStore(fx.ConnectionString);
-        _schemas = new NpgsqlSchemaStore(fx.ConnectionString);
-        _attributes = new NpgsqlAttributeStore(fx.ConnectionString);
-    }
-
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    private async Task<(NpgsqlCteAuthorizer Auth, TenantContext T)> SetupAsync(string store, params RelationTuple[] tuples)
-    {
-        var t = new TenantContext(store, "t");
-        await using var u = await _factory.BeginAsync();
-        var uow = NpgsqlUnitOfWork.From(u);
-        await uow.Connection.ExecuteAsync("INSERT INTO stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
-            new { s = t.Store }, uow.Transaction);
-        await uow.Connection.ExecuteAsync("INSERT INTO tenants (store_id, tenant_id) VALUES (@s, @t) ON CONFLICT DO NOTHING",
-            new { s = t.Store, t = t.Tenant }, uow.Transaction);
-        await _schemas.SetActiveAsync(t.Store, Build(), u);
-        await _relations.WriteAsync(t, tuples, [], u);
-        await u.CommitAsync();
-        return (new NpgsqlCteAuthorizer(fx.ConnectionString, _schemas, _attributes, new NullConditionEvaluator()), t);
-    }
-
-    private static ListObjectsRequest Req(TenantContext t, string user, int pageSize = 100, string? token = null) => new(
-        t, new SubjectRef("user", user), "species", "edit",
-        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", user), new Dictionary<string, object?>()),
-        pageSize, token);
-
-    private static RelationTuple Tup(string ot, string oid, string rel, SubjectRef s) => new(new EntityRef(ot, oid), rel, s);
-
-    [Fact]
-    public async Task Lists_only_confirmed_objects_respecting_exclusion()
-    {
-        var (auth, t) = await SetupAsync("lo-excl",
-            Tup("species", "kangaroo", "editor", new SubjectRef("group", "macropods", "member")),
-            Tup("species", "wallaby", "editor", new SubjectRef("group", "macropods", "member")),
-            Tup("species", "wallaby", "blocked", new SubjectRef("user", "alice")),
-            Tup("group", "macropods", "member", new SubjectRef("user", "alice")));
-
-        var result = await auth.ListObjectsAsync(Req(t, "alice"));
-        result.ObjectIds.ShouldBe(["kangaroo"]);   // wallaby excluded
-        result.ContinuationToken.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task Wildcard_grant_lists_every_object_of_the_type()
-    {
-        var (auth, t) = await SetupAsync("lo-wild",
-            Tup("species", "kangaroo", "editor", new SubjectRef("user", "*")),
-            Tup("species", "wallaby", "editor", new SubjectRef("user", "*")),
-            Tup("species", "emu", "editor", new SubjectRef("user", "*")));
-
-        var result = await auth.ListObjectsAsync(Req(t, "anyone"));
-        result.ObjectIds.ShouldBe(["emu", "kangaroo", "wallaby"]);
-    }
-
-    [Fact]
-    public async Task Paginates_to_exact_page_size_with_resumable_cursor()
-    {
-        var (auth, t) = await SetupAsync("lo-page",
-            Tup("species", "a", "editor", new SubjectRef("user", "*")),
-            Tup("species", "b", "editor", new SubjectRef("user", "*")),
-            Tup("species", "c", "editor", new SubjectRef("user", "*")),
-            Tup("species", "d", "editor", new SubjectRef("user", "*")),
-            Tup("species", "e", "editor", new SubjectRef("user", "*")));
-
-        var p1 = await auth.ListObjectsAsync(Req(t, "anyone", pageSize: 2));
-        p1.ObjectIds.ShouldBe(["a", "b"]);
-        p1.ContinuationToken.ShouldNotBeNull();
-
-        var p2 = await auth.ListObjectsAsync(Req(t, "anyone", pageSize: 2, token: p1.ContinuationToken));
-        p2.ObjectIds.ShouldBe(["c", "d"]);
-
-        var p3 = await auth.ListObjectsAsync(Req(t, "anyone", pageSize: 2, token: p2.ContinuationToken));
-        p3.ObjectIds.ShouldBe(["e"]);
-        p3.ContinuationToken.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task Pages_do_not_overlap_or_drop_across_the_full_range()
-    {
-        var (auth, t) = await SetupAsync("lo-range",
-            Tup("species", "a", "editor", new SubjectRef("user", "*")),
-            Tup("species", "b", "editor", new SubjectRef("user", "*")),
-            Tup("species", "c", "editor", new SubjectRef("user", "*")));
-
-        var all = new List<string>();
-        string? token = null;
-        do
-        {
-            var page = await auth.ListObjectsAsync(Req(t, "anyone", pageSize: 2, token: token));
-            all.AddRange(page.ObjectIds);
-            token = page.ContinuationToken;
-        } while (token is not null);
-
-        all.ShouldBe(["a", "b", "c"]);
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteListObjectsTests`
-Expected: FAIL — `ListObjectsAsync` still throws `NotImplementedException` from the `m1/05` stub.
-
-- [ ] **Step 3: Implement `ListObjectsAsync` (remove the stub)**
-
-Delete the `ListObjectsAsync` throwing stub from `NpgsqlCteAuthorizer.Expr.cs` (keep `ListSubjectsAsync` until Task 3), and add:
-
-```csharp
-// src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListObjects.cs
-using Npgsql;
-using Custodex.Abstractions;
-using Custodex.Core.Evaluation;
-
-namespace Custodex.Storage.Postgres;
-
-public sealed partial class NpgsqlCteAuthorizer
-{
-    public async Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
-    {
-        var index = await LoadSchemaAsync(request.Tenant.Store, ct);
-        index.Permission(request.ObjectType, request.Permission);   // validate: throws on unknown type/permission
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        // Candidate superset: reverse-reachable ∪ type universe (covers wildcard grants). Both sorted ordinal.
-        var reachable = await CteCandidates.ReachableObjectIdsAsync(conn, request.Tenant, request.Subject, request.ObjectType, ct);
-        var universe = await CteCandidates.TypeUniverseAsync(conn, request.Tenant, request.ObjectType, ct);
-        var candidates = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var id in reachable) candidates.Add(id);
-        foreach (var id in universe) candidates.Add(id);
-
-        var after = ContinuationCursor.DecodeAfter(request.ContinuationToken);
-        var confirmed = new List<string>(request.PageSize);
-        string? lastConfirmed = null;
-        var exhausted = true;
-
-        foreach (var id in candidates)
-        {
-            if (after is not null && string.CompareOrdinal(id, after) <= 0) continue;   // resume strictly after cursor
-
-            var obj = new EntityRef(request.ObjectType, id);
-            var ctx = new EvalContext(_options);
-            var ok = await CheckPermissionAsync(
-                conn, index, request.Tenant, obj, request.Permission, request.Subject, request.Context, ctx, explain: null, ct);
-            if (!ok) continue;
-
-            confirmed.Add(id);
-            lastConfirmed = id;
-            if (confirmed.Count == request.PageSize)
-            {
-                exhausted = !await AnyConfirmedAfterAsync(conn, index, request, candidates, id, ct);
-                break;
-            }
-        }
-
-        var token = exhausted ? null : ContinuationCursor.Encode(lastConfirmed!);
-        return new ListObjectsResult(confirmed, token);
-    }
-
-    private async Task<bool> AnyConfirmedAfterAsync(
-        NpgsqlConnection conn, SchemaIndex index, ListObjectsRequest request, SortedSet<string> candidates,
-        string afterId, CancellationToken ct)
-    {
-        foreach (var id in candidates)
-        {
-            if (string.CompareOrdinal(id, afterId) <= 0) continue;
-            var ctx = new EvalContext(_options);
-            var ok = await CheckPermissionAsync(
-                conn, index, request.Tenant, new EntityRef(request.ObjectType, id),
-                request.Permission, request.Subject, request.Context, ctx, explain: null, ct);
-            if (ok) return true;
-        }
-        return false;
-    }
-}
-```
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteListObjectsTests`
-Expected: PASS (4 tests).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
-git commit -m "feat: implement CTE list objects with over-fetch/refill pagination"
-```
+**Done when:** build clean; all four cases pass (Postgres required); parity with the M0/07 oracle, asserted by M1/08.
 
 ---
 
 ### Task 3: `ListSubjectsAsync` — forward-collect leaf users, confirm, paginate
 
-**Files:**
-- Create: `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListSubjects.cs`
-- Test: `tests/Custodex.Storage.Postgres.Tests/Cte/CteListSubjectsTests.cs`
+- [ ] **Files:** create `src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListSubjects.cs` (remove the M1/05 stub); test `…Tests/Cte/CteListSubjectsTests.cs`.
 
-**Interfaces:**
-- Produces: `ListSubjectsAsync` (replaces the `m1/05` stub) — forward-collects candidate leaf `user`s from the whole permission expansion (relations, nested groups, arrow targets) via the reachability CTE and recursive C# walk, records whether a `user:*` wildcard appears, then confirms each candidate (including the surfaced `"*"` subject) with the pointwise Check, returning them sorted by id with the same over-fetch/`ContinuationCursor` contract.
-- Consumes: `CteReachability.SubjectsThroughRelationAsync`/`EdgesThroughRelationAsync` (`m1/05`); `CheckPermissionAsync`; `ContinuationCursor`; `SchemaIndex`.
+**Produces:** `ListSubjectsAsync` — forward-collects candidate leaf `user`s from the whole permission expansion (relations, nested groups, arrow targets) via a cycle-guarded recursive C# walk over the reachability edges, records whether a `user:*` wildcard appears, then confirms each candidate (including the surfaced `"*"` subject) with the pointwise Check, returning them ordinal-sorted with the same over-fetch / `ContinuationCursor` contract.
+**Consumes (see README):** `CteReachability.SubjectsThroughRelationAsync`/`EdgesThroughRelationAsync` (M1/05); `CheckPermissionAsync`; `ContinuationCursor`; `EvalFrame`; `ListSubjectsRequest`/`ListSubjectsResult`.
 
-> **Approach (mirrors `m0/07` Task 4).** Forward-collect every concrete `user` reachable through the permission's expansion — a superset — then confirm each with Check (so exclusion/intersection are honoured). A `user:*` in any contributing relation surfaces the special `"*"` subject so a public grant is visible; `"*"` (0x2A) sorts first ordinal and flows through the same confirm + paginate loop (no bonus row past `PageSize`). Cycle-guarded.
+**Behavior** (spec §7.5): a `user:*` in any contributing relation surfaces the special `"*"` subject so a public grant is visible; `"*"` (0x2A) sorts first ordinal and flows through the same confirm + paginate loop (no bonus row past `PageSize`). The collector is cycle-guarded by a visited-frame set so nested-group loops terminate.
 
-- [ ] **Step 1: Write the failing tests** (the `m0/07` ListSubjects cases, over Postgres)
+**Cases to pin:**
 
-```csharp
-// tests/Custodex.Storage.Postgres.Tests/Cte/CteListSubjectsTests.cs
-using Custodex.Abstractions;
-using Custodex.Core;
-using Custodex.Core.Conditions;
-using Custodex.Storage.Postgres;
-using Shouldly;
-using Xunit;
+| Setup | Expect |
+|---|---|
+| leaf users via nested groups, one of them blocked | only the unblocked user |
+| three members via a group, pageSize 2 | `[a,b]` then `[c]`; resumable; null token last |
+| wildcard `viewer@user:*` plus two direct users, pageSize 2 | `[*, a]` then `[b]`; `"*"` sorts first, page size respected |
+| a nested-group membership cycle | does not overflow; returns the reachable subjects |
 
-namespace Custodex.Storage.Postgres.Tests.Cte;
-
-[Collection("postgres")]
-public class CteListSubjectsTests(PostgresFixture fx) : IAsyncLifetime
-{
-    private NpgsqlUnitOfWorkFactory _factory = null!;
-    private NpgsqlRelationStore _relations = null!;
-    private NpgsqlSchemaStore _schemas = null!;
-    private NpgsqlAttributeStore _attributes = null!;
-
-    private static Schema Build() => new SchemaBuilder("v1")
-        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
-        .Type("doc", t => t
-            .Relation("viewer", s => s.User().SubjectSet("group", "member").Wildcard("user"))
-            .Relation("blocked", s => s.User())
-            .Permission("view", p => p.Relation("viewer").Exclude(x => x.Relation("blocked"))))
-        .Build();
-
-    public async ValueTask InitializeAsync()
-    {
-        await using var conn = await fx.OpenAsync();
-        await MigrationRunner.ApplyAsync(conn);
-        _factory = new NpgsqlUnitOfWorkFactory(fx.ConnectionString);
-        _relations = new NpgsqlRelationStore(fx.ConnectionString);
-        _schemas = new NpgsqlSchemaStore(fx.ConnectionString);
-        _attributes = new NpgsqlAttributeStore(fx.ConnectionString);
-    }
-
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    private async Task<(NpgsqlCteAuthorizer Auth, TenantContext T)> SetupAsync(string store, params RelationTuple[] tuples)
-    {
-        var t = new TenantContext(store, "t");
-        await using var u = await _factory.BeginAsync();
-        var uow = NpgsqlUnitOfWork.From(u);
-        await uow.Connection.ExecuteAsync("INSERT INTO stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
-            new { s = t.Store }, uow.Transaction);
-        await uow.Connection.ExecuteAsync("INSERT INTO tenants (store_id, tenant_id) VALUES (@s, @t) ON CONFLICT DO NOTHING",
-            new { s = t.Store, t = t.Tenant }, uow.Transaction);
-        await _schemas.SetActiveAsync(t.Store, Build(), u);
-        await _relations.WriteAsync(t, tuples, [], u);
-        await u.CommitAsync();
-        return (new NpgsqlCteAuthorizer(fx.ConnectionString, _schemas, _attributes, new NullConditionEvaluator()), t);
-    }
-
-    private static ListSubjectsRequest Req(TenantContext t, int pageSize = 100, string? token = null) => new(
-        t, new EntityRef("doc", "D1"), "view",
-        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", "system"), new Dictionary<string, object?>()),
-        pageSize, token);
-
-    private static RelationTuple Tup(string ot, string oid, string rel, SubjectRef s) => new(new EntityRef(ot, oid), rel, s);
-
-    [Fact]
-    public async Task Lists_leaf_users_via_nested_groups_honouring_exclusion()
-    {
-        var (auth, t) = await SetupAsync("ls-excl",
-            Tup("doc", "D1", "viewer", new SubjectRef("group", "staff", "member")),
-            Tup("group", "staff", "member", new SubjectRef("user", "alice")),
-            Tup("group", "staff", "member", new SubjectRef("user", "bob")),
-            Tup("doc", "D1", "blocked", new SubjectRef("user", "bob")));
-
-        var result = await auth.ListSubjectsAsync(Req(t));
-        result.Subjects.Select(s => s.Id).ShouldBe(["alice"]);
-    }
-
-    [Fact]
-    public async Task Paginates_subjects_to_exact_page_size()
-    {
-        var (auth, t) = await SetupAsync("ls-page",
-            Tup("doc", "D1", "viewer", new SubjectRef("group", "staff", "member")),
-            Tup("group", "staff", "member", new SubjectRef("user", "a")),
-            Tup("group", "staff", "member", new SubjectRef("user", "b")),
-            Tup("group", "staff", "member", new SubjectRef("user", "c")));
-
-        var p1 = await auth.ListSubjectsAsync(Req(t, pageSize: 2));
-        p1.Subjects.Select(s => s.Id).ShouldBe(["a", "b"]);
-        p1.ContinuationToken.ShouldNotBeNull();
-
-        var p2 = await auth.ListSubjectsAsync(Req(t, pageSize: 2, token: p1.ContinuationToken));
-        p2.Subjects.Select(s => s.Id).ShouldBe(["c"]);
-        p2.ContinuationToken.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task Wildcard_grant_surfaces_as_star_and_respects_page_size()
-    {
-        var (auth, t) = await SetupAsync("ls-wild",
-            Tup("doc", "D1", "viewer", new SubjectRef("user", "*")),
-            Tup("doc", "D1", "viewer", new SubjectRef("user", "a")),
-            Tup("doc", "D1", "viewer", new SubjectRef("user", "b")));
-
-        var p1 = await auth.ListSubjectsAsync(Req(t, pageSize: 2));
-        p1.Subjects.Count.ShouldBe(2);
-        p1.Subjects.Select(s => s.Id).ShouldBe(["*", "a"]);   // "*" sorts first ordinal
-        p1.ContinuationToken.ShouldNotBeNull();
-
-        var p2 = await auth.ListSubjectsAsync(Req(t, pageSize: 2, token: p1.ContinuationToken));
-        p2.Subjects.Select(s => s.Id).ShouldBe(["b"]);
-        p2.ContinuationToken.ShouldBeNull();
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteListSubjectsTests`
-Expected: FAIL — `ListSubjectsAsync` still throws `NotImplementedException`.
-
-- [ ] **Step 3: Implement `ListSubjectsAsync` (remove the stub)**
-
-Delete the `ListSubjectsAsync` throwing stub from `NpgsqlCteAuthorizer.Expr.cs`, and add:
-
-```csharp
-// src/Custodex.Storage.Postgres/NpgsqlCteAuthorizer.ListSubjects.cs
-using Npgsql;
-using Custodex.Abstractions;
-using Custodex.Core.Evaluation;
-
-namespace Custodex.Storage.Postgres;
-
-public sealed partial class NpgsqlCteAuthorizer
-{
-    public async Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
-    {
-        var index = await LoadSchemaAsync(request.Tenant.Store, ct);
-        index.Permission(request.Object.Type, request.Permission);   // validate
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        var candidateUsers = new SortedSet<string>(StringComparer.Ordinal);
-        var sawWildcard = new bool[1];
-        var visited = new HashSet<EvalFrame>();
-        await CollectLeafUsersAsync(conn, index, request.Tenant, request.Object, request.Permission,
-            candidateUsers, visited, sawWildcard, ct);
-        if (sawWildcard[0]) candidateUsers.Add("*");
-
-        var after = ContinuationCursor.DecodeAfter(request.ContinuationToken);
-        var confirmed = new List<SubjectRef>(request.PageSize);
-        string? lastConfirmed = null;
-        var exhausted = true;
-
-        foreach (var id in candidateUsers)
-        {
-            if (after is not null && string.CompareOrdinal(id, after) <= 0) continue;
-            var subject = new SubjectRef("user", id);
-            var ctx = new EvalContext(_options);
-            var ok = await CheckPermissionAsync(
-                conn, index, request.Tenant, request.Object, request.Permission, subject, request.Context, ctx, explain: null, ct);
-            if (!ok) continue;
-
-            confirmed.Add(subject);
-            lastConfirmed = id;
-            if (confirmed.Count == request.PageSize)
-            {
-                exhausted = !await AnySubjectConfirmedAfterAsync(conn, index, request, candidateUsers, id, ct);
-                break;
-            }
-        }
-
-        var token = exhausted ? null : ContinuationCursor.Encode(lastConfirmed!);
-        return new ListSubjectsResult(confirmed, token);
-    }
-
-    private async Task<bool> AnySubjectConfirmedAfterAsync(
-        NpgsqlConnection conn, SchemaIndex index, ListSubjectsRequest request, SortedSet<string> users,
-        string afterId, CancellationToken ct)
-    {
-        foreach (var id in users)
-        {
-            if (string.CompareOrdinal(id, afterId) <= 0) continue;
-            var ctx = new EvalContext(_options);
-            var ok = await CheckPermissionAsync(
-                conn, index, request.Tenant, request.Object, request.Permission,
-                new SubjectRef("user", id), request.Context, ctx, explain: null, ct);
-            if (ok) return true;
-        }
-        return false;
-    }
-
-    /// <summary>Forward-collect concrete leaf users (relations, nested groups, arrow targets). Cycle-guarded.</summary>
-    private async Task CollectLeafUsersAsync(
-        NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, string permission,
-        SortedSet<string> users, HashSet<EvalFrame> visited, bool[] sawWildcard, CancellationToken ct)
-    {
-        var frame = new EvalFrame(obj, permission, new SubjectRef("user", "<collect>"));
-        if (!visited.Add(frame)) return;
-        var def = index.Permission(obj.Type, permission);
-        await CollectFromExprAsync(conn, index, tenant, obj, def.Expression, users, visited, sawWildcard, ct);
-    }
-
-    private async Task CollectFromExprAsync(
-        NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, PermExpr expr,
-        SortedSet<string> users, HashSet<EvalFrame> visited, bool[] sawWildcard, CancellationToken ct)
-    {
-        switch (expr)
-        {
-            case RelationRef r:
-                await CollectFromRelationAsync(conn, index, tenant, obj, r.Relation, users, visited, sawWildcard, ct);
-                break;
-            case Union u:
-                await CollectFromExprAsync(conn, index, tenant, obj, u.Left, users, visited, sawWildcard, ct);
-                await CollectFromExprAsync(conn, index, tenant, obj, u.Right, users, visited, sawWildcard, ct);
-                break;
-            case Intersect i:
-                await CollectFromExprAsync(conn, index, tenant, obj, i.Left, users, visited, sawWildcard, ct);
-                await CollectFromExprAsync(conn, index, tenant, obj, i.Right, users, visited, sawWildcard, ct);
-                break;
-            case Exclude e:
-                await CollectFromExprAsync(conn, index, tenant, obj, e.Left, users, visited, sawWildcard, ct);
-                await CollectFromExprAsync(conn, index, tenant, obj, e.Right, users, visited, sawWildcard, ct);
-                break;
-            case Conditioned c:
-                await CollectFromExprAsync(conn, index, tenant, obj, c.Inner, users, visited, sawWildcard, ct);
-                break;
-            case Arrow a:
-            {
-                var edges = await CteReachability.EdgesThroughRelationAsync(conn, null, tenant, obj, a.Relation, ct);
-                foreach (var edge in edges)
-                {
-                    var related = new EntityRef(edge.Subject.Type, edge.Subject.Id);
-                    if (index.TryPermission(related.Type, a.Permission, out _))
-                        await CollectLeafUsersAsync(conn, index, tenant, related, a.Permission, users, visited, sawWildcard, ct);
-                    else
-                        await CollectFromRelationAsync(conn, index, tenant, related, a.Permission, users, visited, sawWildcard, ct);
-                }
-                break;
-            }
-        }
-    }
-
-    private async Task CollectFromRelationAsync(
-        NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
-        SortedSet<string> users, HashSet<EvalFrame> visited, bool[] sawWildcard, CancellationToken ct)
-    {
-        var edges = await CteReachability.EdgesThroughRelationAsync(conn, null, tenant, obj, relation, ct);
-        foreach (var edge in edges)
-        {
-            var s = edge.Subject;
-            if (s.IsWildcard && string.Equals(s.Type, "user", StringComparison.Ordinal))
-                sawWildcard[0] = true;
-            else if (!s.IsSubjectSet && string.Equals(s.Type, "user", StringComparison.Ordinal))
-                users.Add(s.Id);
-            else if (s.IsSubjectSet)
-                await CollectFromRelationAsync(conn, index, tenant, new EntityRef(s.Type, s.Id), s.Relation!, users, visited, sawWildcard, ct);
-        }
-    }
-}
-```
-
-> `EvalFrame` is in `Custodex.Core.Evaluation` (reused via the `using` above). The collector walks the same shape as the oracle's `m0/07` `CollectLeafUsersAsync`; the only change is reading edges via `CteReachability.EdgesThroughRelationAsync` instead of `IRelationStore.GetByObjectAsync`.
-
-- [ ] **Step 4: Run to verify pass**
-
-Run: `dotnet test tests/Custodex.Storage.Postgres.Tests --filter CteListSubjectsTests`
-Expected: PASS (3 tests). With Task 2 done, `NpgsqlCteAuthorizer` now implements every `IAuthorizer` member.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/Custodex.Storage.Postgres tests/Custodex.Storage.Postgres.Tests
-git commit -m "feat: implement CTE list subjects with leaf-user expansion and pagination"
-```
+**Done when:** build clean; all four cases pass (Postgres required); `NpgsqlCteAuthorizer` now implements every `IAuthorizer` member; set-equivalence with the oracle asserted by M1/08.
 
 ---
 
-## Self-review checklist (run after all tasks)
+## Self-review checklist
 
-- [ ] `dotnet build` clean with `TreatWarningsAsErrors=true`.
-- [ ] Reverse-reachability + type-universe CTEs produce a complete, sorted, distinct candidate superset; wildcard grants are covered by the type universe (Task 1).
-- [ ] `ListObjects` confirms each candidate via the pointwise CTE Check — exclusion/intersection/conditions honoured; matches the `m0/07` oracle's cases (Task 2).
-- [ ] Pagination returns exactly `PageSize` confirmed ids except at the true end; the cursor is the `m0/07` `ContinuationCursor`; no dupes, no gaps across the full range (Tasks 2–3).
-- [ ] `ListSubjects` expands nested groups + arrow targets to leaf users, confirms each, and surfaces an unexcluded `user:*` as `"*"` without exceeding `PageSize` (Task 3).
-- [ ] Both operations validate the request type/permission (throw `Unknown*Exception` on bad input) (Tasks 2–3).
-- [ ] The candidate SQL is framed as "validated by the `m1/08` differential harness," candidate generation never misses a true positive (calibration notes, Task 1).
-
-## Contract gaps (reported, not changed)
-
-- **None new.** `ContinuationCursor` is reused from `Custodex.Core.Evaluation` (`m0/07`), now reachable because `Custodex.Storage.Postgres` references `Custodex.Core` (decided `m1/02`, added `m1/05`). The `m0/07` Contract-gaps note already records that the type universe lives in the provider, not the portable `IRelationStore` — fulfilled here by `CteCandidates.TypeUniverseAsync` (provider-side SQL), exactly as `m0/07` anticipated.
-```
-
+- [ ] Build clean under TreatWarningsAsErrors.
+- [ ] Reverse-reachability climbs the general subject-set graph (any relation, not just `group#member`); the type universe covers wildcard grants; candidates are sorted, distinct (Task 1).
+- [ ] `ListObjects` confirms each candidate via the pointwise Check — exclusion/intersection/conditions honoured; matches the oracle (Task 2).
+- [ ] Pagination returns exactly `PageSize` confirmed ids except at the true end; the cursor is the M0/07 `ContinuationCursor`; no dupes, no gaps across a full drain (Tasks 2–3).
+- [ ] `ListSubjects` expands nested groups + arrow targets to leaf users, confirms each, surfaces an unexcluded `user:*` as `"*"` within `PageSize`, and is cycle-safe (Task 3).
+- [ ] Both operations validate the request type/permission (throw `Unknown*Exception` on bad input).
