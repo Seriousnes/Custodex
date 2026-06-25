@@ -16,6 +16,10 @@ public sealed class ProvisioningGrpcService(IStoreManager stores, ITenantManager
     /// <inheritdoc />
     public override async Task<CreateStoreResponse> CreateStore(CreateStoreRequest request, ServerCallContext context)
     {
+        if (!string.Equals(request.Store, tc.AuthenticatedStore, StringComparison.Ordinal))
+            throw new RpcException(new Status(
+                StatusCode.PermissionDenied, "The authenticated principal is not scoped to the targeted store."));
+
         await stores.CreateStoreAsync(request.Store, context.CancellationToken);
         return new CreateStoreResponse();
     }

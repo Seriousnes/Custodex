@@ -66,4 +66,32 @@ public sealed class OidcAuthTests(PostgresFixture pg)
 
         resp.StatusCode.ShouldNotBe(HttpStatusCode.Unauthorized);
     }
+
+    [Fact]
+    public async Task Check_with_wrong_audience_when_audience_is_configured_returns_401()
+    {
+        var store = $"s-{Guid.NewGuid():N}";
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
+            b.UseEnvironment("Development");
+            b.UseSetting("Custodex:Jwt:SigningKey", System.Convert.ToBase64String(SigningKeyBytes));
+            b.UseSetting("Custodex:Jwt:Audience", "custodex-expected-audience");
+        });
+        var client = factory.CreateClient();
+        var token = CreateToken(store, "reader");
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var resp = await client.PostAsJsonAsync("/v1/check", new
+        {
+            store,
+            tenant = $"t-{Guid.NewGuid():N}",
+            @object = new { type = "res", id = "1" },
+            permission = "view",
+            context = new { subject = new { type = "user", id = "alice" }, attributes = new { } },
+        });
+
+        resp.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
 }

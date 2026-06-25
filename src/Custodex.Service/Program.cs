@@ -47,12 +47,16 @@ builder.Services
         if (!string.IsNullOrEmpty(signingKeyB64))
         {
             var key = new SymmetricSecurityKey(Convert.FromBase64String(signingKeyB64));
+            var issuer = jwtSection["Issuer"];
+            var audience = jwtSection["Audience"];
             jwt.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = key,
-                ValidateIssuer = false,
-                ValidateAudience = false,
+                ValidateIssuer = !string.IsNullOrEmpty(issuer),
+                ValidIssuer = issuer,
+                ValidateAudience = !string.IsNullOrEmpty(audience),
+                ValidAudience = audience,
                 NameClaimType = ClaimTypes.NameIdentifier,
                 RoleClaimType = roleClaim,
             };
@@ -100,8 +104,12 @@ if (app.Configuration.GetValue("Custodex:ApplyMigrationsOnStartup", true))
     await MigrationRunner.ApplyAsync(conn);
 }
 
-app.UseSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
 app.UseCustodexProblemDetails();
 
 app.UseAuthentication();
