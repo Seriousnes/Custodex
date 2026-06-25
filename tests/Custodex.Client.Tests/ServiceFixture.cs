@@ -21,6 +21,7 @@ public sealed class ServiceFixture : IAsyncLifetime
     public string ConnectionString => _postgres.GetConnectionString();
 
     internal const string AdminKey = "fixture-admin-key";
+    internal const string AdminStore = "fixture-store";
 
     public async Task InitializeAsync()
     {

@@ -22,9 +22,8 @@ public sealed class ClientParityTests(ServiceFixture fx)
     private async Task<(IAuthorizer Remote, IAuthorizer InProcess, TenantContext Tenant)> SetupAsync(
         Schema schema, RelationTuple[] tuples)
     {
-        var store = $"s-{Guid.NewGuid():N}";
         var tenant = $"t-{Guid.NewGuid():N}";
-        var tc = new TenantContext(store, tenant);
+        var tc = new TenantContext(ServiceFixture.AdminStore, tenant);
 
         var storeMgr = new GrpcStoreManager(new ProvisioningClient(fx.GrpcChannel));
         var tenantMgr = new GrpcTenantManager(new ProvisioningClient(fx.GrpcChannel));
@@ -32,9 +31,9 @@ public sealed class ClientParityTests(ServiceFixture fx)
         var relationMgr = new GrpcRelationManager(new RelationsClient(fx.GrpcChannel));
         var remote = new GrpcAuthorizer(new DecisionClient(fx.GrpcChannel));
 
-        await storeMgr.CreateStoreAsync(store);
+        await storeMgr.CreateStoreAsync(ServiceFixture.AdminStore);
         await tenantMgr.CreateTenantAsync(tc);
-        await schemaMgr.SetActiveSchemaAsync(store, schema);
+        await schemaMgr.SetActiveSchemaAsync(ServiceFixture.AdminStore, schema);
         if (tuples.Length > 0)
             await relationMgr.WriteTuplesAsync(tc, "test", tuples);
 

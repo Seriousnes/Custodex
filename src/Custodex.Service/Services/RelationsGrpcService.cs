@@ -1,4 +1,5 @@
 using Custodex.Service.Mapping;
+using Custodex.Service.Tenancy;
 using Custodex.V1;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -9,13 +10,15 @@ namespace Custodex.Service.Services;
 /// <summary>
 /// gRPC service for tuple and attribute management, delegating to <see cref="Contracts.IRelationManager"/>.
 /// </summary>
-public sealed class RelationsGrpcService(Contracts.IRelationManager relations) : Relations.RelationsBase
+public sealed class RelationsGrpcService(
+    Contracts.IRelationManager relations,
+    ITenantContextAccessor tc) : Relations.RelationsBase
 {
     /// <inheritdoc />
     public override async Task<WriteTuplesResponse> WriteTuples(WriteTuplesRequest request, ServerCallContext context)
     {
         var tuples = request.Tuples.Select(FromProto).ToList();
-        await relations.WriteTuplesAsync(ProtoMap.FromProto(request.Tenant), request.Actor, tuples, context.CancellationToken);
+        await relations.WriteTuplesAsync(tc.Current, request.Actor, tuples, context.CancellationToken);
         return new WriteTuplesResponse { Count = tuples.Count };
     }
 
@@ -23,7 +26,7 @@ public sealed class RelationsGrpcService(Contracts.IRelationManager relations) :
     public override async Task<DeleteTuplesResponse> DeleteTuples(DeleteTuplesRequest request, ServerCallContext context)
     {
         var tuples = request.Tuples.Select(FromProto).ToList();
-        await relations.DeleteTuplesAsync(ProtoMap.FromProto(request.Tenant), request.Actor, tuples, context.CancellationToken);
+        await relations.DeleteTuplesAsync(tc.Current, request.Actor, tuples, context.CancellationToken);
         return new DeleteTuplesResponse { Count = tuples.Count };
     }
 
@@ -31,7 +34,7 @@ public sealed class RelationsGrpcService(Contracts.IRelationManager relations) :
     public override async Task<WriteAttributesResponse> WriteAttributes(WriteAttributesRequest request, ServerCallContext context)
     {
         await relations.WriteAttributesAsync(
-            ProtoMap.FromProto(request.Tenant),
+            tc.Current,
             request.Actor,
             ProtoMap.FromProto(request.Object),
             ProtoMap.FromStruct(request.Attributes),
@@ -49,7 +52,7 @@ public sealed class RelationsGrpcService(Contracts.IRelationManager relations) :
             SubjectType: NullIfEmpty(request.Filter?.SubjectType),
             SubjectId: NullIfEmpty(request.Filter?.SubjectId));
 
-        var tuples = await relations.ReadTuplesAsync(ProtoMap.FromProto(request.Tenant), filter, context.CancellationToken);
+        var tuples = await relations.ReadTuplesAsync(tc.Current, filter, context.CancellationToken);
         var response = new ReadTuplesResponse();
         response.Tuples.AddRange(tuples.Select(ToProto));
         return response;
@@ -63,7 +66,7 @@ public sealed class RelationsGrpcService(Contracts.IRelationManager relations) :
             Actor: NullIfEmpty(request.Actor),
             Limit: request.Limit > 0 ? request.Limit : 100);
 
-        var entries = await relations.ReadChangeLogAsync(ProtoMap.FromProto(request.Tenant), filter, context.CancellationToken);
+        var entries = await relations.ReadChangeLogAsync(tc.Current, filter, context.CancellationToken);
         var response = new ReadChangeLogResponse();
         response.Entries.AddRange(entries.Select(e => new ChangeLogEntry
         {

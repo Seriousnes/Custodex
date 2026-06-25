@@ -20,15 +20,22 @@ public sealed class DecisionRestTests(PostgresFixture pg)
             b.UseAdminApiKey();
         });
 
+    private static HttpClient CreateTenantClient(WebApplicationFactory<Program> factory, string tenant)
+    {
+        var client = factory.CreateAuthenticatedClient();
+        client.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenant);
+        return client;
+    }
+
     [Fact]
     public async Task Check_returns_allowed_true_for_granted_subject()
     {
         await using var factory = CreateFactory();
-        var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
+        var (tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateAuthenticatedClient();
+        var client = CreateTenantClient(factory, tenantId);
         var req = new CheckRequestDto(
-            Store: storeId,
+            Store: TestAuthHelper.AdminStore,
             Tenant: tenantId,
             Object: new EntityRefDto("widget", objId),
             Permission: "view",
@@ -48,11 +55,11 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     public async Task Check_returns_allowed_false_for_ungranted_subject()
     {
         await using var factory = CreateFactory();
-        var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
+        var (tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateAuthenticatedClient();
+        var client = CreateTenantClient(factory, tenantId);
         var req = new CheckRequestDto(
-            Store: storeId,
+            Store: TestAuthHelper.AdminStore,
             Tenant: tenantId,
             Object: new EntityRefDto("widget", objId),
             Permission: "view",
@@ -72,11 +79,11 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     public async Task Check_with_explain_true_returns_explain_node()
     {
         await using var factory = CreateFactory();
-        var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
+        var (tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateAuthenticatedClient();
+        var client = CreateTenantClient(factory, tenantId);
         var req = new CheckRequestDto(
-            Store: storeId,
+            Store: TestAuthHelper.AdminStore,
             Tenant: tenantId,
             Object: new EntityRefDto("widget", objId),
             Permission: "view",
@@ -98,11 +105,11 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     public async Task ListObjects_returns_granted_object_ids()
     {
         await using var factory = CreateFactory();
-        var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
+        var (tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateAuthenticatedClient();
+        var client = CreateTenantClient(factory, tenantId);
         var req = new ListObjectsRequestDto(
-            Store: storeId,
+            Store: TestAuthHelper.AdminStore,
             Tenant: tenantId,
             ObjectType: "widget",
             Permission: "view",
@@ -122,15 +129,15 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     public async Task BatchCheck_returns_aligned_true_false_results()
     {
         await using var factory = CreateFactory();
-        var (storeId, tenantId, objId) = await SetupMinimalSchema(factory);
+        var (tenantId, objId) = await SetupMinimalSchema(factory);
 
-        var client = factory.CreateAuthenticatedClient();
+        var client = CreateTenantClient(factory, tenantId);
         var ctx = new RequestContextDto(
             Subject: new SubjectRefDto("user", "u-1", null),
             Now: null,
             Attributes: null);
         var req = new BatchCheckRequestDto(
-            Store: storeId,
+            Store: TestAuthHelper.AdminStore,
             Tenant: tenantId,
             Checks: [
                 new CheckItemDto(new EntityRefDto("widget", objId), "view"),
@@ -147,13 +154,12 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         result.Results[1].Allowed.ShouldBeFalse();
     }
 
-    private static async Task<(string store, string tenant, string objId)>
+    private static async Task<(string tenant, string objId)>
         SetupMinimalSchema(WebApplicationFactory<Program> factory)
     {
-        var store = $"store-{Guid.NewGuid():N}";
         var tenant = $"tenant-{Guid.NewGuid():N}";
         var objId = $"obj-{Guid.NewGuid():N}";
-        var tc = new TenantContext(store, tenant);
+        var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var schema = new SchemaBuilder("v1")
             .Type("widget", t => t
@@ -167,14 +173,14 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         var schemaMgr = scope.ServiceProvider.GetRequiredService<ISchemaManager>();
         var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();
 
-        await storeMgr.CreateStoreAsync(store);
+        await storeMgr.CreateStoreAsync(TestAuthHelper.AdminStore);
         await tenantMgr.CreateTenantAsync(tc);
-        await schemaMgr.SetActiveSchemaAsync(store, schema);
+        await schemaMgr.SetActiveSchemaAsync(TestAuthHelper.AdminStore, schema);
         await relMgr.WriteTuplesAsync(tc, "test",
         [
             new RelationTuple(new EntityRef("widget", objId), "owner", new SubjectRef("user", "u-1")),
         ]);
 
-        return (store, tenant, objId);
+        return (tenant, objId);
     }
 }

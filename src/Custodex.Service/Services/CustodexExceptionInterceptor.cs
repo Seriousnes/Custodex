@@ -1,4 +1,5 @@
 using Custodex.Abstractions;
+using Custodex.Service.Tenancy;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 
@@ -20,6 +21,11 @@ public sealed class CustodexExceptionInterceptor : Interceptor
         try
         {
             return await continuation(request, context);
+        }
+        catch (MissingTenantContextException ex)
+        {
+            var trailers = new Metadata { { "custodex-error-kind", "missing_tenant" } };
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message), trailers);
         }
         catch (UnknownTypeException ex)
         {

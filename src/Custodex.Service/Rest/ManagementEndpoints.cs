@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Service.Mapping;
+using Custodex.Service.Tenancy;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Custodex.Service.Rest;
@@ -9,32 +10,30 @@ public static partial class RestEndpoints
     static partial void MapManagementEndpoints(RouteGroupBuilder group)
     {
         group.MapPost("/tuples", async (
-            WriteTuplesRequestDto req, IRelationManager relations, CancellationToken ct) =>
+            WriteTuplesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var tuples = req.Tuples.Select(RestMap.FromDto).ToList();
-            await relations.WriteTuplesAsync(
-                RestMap.Tenant(req.Store, req.Tenant), req.Actor, tuples, ct);
+            await relations.WriteTuplesAsync(tc.Current, req.Actor, tuples, ct);
             return Results.Ok();
         })
         .WithName("WriteTuples")
         .WithSummary("Write relation tuples (audited).");
 
         group.MapDelete("/tuples", async (
-            [FromBody] DeleteTuplesRequestDto req, IRelationManager relations, CancellationToken ct) =>
+            [FromBody] DeleteTuplesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var tuples = req.Tuples.Select(RestMap.FromDto).ToList();
-            await relations.DeleteTuplesAsync(
-                RestMap.Tenant(req.Store, req.Tenant), req.Actor, tuples, ct);
+            await relations.DeleteTuplesAsync(tc.Current, req.Actor, tuples, ct);
             return Results.Ok();
         })
         .WithName("DeleteTuples")
         .WithSummary("Delete relation tuples (audited).");
 
         group.MapPut("/attributes", async (
-            WriteAttributesRequestDto req, IRelationManager relations, CancellationToken ct) =>
+            WriteAttributesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             await relations.WriteAttributesAsync(
-                RestMap.Tenant(req.Store, req.Tenant),
+                tc.Current,
                 req.Actor,
                 RestMap.FromDto(req.Object),
                 req.Attributes,
@@ -45,23 +44,21 @@ public static partial class RestEndpoints
         .WithSummary("Write resource attributes used in condition evaluation.");
 
         group.MapPost("/tuples/query", async (
-            ReadTuplesRequestDto req, IRelationManager relations, CancellationToken ct) =>
+            ReadTuplesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var filter = new TupleFilter(
                 req.ObjectType, req.ObjectId, req.Relation, req.SubjectType, req.SubjectId);
-            var tuples = await relations.ReadTuplesAsync(
-                RestMap.Tenant(req.Store, req.Tenant), filter, ct);
+            var tuples = await relations.ReadTuplesAsync(tc.Current, filter, ct);
             return Results.Ok(new ReadTuplesResponseDto(tuples.Select(RestMap.ToDto).ToList()));
         })
         .WithName("ReadTuples")
         .WithSummary("Read relation tuples by filter.");
 
         group.MapPost("/change-log/query", async (
-            ReadChangeLogRequestDto req, IRelationManager relations, CancellationToken ct) =>
+            ReadChangeLogRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var filter = new ChangeLogFilter(req.Since, req.Actor, req.Limit);
-            var entries = await relations.ReadChangeLogAsync(
-                RestMap.Tenant(req.Store, req.Tenant), filter, ct);
+            var entries = await relations.ReadChangeLogAsync(tc.Current, filter, ct);
             var dtos = entries.Select(e => new ChangeLogEntryDto(
                 e.Id, e.Actor, e.Operation, e.Target, e.Before, e.After, e.OccurredAt)).ToList();
             return Results.Ok(new ReadChangeLogResponseDto(dtos));

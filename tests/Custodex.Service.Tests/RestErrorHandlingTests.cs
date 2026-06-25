@@ -23,10 +23,9 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
     public async Task Check_against_undefined_permission_returns_400()
     {
         await using var factory = CreateFactory();
-        var client = factory.CreateAuthenticatedClient();
-
-        var storeId = $"store-{Guid.NewGuid():N}";
         var tenantId = $"tenant-{Guid.NewGuid():N}";
+
+        var adminClient = factory.CreateAuthenticatedClient();
 
         var schema = new SchemaBuilder("v1")
             .Type("doc", t => t
@@ -34,12 +33,17 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
             .Build();
         var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
 
-        await client.PostAsJsonAsync("/v1/stores", new CreateStoreRequestDto(storeId));
-        await client.PostAsJsonAsync("/v1/tenants", new CreateTenantRequestDto(storeId, tenantId));
-        await client.PutAsJsonAsync($"/v1/schema/{storeId}", new SetActiveSchemaRequestDto(schemaJson));
+        await adminClient.PostAsJsonAsync("/v1/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
+        await adminClient.PostAsJsonAsync("/v1/tenants",
+            new CreateTenantRequestDto(TestAuthHelper.AdminStore, tenantId));
+        await adminClient.PutAsJsonAsync($"/v1/schema/{TestAuthHelper.AdminStore}",
+            new SetActiveSchemaRequestDto(schemaJson));
+
+        var tenantClient = factory.CreateAuthenticatedClient();
+        tenantClient.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenantId);
 
         var req = new CheckRequestDto(
-            Store: storeId,
+            Store: TestAuthHelper.AdminStore,
             Tenant: tenantId,
             Object: new EntityRefDto("doc", "d-1"),
             Permission: "no-such-permission",
@@ -48,7 +52,7 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
                 Now: null,
                 Attributes: null));
 
-        var resp = await client.PostAsJsonAsync("/v1/check", req);
+        var resp = await tenantClient.PostAsJsonAsync("/v1/check", req);
         resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 }

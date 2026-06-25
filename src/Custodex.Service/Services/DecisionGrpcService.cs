@@ -1,4 +1,5 @@
 using Custodex.Service.Mapping;
+using Custodex.Service.Tenancy;
 using Custodex.V1;
 using Grpc.Core;
 using Contracts = Custodex.Abstractions;
@@ -9,13 +10,15 @@ namespace Custodex.Service.Services;
 /// gRPC service implementation for the <c>Decision</c> service.
 /// Delegates all four operations to <see cref="IAuthorizer"/> via <see cref="ProtoMap"/>.
 /// </summary>
-public sealed class DecisionGrpcService(Contracts.IAuthorizer authorizer) : Decision.DecisionBase
+public sealed class DecisionGrpcService(
+    Contracts.IAuthorizer authorizer,
+    ITenantContextAccessor tc) : Decision.DecisionBase
 {
     /// <inheritdoc />
     public override async Task<CheckResponse> Check(CheckRequest request, ServerCallContext context)
     {
         var result = await authorizer.CheckAsync(new Contracts.CheckRequest(
-            ProtoMap.FromProto(request.Tenant),
+            tc.Current,
             ProtoMap.FromProto(request.Object),
             request.Permission,
             ProtoMap.FromProto(request.Subject),
@@ -39,7 +42,7 @@ public sealed class DecisionGrpcService(Contracts.IAuthorizer authorizer) : Deci
             .ToList();
 
         var results = await authorizer.BatchCheckAsync(new Contracts.BatchCheckRequest(
-            ProtoMap.FromProto(request.Tenant),
+            tc.Current,
             items,
             ProtoMap.FromProto(request.Context)), context.CancellationToken);
 
@@ -56,7 +59,7 @@ public sealed class DecisionGrpcService(Contracts.IAuthorizer authorizer) : Deci
         var token = string.IsNullOrEmpty(request.ContinuationToken) ? null : request.ContinuationToken;
 
         var result = await authorizer.ListObjectsAsync(new Contracts.ListObjectsRequest(
-            ProtoMap.FromProto(request.Tenant),
+            tc.Current,
             ProtoMap.FromProto(request.Subject),
             request.ObjectType,
             request.Permission,
@@ -78,7 +81,7 @@ public sealed class DecisionGrpcService(Contracts.IAuthorizer authorizer) : Deci
         var token = string.IsNullOrEmpty(request.ContinuationToken) ? null : request.ContinuationToken;
 
         var result = await authorizer.ListSubjectsAsync(new Contracts.ListSubjectsRequest(
-            ProtoMap.FromProto(request.Tenant),
+            tc.Current,
             ProtoMap.FromProto(request.Object),
             request.Permission,
             ProtoMap.FromProto(request.Context),

@@ -3,6 +3,7 @@ using Custodex.Core;
 using Custodex.Service.Auth;
 using Custodex.Service.Rest;
 using Custodex.Service.Services;
+using Custodex.Service.Tenancy;
 using Custodex.Storage.Postgres;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -67,6 +68,8 @@ builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
         config.GetSection("Custodex:ApiKeys").Bind(opts.Keys));
 
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<TenantContextAccessor>();
+builder.Services.AddScoped<ITenantContextAccessor>(sp => sp.GetRequiredService<TenantContextAccessor>());
 
 var connectionString = builder.Configuration["Custodex:ConnectionString"]
     ?? throw new InvalidOperationException("Custodex:ConnectionString is required.");
@@ -88,6 +91,7 @@ app.UseCustodexProblemDetails();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.MapDefaultEndpoints();
 app.MapGrpcService<DecisionGrpcService>().RequireAuthorization();

@@ -1,4 +1,5 @@
 using Custodex.Abstractions;
+using Custodex.Service.Tenancy;
 
 namespace Custodex.Service.Rest;
 
@@ -24,6 +25,7 @@ public static partial class RestEndpoints
                 var ex = feature.Error;
                 var (status, title) = ex switch
                 {
+                    MissingTenantContextException => (400, "Missing tenant context."),
                     UnknownTypeException => (400, "Unknown entity type."),
                     UnknownRelationException => (400, "Unknown relation."),
                     UnknownPermissionException => (400, "Unknown permission."),

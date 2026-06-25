@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core;
 using Custodex.Service.Mapping;
+using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -24,22 +25,24 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     private static GrpcChannel CreateChannel(WebApplicationFactory<Program> factory) =>
         factory.CreateAuthenticatedGrpcChannel();
 
-    private static async Task<(string Store, string Tenant)> ProvisionAsync(
+    private static Metadata TenantHeaders(string tenant) =>
+        new() { { "x-custodex-tenant", tenant } };
+
+    private static async Task<string> ProvisionAsync(
         IServiceProvider services, Schema schema)
     {
-        var store = $"store-{Guid.NewGuid():N}";
         var tenant = $"tenant-{Guid.NewGuid():N}";
-        var tc = new TenantContext(store, tenant);
+        var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var storeMgr = services.GetRequiredService<IStoreManager>();
         var tenantMgr = services.GetRequiredService<ITenantManager>();
         var schemaMgr = services.GetRequiredService<ISchemaManager>();
 
-        await storeMgr.CreateStoreAsync(store);
+        await storeMgr.CreateStoreAsync(TestAuthHelper.AdminStore);
         await tenantMgr.CreateTenantAsync(tc);
-        await schemaMgr.SetActiveSchemaAsync(store, schema);
+        await schemaMgr.SetActiveSchemaAsync(TestAuthHelper.AdminStore, schema);
 
-        return (store, tenant);
+        return tenant;
     }
 
     [Fact]
@@ -54,8 +57,8 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var (store, tenant) = await ProvisionAsync(scope.ServiceProvider, schema);
-        var tc = new TenantContext(store, tenant);
+        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();
         await relMgr.WriteTuplesAsync(tc, "test",
@@ -67,14 +70,13 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         var client = new ProtoV1.Decision.DecisionClient(channel);
         var req = new ProtoV1.CheckRequest
         {
-            Tenant = new ProtoV1.TenantContext { Store = store, Tenant = tenant },
             Object = new ProtoV1.EntityRef { Type = "widget", Id = "1" },
             Permission = "view",
             Subject = new ProtoV1.SubjectRef { Type = "user", Id = "alice" },
             Context = new ProtoV1.RequestContext(),
         };
 
-        var resp = await client.CheckAsync(req);
+        var resp = await client.CheckAsync(req, headers: TenantHeaders(tenant));
 
         resp.Allowed.ShouldBeTrue();
     }
@@ -91,20 +93,19 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var (store, tenant) = await ProvisionAsync(scope.ServiceProvider, schema);
+        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
 
         var channel = CreateChannel(factory);
         var client = new ProtoV1.Decision.DecisionClient(channel);
         var req = new ProtoV1.CheckRequest
         {
-            Tenant = new ProtoV1.TenantContext { Store = store, Tenant = tenant },
             Object = new ProtoV1.EntityRef { Type = "widget", Id = "1" },
             Permission = "view",
             Subject = new ProtoV1.SubjectRef { Type = "user", Id = "bob" },
             Context = new ProtoV1.RequestContext(),
         };
 
-        var resp = await client.CheckAsync(req);
+        var resp = await client.CheckAsync(req, headers: TenantHeaders(tenant));
 
         resp.Allowed.ShouldBeFalse();
     }
@@ -121,8 +122,8 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var (store, tenant) = await ProvisionAsync(scope.ServiceProvider, schema);
-        var tc = new TenantContext(store, tenant);
+        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();
         await relMgr.WriteTuplesAsync(tc, "test",
@@ -135,14 +136,13 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         var client = new ProtoV1.Decision.DecisionClient(channel);
         var req = new ProtoV1.ListObjectsRequest
         {
-            Tenant = new ProtoV1.TenantContext { Store = store, Tenant = tenant },
             Subject = new ProtoV1.SubjectRef { Type = "user", Id = "alice" },
             ObjectType = "widget",
             Permission = "view",
             Context = new ProtoV1.RequestContext(),
         };
 
-        var resp = await client.ListObjectsAsync(req);
+        var resp = await client.ListObjectsAsync(req, headers: TenantHeaders(tenant));
 
         var ids = resp.ObjectIds.OrderBy(x => x).ToList();
         ids.Count.ShouldBe(2);
@@ -162,8 +162,8 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var (store, tenant) = await ProvisionAsync(scope.ServiceProvider, schema);
-        var tc = new TenantContext(store, tenant);
+        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();
         await relMgr.WriteTuplesAsync(tc, "test",
@@ -175,7 +175,6 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         var client = new ProtoV1.Decision.DecisionClient(channel);
         var req = new ProtoV1.BatchCheckRequest
         {
-            Tenant = new ProtoV1.TenantContext { Store = store, Tenant = tenant },
             Context = new ProtoV1.RequestContext(),
         };
         req.Items.Add(new ProtoV1.CheckItem
@@ -191,7 +190,7 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
             Subject = new ProtoV1.SubjectRef { Type = "user", Id = "bob" },
         });
 
-        var resp = await client.BatchCheckAsync(req);
+        var resp = await client.BatchCheckAsync(req, headers: TenantHeaders(tenant));
 
         resp.Results.Count.ShouldBe(2);
         resp.Results[0].Allowed.ShouldBeTrue();

@@ -1,4 +1,5 @@
 using Custodex.Abstractions;
+using Custodex.Service.Tenancy;
 
 namespace Custodex.Service.Rest;
 
@@ -6,11 +7,11 @@ public static partial class RestEndpoints
 {
     static partial void MapDecisionEndpoints(RouteGroupBuilder group)
     {
-        group.MapPost("/check", async (CheckRequestDto req, IAuthorizer auth, CancellationToken ct) =>
+        group.MapPost("/check", async (CheckRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var ctx = RestMap.FromDto(req.Context);
             var result = await auth.CheckAsync(new CheckRequest(
-                RestMap.Tenant(req.Store, req.Tenant),
+                tc.Current,
                 RestMap.FromDto(req.Object),
                 req.Permission,
                 ctx.Subject,
@@ -24,14 +25,13 @@ public static partial class RestEndpoints
         .WithName("Check")
         .WithSummary("Evaluate a single authorization check.");
 
-        group.MapPost("/batch-check", async (BatchCheckRequestDto req, IAuthorizer auth, CancellationToken ct) =>
+        group.MapPost("/batch-check", async (BatchCheckRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var ctx = RestMap.FromDto(req.Context);
-            var tenant = RestMap.Tenant(req.Store, req.Tenant);
             var items = req.Checks.Select(c =>
                 new CheckItem(RestMap.FromDto(c.Object), c.Permission, ctx.Subject)).ToList();
 
-            var results = await auth.BatchCheckAsync(new BatchCheckRequest(tenant, items, ctx), ct);
+            var results = await auth.BatchCheckAsync(new BatchCheckRequest(tc.Current, items, ctx), ct);
 
             return Results.Ok(new BatchCheckResponseDto(
                 results.Select(r => new CheckResponseDto(
@@ -41,11 +41,11 @@ public static partial class RestEndpoints
         .WithName("BatchCheck")
         .WithSummary("Evaluate multiple authorization checks sharing one request context.");
 
-        group.MapPost("/list-objects", async (ListObjectsRequestDto req, IAuthorizer auth, CancellationToken ct) =>
+        group.MapPost("/list-objects", async (ListObjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var ctx = RestMap.FromDto(req.Context);
             var result = await auth.ListObjectsAsync(new ListObjectsRequest(
-                RestMap.Tenant(req.Store, req.Tenant),
+                tc.Current,
                 ctx.Subject,
                 req.ObjectType,
                 req.Permission,
@@ -58,11 +58,11 @@ public static partial class RestEndpoints
         .WithName("ListObjects")
         .WithSummary("List objects of a given type that a subject may access via a permission.");
 
-        group.MapPost("/list-subjects", async (ListSubjectsRequestDto req, IAuthorizer auth, CancellationToken ct) =>
+        group.MapPost("/list-subjects", async (ListSubjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var ctx = RestMap.FromDto(req.Context);
             var result = await auth.ListSubjectsAsync(new ListSubjectsRequest(
-                RestMap.Tenant(req.Store, req.Tenant),
+                tc.Current,
                 RestMap.FromDto(req.Object),
                 req.Permission,
                 ctx,

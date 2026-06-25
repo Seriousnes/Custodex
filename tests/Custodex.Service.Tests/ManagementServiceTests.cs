@@ -1,8 +1,8 @@
 using Custodex.Abstractions;
 using Custodex.Core;
 using Custodex.Service.Mapping;
-using Grpc.Net.Client;
 using Grpc.Core;
+using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,17 +25,24 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
     private static GrpcChannel CreateChannel(WebApplicationFactory<Program> factory) =>
         factory.CreateAuthenticatedGrpcChannel();
 
-    private static async Task<(string Store, string Tenant)> ProvisionStoreAndTenantAsync(
+    private static Metadata TenantHeaders(string tenant) =>
+        new() { { "x-custodex-tenant", tenant } };
+
+    private static async Task<string> ProvisionStoreAndTenantAsync(
         ProtoV1.Provisioning.ProvisioningClient pClient)
     {
-        var store = $"s-{Guid.NewGuid():N}";
         var tenant = $"t-{Guid.NewGuid():N}";
-        await pClient.CreateStoreAsync(new ProtoV1.CreateStoreRequest { Store = store });
+        await pClient.CreateStoreAsync(
+            new ProtoV1.CreateStoreRequest { Store = TestAuthHelper.AdminStore });
         await pClient.CreateTenantAsync(new ProtoV1.CreateTenantRequest
         {
-            Tenant = new ProtoV1.TenantContext { Store = store, Tenant = tenant },
+            Tenant = new ProtoV1.TenantContext
+            {
+                Store = TestAuthHelper.AdminStore,
+                Tenant = tenant,
+            },
         });
-        return (store, tenant);
+        return tenant;
     }
 
     [Fact]
@@ -46,7 +53,7 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
         var pClient = new ProtoV1.Provisioning.ProvisioningClient(channel);
         var sClient = new ProtoV1.Schema.SchemaClient(channel);
 
-        var (store, _) = await ProvisionStoreAndTenantAsync(pClient);
+        await ProvisionStoreAndTenantAsync(pClient);
 
         var schema = new SchemaBuilder("v1")
             .Type("widget", t => t
@@ -55,9 +62,14 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
             .Build();
 
         var json = SchemaJson.Serialize(schema);
-        await sClient.SetActiveAsync(new ProtoV1.SetActiveSchemaRequest { Store = store, SchemaJson = json });
+        await sClient.SetActiveAsync(new ProtoV1.SetActiveSchemaRequest
+        {
+            Store = TestAuthHelper.AdminStore,
+            SchemaJson = json,
+        });
 
-        var resp = await sClient.GetActiveAsync(new ProtoV1.GetActiveSchemaRequest { Store = store });
+        var resp = await sClient.GetActiveAsync(
+            new ProtoV1.GetActiveSchemaRequest { Store = TestAuthHelper.AdminStore });
 
         resp.Found.ShouldBeTrue();
         resp.SchemaJson.ShouldNotBeNullOrEmpty();
@@ -76,7 +88,7 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
         var sClient = new ProtoV1.Schema.SchemaClient(channel);
         var rClient = new ProtoV1.Relations.RelationsClient(channel);
 
-        var (store, tenant) = await ProvisionStoreAndTenantAsync(pClient);
+        var tenant = await ProvisionStoreAndTenantAsync(pClient);
 
         var schema = new SchemaBuilder("v1")
             .Type("group", t => t.Relation("member", s => s.Type("user")))
@@ -87,14 +99,13 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
 
         await sClient.SetActiveAsync(new ProtoV1.SetActiveSchemaRequest
         {
-            Store = store,
+            Store = TestAuthHelper.AdminStore,
             SchemaJson = SchemaJson.Serialize(schema),
         });
 
-        var tc = new ProtoV1.TenantContext { Store = store, Tenant = tenant };
+        var tenantMeta = TenantHeaders(tenant);
         await rClient.WriteTuplesAsync(new ProtoV1.WriteTuplesRequest
         {
-            Tenant = tc,
             Actor = "test",
             Tuples =
             {
@@ -105,13 +116,12 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
                     Subject = new ProtoV1.SubjectRef { Type = "group", Id = "editors", Relation = "member" },
                 },
             },
-        });
+        }, headers: tenantMeta);
 
         var readResp = await rClient.ReadTuplesAsync(new ProtoV1.ReadTuplesRequest
         {
-            Tenant = tc,
             Filter = new ProtoV1.TupleFilter { ObjectType = "widget" },
-        });
+        }, headers: tenantMeta);
 
         readResp.Tuples.Count.ShouldBe(1);
         readResp.Tuples[0].Subject.Relation.ShouldBe("member");
@@ -126,21 +136,20 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
         var sClient = new ProtoV1.Schema.SchemaClient(channel);
         var rClient = new ProtoV1.Relations.RelationsClient(channel);
 
-        var (store, tenant) = await ProvisionStoreAndTenantAsync(pClient);
+        var tenant = await ProvisionStoreAndTenantAsync(pClient);
 
         var schema = new SchemaBuilder("v1")
             .Type("widget", t => t.Relation("owner", s => s.Type("user")))
             .Build();
         await sClient.SetActiveAsync(new ProtoV1.SetActiveSchemaRequest
         {
-            Store = store,
+            Store = TestAuthHelper.AdminStore,
             SchemaJson = SchemaJson.Serialize(schema),
         });
 
-        var tc = new ProtoV1.TenantContext { Store = store, Tenant = tenant };
+        var tenantMeta = TenantHeaders(tenant);
         await rClient.WriteTuplesAsync(new ProtoV1.WriteTuplesRequest
         {
-            Tenant = tc,
             Actor = "audit-actor",
             Tuples =
             {
@@ -151,13 +160,12 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
                     Subject = new ProtoV1.SubjectRef { Type = "user", Id = "alice" },
                 },
             },
-        });
+        }, headers: tenantMeta);
 
         var logResp = await rClient.ReadChangeLogAsync(new ProtoV1.ReadChangeLogRequest
         {
-            Tenant = tc,
             Limit = 10,
-        });
+        }, headers: tenantMeta);
 
         logResp.Entries.ShouldNotBeEmpty();
         logResp.Entries.Any(e => e.Actor == "audit-actor").ShouldBeTrue();
@@ -171,7 +179,7 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
         var pClient = new ProtoV1.Provisioning.ProvisioningClient(channel);
         var sClient = new ProtoV1.Schema.SchemaClient(channel);
 
-        var (store, _) = await ProvisionStoreAndTenantAsync(pClient);
+        await ProvisionStoreAndTenantAsync(pClient);
 
         var badSchema = new SchemaBuilder("v1")
             .Type("widget", t => t
@@ -181,7 +189,7 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
         var ex = await Should.ThrowAsync<RpcException>(async () =>
             await sClient.SetActiveAsync(new ProtoV1.SetActiveSchemaRequest
             {
-                Store = store,
+                Store = TestAuthHelper.AdminStore,
                 SchemaJson = SchemaJson.Serialize(badSchema),
             }));
 
