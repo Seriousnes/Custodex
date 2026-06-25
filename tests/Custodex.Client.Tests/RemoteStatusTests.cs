@@ -1,6 +1,4 @@
-extern alias ClientProtos;
-
-using ClientProtos::Custodex.Client.Transport;
+using Custodex.Client.Transport;
 using Custodex.Abstractions;
 using Grpc.Core;
 using Shouldly;

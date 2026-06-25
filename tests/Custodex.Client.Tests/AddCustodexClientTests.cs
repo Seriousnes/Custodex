@@ -1,6 +1,4 @@
-extern alias ClientProtos;
-
-using ClientProtos::Custodex.Client;
+using Custodex.Client;
 using Custodex.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;

@@ -1,15 +1,12 @@
-extern alias ClientProtos;
-extern alias ServiceHost;
-
-using ClientProtos::Custodex.Client;
+using Custodex.Client;
 using Custodex.Abstractions;
 using Custodex.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using DecisionClient = ClientProtos::Custodex.V1.Decision.DecisionClient;
-using ProvisioningClient = ClientProtos::Custodex.V1.Provisioning.ProvisioningClient;
-using RelationsClient = ClientProtos::Custodex.V1.Relations.RelationsClient;
-using SchemaGrpcClient = ClientProtos::Custodex.V1.Schema.SchemaClient;
+using DecisionClient = Custodex.V1.Decision.DecisionClient;
+using ProvisioningClient = Custodex.V1.Provisioning.ProvisioningClient;
+using RelationsClient = Custodex.V1.Relations.RelationsClient;
+using SchemaGrpcClient = Custodex.V1.Schema.SchemaClient;
 
 namespace Custodex.Client.Tests;
 

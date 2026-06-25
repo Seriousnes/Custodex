@@ -1,6 +1,4 @@
-extern alias ClientProtos;
-
-using ClientProtos::Custodex.Client;
+using Custodex.Client;
 using Custodex.Abstractions;
 using Grpc.Core;
 using Shouldly;
@@ -48,14 +46,14 @@ public sealed class GrpcAuthorizerMappingTests
         fake.LastListObjectsRequest!.ContinuationToken.ShouldBe(string.Empty);
     }
 
-    private sealed class FakeDecisionClient : ClientProtos::Custodex.V1.Decision.DecisionClient
+    private sealed class FakeDecisionClient : Custodex.V1.Decision.DecisionClient
     {
         private readonly bool _allowed;
         private readonly IEnumerable<string> _objectIds;
         private readonly string _continuationToken;
 
-        public ClientProtos::Custodex.V1.CheckRequest? LastCheckRequest { get; private set; }
-        public ClientProtos::Custodex.V1.ListObjectsRequest? LastListObjectsRequest { get; private set; }
+        public Custodex.V1.CheckRequest? LastCheckRequest { get; private set; }
+        public Custodex.V1.ListObjectsRequest? LastListObjectsRequest { get; private set; }
 
         public FakeDecisionClient(bool allowed = false, IEnumerable<string>? objectIds = null, string continuationToken = "")
         {
@@ -64,13 +62,13 @@ public sealed class GrpcAuthorizerMappingTests
             _continuationToken = continuationToken;
         }
 
-        public override AsyncUnaryCall<ClientProtos::Custodex.V1.CheckResponse> CheckAsync(
-            ClientProtos::Custodex.V1.CheckRequest request,
+        public override AsyncUnaryCall<Custodex.V1.CheckResponse> CheckAsync(
+            Custodex.V1.CheckRequest request,
             CallOptions options = default)
         {
             LastCheckRequest = request;
-            var response = new ClientProtos::Custodex.V1.CheckResponse { Allowed = _allowed };
-            return new AsyncUnaryCall<ClientProtos::Custodex.V1.CheckResponse>(
+            var response = new Custodex.V1.CheckResponse { Allowed = _allowed };
+            return new AsyncUnaryCall<Custodex.V1.CheckResponse>(
                 Task.FromResult(response),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
@@ -78,18 +76,18 @@ public sealed class GrpcAuthorizerMappingTests
                 () => { });
         }
 
-        public override AsyncUnaryCall<ClientProtos::Custodex.V1.ListObjectsResponse> ListObjectsAsync(
-            ClientProtos::Custodex.V1.ListObjectsRequest request,
+        public override AsyncUnaryCall<Custodex.V1.ListObjectsResponse> ListObjectsAsync(
+            Custodex.V1.ListObjectsRequest request,
             CallOptions options = default)
         {
             LastListObjectsRequest = request;
-            var response = new ClientProtos::Custodex.V1.ListObjectsResponse
+            var response = new Custodex.V1.ListObjectsResponse
             {
                 ContinuationToken = _continuationToken,
             };
             foreach (var id in _objectIds)
                 response.ObjectIds.Add(id);
-            return new AsyncUnaryCall<ClientProtos::Custodex.V1.ListObjectsResponse>(
+            return new AsyncUnaryCall<Custodex.V1.ListObjectsResponse>(
                 Task.FromResult(response),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,

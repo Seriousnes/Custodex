@@ -8,10 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
     <PackageReference Include="Grpc.Net.Client" Version="2.64.0" />
     <PackageReference Include="Grpc.Net.ClientFactory" Version="2.64.0" />
-    <PackageReference Include="Grpc.Tools" Version="2.64.0" PrivateAssets="All" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
   </ItemGroup>
@@ -19,21 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Custodex.Abstractions\Custodex.Abstractions.csproj" />
     <ProjectReference Include="..\Custodex.Core\Custodex.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Protobuf Include="..\Custodex.Service\Protos\custodex_common.proto"
-              GrpcServices="None"
-              Link="Protos\custodex_common.proto"
-              ProtoRoot="..\Custodex.Service" />
-    <Protobuf Include="..\Custodex.Service\Protos\custodex_decision.proto"
-              GrpcServices="Client"
-              Link="Protos\custodex_decision.proto"
-              ProtoRoot="..\Custodex.Service" />
-    <Protobuf Include="..\Custodex.Service\Protos\custodex_management.proto"
-              GrpcServices="Client"
-              Link="Protos\custodex_management.proto"
-              ProtoRoot="..\Custodex.Service" />
+    <ProjectReference Include="..\Custodex.Protos\Custodex.Protos.csproj" />
   </ItemGroup>
 
 </Project>

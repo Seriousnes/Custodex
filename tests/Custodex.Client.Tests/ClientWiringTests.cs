@@ -1,6 +1,4 @@
-extern alias ClientProtos;
-
-using ClientProtos::Custodex.V1;
+using Custodex.V1;
 using Shouldly;
 
 namespace Custodex.Client.Tests;
