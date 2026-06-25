@@ -27,7 +27,7 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await using var cmd = new NpgsqlCommand("""
-            INSERT INTO change_log (store_id, tenant_id, actor, operation, target, before, after)
+            INSERT INTO custodex.change_log (store_id, tenant_id, actor, operation, target, before, after)
             VALUES (@store, @tenant, @actor, @operation, @target, @before, @after)
             """, w.Connection, w.Transaction);
         cmd.Parameters.AddWithValue("store", t.Store);
@@ -49,7 +49,7 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
         await using var conn = new NpgsqlConnection(_cs);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition("""
             SELECT id, actor, operation, target, before::text AS before, after::text AS after, occurred_at
-            FROM change_log
+            FROM custodex.change_log
             WHERE store_id = @store AND tenant_id = @tenant
               AND (@since IS NULL OR occurred_at >= @since)
               AND (@actor IS NULL OR actor = @actor)

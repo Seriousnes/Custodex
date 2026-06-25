@@ -16,6 +16,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     public string ConnectionString =>
         new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { SearchPath = "custodex" }.ToString();
 
+    /// <summary>Gets the raw container connection string, with no Custodex search_path — mirrors a consumer's own connection.</summary>
+    public string RawConnectionString => _container.GetConnectionString();
+
     /// <inheritdoc />
     public async Task InitializeAsync() => await _container.StartAsync();
 

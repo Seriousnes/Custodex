@@ -31,10 +31,10 @@ public sealed class CustodexSchemaManager(
         await using var uow = await uowFactory.BeginAsync(ct);
         var w = NpgsqlUnitOfWork.From(uow);
         await w.Connection.ExecuteAsync(
-            "INSERT INTO stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
+            "INSERT INTO custodex.stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
             new { s = store }, w.Transaction);
         await w.Connection.ExecuteAsync(
-            "INSERT INTO tenants (store_id, tenant_id) VALUES (@s, @s) ON CONFLICT DO NOTHING",
+            "INSERT INTO custodex.tenants (store_id, tenant_id) VALUES (@s, @s) ON CONFLICT DO NOTHING",
             new { s = store }, w.Transaction);
         await audited.SetSchemaAsync(store, tenant, actor: "schema-author", schema, uow, ct);
         await uow.CommitAsync(ct);

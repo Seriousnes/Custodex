@@ -17,7 +17,7 @@ public sealed class CustodexStoreManager(string connectionString) : IStoreManage
     {
         await using var conn = new NpgsqlConnection(_cs);
         await conn.ExecuteAsync(new CommandDefinition(
-            "INSERT INTO stores (id) VALUES (@store) ON CONFLICT DO NOTHING",
+            "INSERT INTO custodex.stores (id) VALUES (@store) ON CONFLICT DO NOTHING",
             new { store }, cancellationToken: ct));
     }
 }
@@ -35,7 +35,7 @@ public sealed class CustodexTenantManager(string connectionString) : ITenantMana
     {
         await using var conn = new NpgsqlConnection(_cs);
         await conn.ExecuteAsync(new CommandDefinition(
-            "INSERT INTO tenants (store_id, tenant_id) VALUES (@store, @tenant) ON CONFLICT DO NOTHING",
+            "INSERT INTO custodex.tenants (store_id, tenant_id) VALUES (@store, @tenant) ON CONFLICT DO NOTHING",
             new { store = tenant.Store, tenant = tenant.Tenant }, cancellationToken: ct));
     }
 }

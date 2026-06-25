@@ -20,6 +20,6 @@ public static class CacheSweep
         await using var conn = new NpgsqlConnection(CustodexSchema.Apply(connectionString));
         await conn.OpenAsync(ct);
         return await conn.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM cache_entries WHERE expires_at <= now()", cancellationToken: ct));
+            "DELETE FROM custodex.cache_entries WHERE expires_at <= now()", cancellationToken: ct));
     }
 }

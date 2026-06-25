@@ -45,7 +45,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         TenantContext t, EntityRef obj, string relation, CancellationToken ct = default)
     {
         var sql = $"""
-            SELECT {SelectColumns} FROM relation_tuples
+            SELECT {SelectColumns} FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND object_type = @ot AND object_id = @oid AND relation = @rel
             """;
@@ -59,7 +59,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         TenantContext t, SubjectRef subject, CancellationToken ct = default)
     {
         var sql = $"""
-            SELECT {SelectColumns} FROM relation_tuples
+            SELECT {SelectColumns} FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND subject_type = @st AND subject_id = @sid
               AND COALESCE(subject_relation, '') = COALESCE(@srel, '')
@@ -74,7 +74,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         TenantContext t, string objectType, CancellationToken ct = default)
     {
         const string sql = """
-            SELECT DISTINCT object_id FROM relation_tuples
+            SELECT DISTINCT object_id FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant AND object_type = @ot
             """;
         return await QueryStringsAsync(sql,
@@ -92,7 +92,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         foreach (var tuple in remove)
         {
             await using var cmd = new NpgsqlCommand("""
-                DELETE FROM relation_tuples
+                DELETE FROM custodex.relation_tuples
                 WHERE store_id = @store AND tenant_id = @tenant
                   AND object_type = @ot AND object_id = @oid AND relation = @rel
                   AND subject_type = @st AND subject_id = @sid
@@ -105,7 +105,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         foreach (var tuple in add)
         {
             await using var cmd = new NpgsqlCommand("""
-                INSERT INTO relation_tuples
+                INSERT INTO custodex.relation_tuples
                     (store_id, tenant_id, object_type, object_id, relation,
                      subject_type, subject_id, subject_relation, condition_name, condition_params)
                 VALUES (@store, @tenant, @ot, @oid, @rel, @st, @sid, @srel, @cname, @cparams)
@@ -132,7 +132,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         TenantContext t, TupleFilter filter, CancellationToken ct = default)
     {
         var sql = $"""
-            SELECT {SelectColumns} FROM relation_tuples
+            SELECT {SelectColumns} FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND (@ot IS NULL OR object_type = @ot)
               AND (@oid IS NULL OR object_id = @oid)

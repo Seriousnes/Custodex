@@ -29,7 +29,7 @@ public sealed partial class PostgresCacheStore : ICacheStore
         await using var conn = new NpgsqlConnection(_connectionString);
         return await conn.ExecuteScalarAsync<long>(new CommandDefinition("""
             SELECT COALESCE(
-                (SELECT epoch FROM tenant_epochs WHERE store_id = @store AND tenant_id = @tenant), 0)
+                (SELECT epoch FROM custodex.tenant_epochs WHERE store_id = @store AND tenant_id = @tenant), 0)
             """,
             new { store = t.Store, tenant = t.Tenant }, cancellationToken: ct));
     }
@@ -39,7 +39,7 @@ public sealed partial class PostgresCacheStore : ICacheStore
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await using var cmd = new NpgsqlCommand("""
-            INSERT INTO tenant_epochs (store_id, tenant_id, epoch)
+            INSERT INTO custodex.tenant_epochs (store_id, tenant_id, epoch)
             VALUES (@store, @tenant, 1)
             ON CONFLICT (store_id, tenant_id)
             DO UPDATE SET epoch = tenant_epochs.epoch + 1

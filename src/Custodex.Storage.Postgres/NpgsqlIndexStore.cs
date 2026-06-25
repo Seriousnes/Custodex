@@ -15,7 +15,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
     private readonly string _cs = CustodexSchema.Apply(connectionString);
 
     private const string UpsertSql = """
-        INSERT INTO reverse_index
+        INSERT INTO custodex.reverse_index
             (store_id, tenant_id, schema_version, subject, permission, object_type, object_id, conditioned)
         VALUES (@store, @tenant, @sv, @subject, @permission, @ot, @oid, @conditioned)
         ON CONFLICT (store_id, tenant_id, schema_version, subject, permission, object_type, object_id)
@@ -45,7 +45,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await w.Connection.ExecuteAsync(new CommandDefinition("""
-            DELETE FROM reverse_index
+            DELETE FROM custodex.reverse_index
             WHERE store_id = @store AND tenant_id = @tenant AND schema_version = @sv
               AND object_type = @ot AND object_id = @oid
             """, new { store = t.Store, tenant = t.Tenant, sv = schemaVersion, ot = objectType, oid = objectId },
@@ -59,7 +59,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
         if (rows.Count == 0) return;
         var w = NpgsqlUnitOfWork.From(uow);
         const string sql = """
-            DELETE FROM reverse_index
+            DELETE FROM custodex.reverse_index
             WHERE store_id = @store AND tenant_id = @tenant AND schema_version = @sv
               AND subject = @subject AND permission = @permission
               AND object_type = @ot AND object_id = @oid
@@ -84,7 +84,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
         var rows = await conn.QueryAsync<Row>(new CommandDefinition("""
             SELECT subject AS Subject, permission AS Permission, object_type AS ObjectType,
                    object_id AS ObjectId, conditioned AS Conditioned
-            FROM reverse_index
+            FROM custodex.reverse_index
             WHERE store_id = @store AND tenant_id = @tenant AND schema_version = @sv
               AND subject = @subject AND permission = @permission AND object_type = @ot
               AND (@after IS NULL OR object_id > @after)
@@ -107,7 +107,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
         var rows = await conn.QueryAsync<Row>(new CommandDefinition("""
             SELECT subject AS Subject, permission AS Permission, object_type AS ObjectType,
                    object_id AS ObjectId, conditioned AS Conditioned
-            FROM reverse_index
+            FROM custodex.reverse_index
             WHERE store_id = @store AND tenant_id = @tenant AND schema_version = @sv
               AND object_type = @ot AND object_id = @oid
             """, new { store = t.Store, tenant = t.Tenant, sv = schemaVersion, ot = objectType, oid = objectId },
@@ -120,10 +120,10 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await w.Connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM reverse_index WHERE store_id = @store AND tenant_id = @tenant",
+            "DELETE FROM custodex.reverse_index WHERE store_id = @store AND tenant_id = @tenant",
             new { store = t.Store, tenant = t.Tenant }, transaction: w.Transaction, cancellationToken: ct));
         await w.Connection.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM index_build_markers WHERE store_id = @store AND tenant_id = @tenant",
+            "DELETE FROM custodex.index_build_markers WHERE store_id = @store AND tenant_id = @tenant",
             new { store = t.Store, tenant = t.Tenant }, transaction: w.Transaction, cancellationToken: ct));
     }
 
@@ -133,7 +133,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
         return await conn.ExecuteScalarAsync<bool>(new CommandDefinition("""
-            SELECT EXISTS (SELECT 1 FROM index_build_markers
+            SELECT EXISTS (SELECT 1 FROM custodex.index_build_markers
                 WHERE store_id = @store AND tenant_id = @tenant AND schema_version = @sv)
             """, new { store = t.Store, tenant = t.Tenant, sv = schemaVersion }, cancellationToken: ct));
     }
@@ -143,7 +143,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await w.Connection.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO index_build_markers (store_id, tenant_id, schema_version)
+            INSERT INTO custodex.index_build_markers (store_id, tenant_id, schema_version)
             VALUES (@store, @tenant, @sv)
             ON CONFLICT (store_id, tenant_id, schema_version) DO UPDATE SET built_at = now()
             """, new { store = t.Store, tenant = t.Tenant, sv = schemaVersion },

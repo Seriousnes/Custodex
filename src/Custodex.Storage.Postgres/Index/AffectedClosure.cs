@@ -20,7 +20,7 @@ public static class AffectedClosure
           UNION
             SELECT rt.object_type, rt.object_id
             FROM reached r
-            JOIN relation_tuples rt
+            JOIN custodex.relation_tuples rt
               ON rt.store_id = @store AND rt.tenant_id = @tenant
              AND rt.subject_type = r.otype AND rt.subject_id = r.oid
         )

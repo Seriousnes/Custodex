@@ -27,12 +27,12 @@ public static class RebuildEnumeration
     public static async Task<RebuildInputs> LoadAsync(NpgsqlConnection conn, TenantContext t, CancellationToken ct = default)
     {
         var users = (await conn.QueryAsync<string>(new CommandDefinition("""
-            SELECT DISTINCT subject_id FROM relation_tuples
+            SELECT DISTINCT subject_id FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant AND subject_type = 'user' AND subject_id <> '*'
             """, new { store = t.Store, tenant = t.Tenant }, cancellationToken: ct))).ToList();
 
         var objects = await conn.QueryAsync<Row>(new CommandDefinition("""
-            SELECT DISTINCT object_type AS ObjectType, object_id AS ObjectId FROM relation_tuples
+            SELECT DISTINCT object_type AS ObjectType, object_id AS ObjectId FROM custodex.relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
             """, new { store = t.Store, tenant = t.Tenant }, cancellationToken: ct));
 

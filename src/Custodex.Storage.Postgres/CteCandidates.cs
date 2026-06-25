@@ -19,7 +19,7 @@ public static class CteCandidates
             -- climb: any object whose tuple subject matches a current principal becomes the next principal
             SELECT rt.object_type, rt.object_id, rt.relation
             FROM principals p
-            JOIN relation_tuples rt
+            JOIN custodex.relation_tuples rt
               ON rt.store_id = @store AND rt.tenant_id = @tenant
              AND rt.subject_type = p.ptype AND rt.subject_id = p.pid
              AND COALESCE(rt.subject_relation, '') = COALESCE(p.prelation, '')
@@ -28,7 +28,7 @@ public static class CteCandidates
             -- objects any principal appears on
             SELECT rt.object_type, rt.object_id
             FROM principals p
-            JOIN relation_tuples rt
+            JOIN custodex.relation_tuples rt
               ON rt.store_id = @store AND rt.tenant_id = @tenant
              AND rt.subject_type = p.ptype AND rt.subject_id = p.pid
              AND COALESCE(rt.subject_relation, '') = COALESCE(p.prelation, '')
@@ -36,7 +36,7 @@ public static class CteCandidates
             -- follow structural edges transitively: objects whose tuples point at already-reached objects
             SELECT rt.object_type, rt.object_id
             FROM reached_objects ro
-            JOIN relation_tuples rt
+            JOIN custodex.relation_tuples rt
               ON rt.store_id = @store AND rt.tenant_id = @tenant
              AND rt.subject_type = ro.otype AND rt.subject_id = ro.oid
              AND rt.subject_relation IS NULL
@@ -49,7 +49,7 @@ public static class CteCandidates
 
     private const string UniverseSql = """
         SELECT DISTINCT object_id
-        FROM relation_tuples
+        FROM custodex.relation_tuples
         WHERE store_id = @store AND tenant_id = @tenant AND object_type = @objtype
         ORDER BY object_id
         """;
