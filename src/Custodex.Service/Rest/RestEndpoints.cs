@@ -1,9 +1,8 @@
 namespace Custodex.Service.Rest;
 
 /// <summary>
-/// Extension methods that wire the Custodex REST API onto a <see cref="WebApplication"/>.
-/// The decision and management endpoint maps are partial methods filled by their
-/// respective companion files once the DTOs are in place.
+/// Extension methods that wire the Custodex REST API onto a <see cref="WebApplication"/>,
+/// mapping the decision and management endpoint groups onto the application.
 /// </summary>
 public static partial class RestEndpoints
 {
