@@ -1,8 +1,11 @@
+using System.Security.Claims;
 using Custodex.Core;
 using Custodex.Service.Auth;
 using Custodex.Service.Rest;
 using Custodex.Service.Services;
 using Custodex.Storage.Postgres;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Npgsql;
 
@@ -17,9 +20,47 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Custodex Authorization API", Version = "v1" });
 });
 
+var jwtSection = builder.Configuration.GetSection("Custodex:Jwt");
+var signingKeyB64 = jwtSection["SigningKey"];
+
 builder.Services
-    .AddAuthentication("ApiKey")
-    .AddScheme<ApiKeyOptions, ApiKeyAuthenticationHandler>("ApiKey", _ => { });
+    .AddAuthentication("Custodex-any")
+    .AddPolicyScheme("Custodex-any", "ApiKey or Bearer", o =>
+    {
+        o.ForwardDefaultSelector = ctx =>
+            ctx.Request.Headers.ContainsKey("X-Custodex-Key") ? "ApiKey" : JwtBearerDefaults.AuthenticationScheme;
+        o.ForwardChallenge = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddScheme<ApiKeyOptions, ApiKeyAuthenticationHandler>("ApiKey", _ => { })
+    .AddJwtBearer(jwt =>
+    {
+        var storeClaim = jwtSection["StoreClaim"] ?? "Custodex:store";
+        var roleClaim = jwtSection["RoleClaim"] ?? "Custodex:role";
+
+        if (!string.IsNullOrEmpty(signingKeyB64))
+        {
+            var key = new SymmetricSecurityKey(Convert.FromBase64String(signingKeyB64));
+            jwt.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = key,
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                NameClaimType = ClaimTypes.NameIdentifier,
+                RoleClaimType = roleClaim,
+            };
+        }
+        else if (!string.IsNullOrEmpty(jwtSection["Authority"]))
+        {
+            jwt.Authority = jwtSection["Authority"];
+            jwt.Audience = jwtSection["Audience"];
+            jwt.TokenValidationParameters = new TokenValidationParameters
+            {
+                NameClaimType = ClaimTypes.NameIdentifier,
+                RoleClaimType = roleClaim,
+            };
+        }
+    });
 
 builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
     .Configure<IConfiguration>((opts, config) =>
