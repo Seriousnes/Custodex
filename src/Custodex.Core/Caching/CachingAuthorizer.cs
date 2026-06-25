@@ -26,6 +26,7 @@ public sealed class CachingAuthorizer : IAuthorizer
         _ttl = ttl ?? DefaultTtl;
     }
 
+    /// <inheritdoc/>
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
         // Explain bypasses the cache so the trace is always complete and fresh.
@@ -54,12 +55,15 @@ public sealed class CachingAuthorizer : IAuthorizer
         return new CheckResult(allowed);
     }
 
+    /// <inheritdoc/>
     public Task<IReadOnlyList<CheckResult>> BatchCheckAsync(BatchCheckRequest request, CancellationToken ct = default)
         => _inner.BatchCheckAsync(request, ct);
 
+    /// <inheritdoc/>
     public Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
         => _inner.ListObjectsAsync(request, ct);
 
+    /// <inheritdoc/>
     public Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
         => _inner.ListSubjectsAsync(request, ct);
 }

@@ -1,4 +1,7 @@
 namespace Custodex.Abstractions;
 
-/// <summary>Marker base for the condition-body AST; concrete nodes are added in m0/06.</summary>
+/// <summary>
+/// The base of the condition-body (ABAC) expression AST. Concrete nodes form a closed set the condition
+/// evaluator switches over to compute a boolean from a condition's parameters and the request attributes.
+/// </summary>
 public abstract record ConditionExpr;

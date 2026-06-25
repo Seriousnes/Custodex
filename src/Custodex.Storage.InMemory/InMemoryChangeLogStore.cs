@@ -2,6 +2,7 @@ using Custodex.Abstractions;
 
 namespace Custodex.Storage.InMemory;
 
+/// <summary>An in-memory <see cref="IChangeLogStore"/>: holds the append-only change log in process memory for tests and local development. Thread-safe; data lives only for the lifetime of the process.</summary>
 public sealed class InMemoryChangeLogStore : IChangeLogStore
 {
     private readonly record struct Key(string Store, string Tenant);
@@ -12,6 +13,7 @@ public sealed class InMemoryChangeLogStore : IChangeLogStore
 
     private static Key KeyOf(TenantContext t) => new(t.Store, t.Tenant);
 
+    /// <inheritdoc/>
     public Task AppendAsync(TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default)
     {
         lock (_gate)
@@ -28,6 +30,7 @@ public sealed class InMemoryChangeLogStore : IChangeLogStore
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc/>
     public Task<IReadOnlyList<ChangeLogEntry>> ReadAsync(
         TenantContext t, ChangeLogFilter filter, CancellationToken ct = default)
     {

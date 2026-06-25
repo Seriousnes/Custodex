@@ -2,8 +2,17 @@ using Custodex.Abstractions;
 
 namespace Custodex.Core.Validation;
 
+/// <summary>
+/// Checks a set of supplied parameter values against a condition's declared parameters: every
+/// declared parameter must be present with a value of the expected type, and no undeclared
+/// parameter may be supplied.
+/// </summary>
 public static class ConditionParamChecker
 {
+    /// <summary>Checks supplied parameter values against a condition's declarations.</summary>
+    /// <param name="definition">The condition whose declared parameters define what is expected.</param>
+    /// <param name="parameters">The supplied parameter values, keyed by parameter name.</param>
+    /// <returns>One message per missing, mistyped, or undeclared parameter, or an empty list when all match.</returns>
     public static IReadOnlyList<string> Check(
         ConditionDef definition, IReadOnlyDictionary<string, object?> parameters)
     {

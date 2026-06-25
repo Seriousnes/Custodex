@@ -3,14 +3,14 @@ using Custodex.Abstractions;
 namespace Custodex.Core.Conditions;
 
 /// <summary>
-/// Adapts the static <see cref="ConditionEvaluator"/> to the injectable
-/// <see cref="IConditionEvaluator"/> seam that EngineDrivenAuthorizer consumes:
-/// forwards the tuple/invocation parameters and synced resource attributes, and
-/// maps the <see cref="ConditionResult"/> to a bool (Allow → true; Deny/Error →
-/// false, honouring default-deny).
+/// The default <see cref="IConditionEvaluator"/>, adapting the static <see cref="ConditionEvaluator"/>
+/// to the seam the authorizers consume. It forwards the invocation's bound parameters and the object's
+/// synced attributes, and collapses the <see cref="ConditionResult"/> to a bool, so any denial or
+/// evaluation error becomes <see langword="false"/> (default-deny).
 /// </summary>
 public sealed class CelConditionEvaluator : IConditionEvaluator
 {
+    /// <inheritdoc/>
     public bool Evaluate(
         ConditionDef definition,
         ConditionRef invocation,

@@ -8,7 +8,9 @@ namespace Custodex.Core.Dsl;
 /// <summary>Serializes a <see cref="Schema"/> to its DSL text representation.</summary>
 public static class SchemaWriter
 {
-    /// <summary>Returns the DSL text for the given schema. Round-trips through <see cref="Parsing.SchemaParser.Parse(string)"/>.</summary>
+    /// <summary>Returns the DSL text for the given schema. Round-trips through <see cref="Parsing.SchemaParser.Parse(string, string)"/>.</summary>
+    /// <param name="schema">The schema to serialize.</param>
+    /// <returns>The schema rendered as DSL source text.</returns>
     public static string Write(Schema schema)
     {
         var sb = new StringBuilder();

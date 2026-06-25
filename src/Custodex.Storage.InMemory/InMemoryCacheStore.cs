@@ -2,6 +2,8 @@ using Custodex.Abstractions;
 
 namespace Custodex.Storage.InMemory;
 
+/// <summary>An in-memory <see cref="ICacheStore"/>: holds cached decisions and per-tenant epoch counters in process memory for tests and local development. Thread-safe; data lives only for the lifetime of the process, and expired entries are evicted lazily on read.</summary>
+/// <param name="timeProvider">The clock used to apply entry time-to-live and expiry. Defaults to <see cref="TimeProvider.System"/>; pass a fake provider to control time in tests.</param>
 public sealed class InMemoryCacheStore(TimeProvider? timeProvider = null) : ICacheStore
 {
     private readonly record struct Key(string Store, string Tenant);
@@ -12,6 +14,7 @@ public sealed class InMemoryCacheStore(TimeProvider? timeProvider = null) : ICac
     private readonly Dictionary<string, Slot> _entries = new(StringComparer.Ordinal);
     private readonly Dictionary<Key, long> _epochs = new();
 
+    /// <inheritdoc/>
     public Task<CacheEntry?> GetAsync(string key, CancellationToken ct = default)
     {
         lock (_gate)
@@ -27,6 +30,7 @@ public sealed class InMemoryCacheStore(TimeProvider? timeProvider = null) : ICac
         }
     }
 
+    /// <inheritdoc/>
     public Task SetAsync(string key, CacheEntry entry, TimeSpan ttl, CancellationToken ct = default)
     {
         lock (_gate)
@@ -34,12 +38,14 @@ public sealed class InMemoryCacheStore(TimeProvider? timeProvider = null) : ICac
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc/>
     public Task<long> GetEpochAsync(TenantContext t, CancellationToken ct = default)
     {
         lock (_gate)
             return Task.FromResult(_epochs.TryGetValue(new Key(t.Store, t.Tenant), out var e) ? e : 0);
     }
 
+    /// <inheritdoc/>
     public Task BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
     {
         lock (_gate)
