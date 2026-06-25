@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Custodex.Client\Custodex.Client.csproj" />
+    <ProjectReference Include="..\Custodex.Client\Custodex.Client.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\Custodex.Service\Custodex.Service.csproj" />
   </ItemGroup>
 
