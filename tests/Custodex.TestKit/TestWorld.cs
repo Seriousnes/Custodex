@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
+
 using Bogus;
+
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;

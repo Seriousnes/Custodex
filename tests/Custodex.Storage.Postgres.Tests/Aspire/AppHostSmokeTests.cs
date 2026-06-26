@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+
 using Aspire.Hosting.Testing;
+
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
+
 using Shouldly;
 
 namespace Custodex.Storage.Postgres.Tests.Aspire;
@@ -16,22 +18,17 @@ public sealed class AppHostSmokeTests
     [Fact]
     public async Task Orchestrated_stack_answers_direct_grant_check()
     {
-        await using var app = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Custodex_AppHost>(
-            [],
-            (_, hostSettings) =>
-            {
-                hostSettings.Configuration = new Microsoft.Extensions.Configuration.ConfigurationManager();
-                hostSettings.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["Custodex:TestAdminKey"] = AdminKey,
-                    ["Custodex:TestAdminStore"] = Store,
-                });
-            });
+        var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Custodex_AppHost>();
+        appHost.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Custodex:TestAdminKey"] = AdminKey,
+            ["Custodex:TestAdminStore"] = Store,
+        });
 
-        var builtApp = await app.BuildAsync();
-        await builtApp.StartAsync();
+        await using var app = await appHost.BuildAsync();
+        await app.StartAsync();
 
-        var client = builtApp.CreateHttpClient("custodex-service");
+        var client = app.CreateHttpClient("custodex-service");
         client.DefaultRequestHeaders.Add("X-Custodex-Key", AdminKey);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));

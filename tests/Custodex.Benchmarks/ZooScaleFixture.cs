@@ -5,8 +5,11 @@ using Custodex.Core.Evaluation;
 using Custodex.Storage.InMemory;
 using Custodex.Storage.Postgres;
 using Custodex.Storage.Postgres.Index;
+
 using Dapper;
+
 using Npgsql;
+
 using Testcontainers.PostgreSql;
 
 namespace Custodex.Benchmarks;
@@ -129,8 +132,7 @@ public sealed class ZooScaleFixture
     /// <summary>Starts the container, applies migrations, seeds the dataset, rebuilds the reverse index, and constructs the three authorizer variants.</summary>
     public async Task InitializeAsync()
     {
-        _container = new PostgreSqlBuilder()
-            .WithImage("postgres:18-alpine")
+        _container = new PostgreSqlBuilder("postgres:18-alpine")
             .WithEnvironment("POSTGRES_INITDB_ARGS",
                 "--locale-provider=icu --icu-locale=en-US --encoding=UTF8 --locale=C.UTF-8")
             .Build();

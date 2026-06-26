@@ -1,7 +1,8 @@
-using Npgsql;
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
+
+using Npgsql;
 
 namespace Custodex.Storage.Postgres;
 

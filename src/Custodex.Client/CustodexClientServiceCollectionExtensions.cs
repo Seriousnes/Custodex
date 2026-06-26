@@ -1,6 +1,9 @@
 using Custodex.Abstractions;
+
 using Grpc.Net.Client;
+
 using Microsoft.Extensions.DependencyInjection;
+
 using ProtoV1 = Custodex.V1;
 
 namespace Custodex.Client;

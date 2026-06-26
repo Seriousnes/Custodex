@@ -1,4 +1,5 @@
 using CsCheck;
+
 using Custodex.Abstractions;
 using Custodex.TestKit;
 

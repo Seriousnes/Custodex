@@ -1,12 +1,15 @@
 using Custodex.Abstractions;
 using Custodex.Core;
-using Custodex.Service.Mapping;
+
 using Grpc.Core;
 using Grpc.Net.Client;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+
 using Shouldly;
+
 using ProtoV1 = Custodex.V1;
 
 namespace Custodex.Service.Tests;

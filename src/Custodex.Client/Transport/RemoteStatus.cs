@@ -1,4 +1,5 @@
 using Custodex.Abstractions;
+
 using Grpc.Core;
 
 namespace Custodex.Client.Transport;

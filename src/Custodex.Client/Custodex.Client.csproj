@@ -1,24 +1,21 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<RootNamespace>Custodex</RootNamespace>
-		<UserSecretsId>890ae1d8-ef38-4e12-9a94-3a1f5f46270e</UserSecretsId>
-		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-		<DockerfileContext>..\..</DockerfileContext>
+		<RootNamespace>Custodex.Client</RootNamespace>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Grpc.AspNetCore" />
 		<PackageReference Include="Grpc.Net.Client" />
-		<PackageReference Include="Grpc.Net.ClientFactory" />
-		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\Custodex.ServiceDefaults\Custodex.ServiceDefaults.csproj" />
+		<ProjectReference Include="..\Custodex.Abstractions\Custodex.Abstractions.csproj" />
+		<ProjectReference Include="..\Custodex.Core\Custodex.Core.csproj" />
+		<ProjectReference Include="..\Custodex.Protos\Custodex.Protos.csproj" />
 	</ItemGroup>
 
 </Project>

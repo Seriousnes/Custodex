@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using Custodex.Core;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests;

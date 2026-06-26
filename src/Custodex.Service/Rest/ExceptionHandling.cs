@@ -1,7 +1,5 @@
 using Custodex.Abstractions;
 using Custodex.Service.Tenancy;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Custodex.Service.Rest;
 

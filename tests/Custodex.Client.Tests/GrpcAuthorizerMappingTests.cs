@@ -1,6 +1,7 @@
-using Custodex.Client;
 using Custodex.Abstractions;
+
 using Grpc.Core;
+
 using Shouldly;
 
 namespace Custodex.Client.Tests;

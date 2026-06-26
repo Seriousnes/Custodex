@@ -1,5 +1,3 @@
-using Custodex.Abstractions;
-using Custodex.V1;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Custodex.Protos;

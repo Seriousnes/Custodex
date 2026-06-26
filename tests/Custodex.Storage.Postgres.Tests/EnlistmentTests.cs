@@ -1,6 +1,9 @@
 using Custodex.Abstractions;
+
 using Dapper;
+
 using Npgsql;
+
 using Shouldly;
 
 namespace Custodex.Storage.Postgres.Tests;

@@ -1,6 +1,8 @@
-using Dapper;
-using Npgsql;
 using Custodex.Abstractions;
+
+using Dapper;
+
+using Npgsql;
 
 namespace Custodex.Storage.Postgres;
 

@@ -1,9 +1,10 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Custodex.Abstractions;
 using Custodex.Core;
 using Custodex.Core.Conditions;
 using Custodex.Storage.Postgres.Managers;
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Custodex.Storage.Postgres;
 

@@ -29,10 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Custodex.Client\Custodex.Client.csproj" Aliases="ClientProtos" />
+    <ProjectReference Include="..\..\src\Custodex.Client\Custodex.Client.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Abstractions\Custodex.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Core\Custodex.Core.csproj" />
-    <ProjectReference Include="..\..\src\Custodex.Service\Custodex.Service.csproj" Aliases="ServiceHost" />
+    <ProjectReference Include="..\..\src\Custodex.Service\Custodex.Service.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Storage.InMemory\Custodex.Storage.InMemory.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Storage.Postgres\Custodex.Storage.Postgres.csproj" />
     <ProjectReference Include="..\Custodex.TestKit\Custodex.TestKit.csproj" />

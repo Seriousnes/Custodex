@@ -1,7 +1,5 @@
-using Custodex.Abstractions;
 using Custodex.Protos;
-using Custodex.V1;
-using Google.Protobuf.WellKnownTypes;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests;

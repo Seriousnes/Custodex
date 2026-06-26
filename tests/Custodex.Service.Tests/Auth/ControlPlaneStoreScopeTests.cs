@@ -1,13 +1,18 @@
 using System.Net;
 using System.Net.Http.Json;
+
 using Custodex.Core;
 using Custodex.Service.Mapping;
 using Custodex.Service.Rest;
+
 using Grpc.Core;
 using Grpc.Net.Client;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+
 using Shouldly;
+
 using ProtoV1 = Custodex.V1;
 
 namespace Custodex.Service.Tests;

@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Client.Transport;
 using Custodex.Protos;
+
 using ProtoV1 = Custodex.V1;
 
 namespace Custodex.Client;

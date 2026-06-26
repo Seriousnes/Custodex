@@ -1,4 +1,5 @@
 using System.Security.Claims;
+
 using Custodex.Core;
 using Custodex.Service.Auth;
 using Custodex.Service.Health;
@@ -6,12 +7,12 @@ using Custodex.Service.Rest;
 using Custodex.Service.Services;
 using Custodex.Service.Tenancy;
 using Custodex.Storage.Postgres;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+
 using Npgsql;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -77,13 +78,11 @@ builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
     .Configure<IConfiguration>((opts, config) =>
         config.GetSection("Custodex:ApiKeys").Bind(opts.Keys));
 
-builder.Services.AddAuthorization(opts =>
-{
-    opts.AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()
-        .RequireClaim("Custodex:role", "reader", "admin"));
-    opts.AddPolicy("Custodex:manage", p => p.RequireAuthenticatedUser()
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()
+        .RequireClaim("Custodex:role", "reader", "admin"))
+    .AddPolicy("Custodex:manage", p => p.RequireAuthenticatedUser()
         .RequireClaim("Custodex:role", "admin"));
-});
 builder.Services.AddScoped<TenantContextAccessor>();
 builder.Services.AddScoped<ITenantContextAccessor>(sp => sp.GetRequiredService<TenantContextAccessor>());
 
@@ -112,6 +111,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCustodexProblemDetails();
 
+app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TenantResolutionMiddleware>();
@@ -124,5 +124,3 @@ app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization("Custodex:man
 app.MapCustodexRest();
 
 app.Run();
-
-public partial class Program { }

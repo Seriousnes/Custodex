@@ -1,7 +1,9 @@
+using Custodex.Abstractions;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Custodex.Abstractions;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests;

@@ -1,10 +1,10 @@
-using Dapper;
 using Custodex.Abstractions;
 using Custodex.Core;
-using Custodex.Storage.Postgres;
 using Custodex.Storage.Postgres.Index;
+
+using Dapper;
+
 using Shouldly;
-using Xunit;
 
 namespace Custodex.Storage.Postgres.Tests.Index;
 

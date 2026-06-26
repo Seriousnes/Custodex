@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Attributes;
+
 using Custodex.Abstractions;
 
 namespace Custodex.Benchmarks;
