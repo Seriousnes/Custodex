@@ -1,13 +1,15 @@
+using Custodex.Abstractions;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Custodex.Abstractions;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests;
 
 [Collection("service")]
-public sealed class HostBootTests(PostgresFixture pg) : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HostBootTests(PostgresFixture pg)
 {
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

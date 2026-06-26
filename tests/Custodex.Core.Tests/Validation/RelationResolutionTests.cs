@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core.Validation;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Validation;
@@ -15,7 +16,7 @@ public class RelationResolutionTests
         var grant = world.Relation();
         var edit = world.Permission();
         var manage = world.Permission();
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(grant, s => s.Type(world.UserType))
                 .Permission(edit, p => p.Relation(grant))
@@ -36,7 +37,7 @@ public class RelationResolutionTests
         var grant = world.Relation();
         var edit = world.Permission();
         var unknown = world.Relation();
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(grant, s => s.Type(world.UserType))
                 .Permission(edit, p => p.Relation(unknown)))
@@ -54,7 +55,7 @@ public class RelationResolutionTests
         var world = TestWorld.New();
         var objType = world.EntityType();
         var dup = world.Relation();
-        var schema = new Schema(world.Version,
+        var schema = new Schema(TestWorld.Version,
             [new EntityTypeDef(objType,
                 [new RelationDef(dup, [new SubjectTypeRef(world.UserType)]),
                  new RelationDef(dup, [new SubjectTypeRef(world.UserType)])],

@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Storage.InMemory.Tests;
@@ -14,11 +15,11 @@ public class RelationStoreTests
         var world = TestWorld.New();
         var tenant = world.Tenant;
         var groupId = world.ObjectId();
-        var obj = world.Object(world.GroupType, groupId);
+        var obj = TestWorld.Object(world.GroupType, groupId);
         var subject1 = world.SubjectId();
         var subject2 = world.SubjectId();
         RelationTuple Member(string user) =>
-            world.Tuple(world.GroupType, groupId, world.MemberRelation, world.User(user));
+            TestWorld.Tuple(world.GroupType, groupId, world.MemberRelation, world.User(user));
         var store = new InMemoryRelationStore();
         await store.WriteAsync(tenant, [Member(subject1), Member(subject2)], [], Uow);
 
@@ -60,11 +61,11 @@ public class RelationStoreTests
         var world = TestWorld.New();
         var tenant = world.Tenant;
         var groupId = world.ObjectId();
-        var obj = world.Object(world.GroupType, groupId);
+        var obj = TestWorld.Object(world.GroupType, groupId);
         var subject = world.SubjectId();
         var store = new InMemoryRelationStore();
         await store.WriteAsync(tenant,
-            [world.Tuple(world.GroupType, groupId, world.MemberRelation, world.User(subject))], [], Uow);
+            [TestWorld.Tuple(world.GroupType, groupId, world.MemberRelation, world.User(subject))], [], Uow);
 
         var bySubject = await store.GetBySubjectAsync(tenant, world.User(subject));
 
@@ -78,11 +79,11 @@ public class RelationStoreTests
         var t1 = world.Tenant;
         var t2 = new TenantContext(world.Tenant.Store, world.EntityType());
         var groupId = world.ObjectId();
-        var obj = world.Object(world.GroupType, groupId);
+        var obj = TestWorld.Object(world.GroupType, groupId);
         var subject = world.SubjectId();
         var store = new InMemoryRelationStore();
         await store.WriteAsync(t1,
-            [world.Tuple(world.GroupType, groupId, world.MemberRelation, world.User(subject))], [], Uow);
+            [TestWorld.Tuple(world.GroupType, groupId, world.MemberRelation, world.User(subject))], [], Uow);
 
         (await store.GetByObjectAsync(t2, obj, world.MemberRelation)).ShouldBeEmpty();
         (await store.GetBySubjectAsync(t2, world.User(subject))).ShouldBeEmpty();
@@ -94,10 +95,10 @@ public class RelationStoreTests
         var world = TestWorld.New();
         var tenant = world.Tenant;
         var groupId = world.ObjectId();
-        var obj = world.Object(world.GroupType, groupId);
+        var obj = TestWorld.Object(world.GroupType, groupId);
         var subject = world.SubjectId();
         RelationTuple Member() =>
-            world.Tuple(world.GroupType, groupId, world.MemberRelation, world.User(subject));
+            TestWorld.Tuple(world.GroupType, groupId, world.MemberRelation, world.User(subject));
         var store = new InMemoryRelationStore();
         await store.WriteAsync(tenant, [Member()], [], Uow);
         await store.WriteAsync(tenant, [Member()], [], Uow);

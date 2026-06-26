@@ -1,56 +1,54 @@
-using Custodex.Abstractions;
-using Custodex.V1;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Custodex.Protos;
 
 /// <summary>
 /// Single source of truth for converting between the canonical <see cref="Custodex.Abstractions"/>
-/// records and the generated <c>Custodex.V1</c> protobuf messages. Every shared type has a
+/// records and the generated <c>Custodex.Api</c> protobuf messages. Every shared type has a
 /// <c>ToProto</c> (domain → proto) and a <c>FromProto</c> (proto → domain) form so both the gRPC
 /// service and client map the wire contract identically.
 /// </summary>
 public static class ProtoMap
 {
     /// <summary>Converts a domain <see cref="Abstractions.EntityRef"/> to its proto form.</summary>
-    public static V1.EntityRef ToProto(Abstractions.EntityRef r) => new() { Type = r.Type, Id = r.Id };
+    public static Api.EntityRef ToProto(Abstractions.EntityRef r) => new() { Type = r.Type, Id = r.Id };
 
-    /// <summary>Converts a proto <see cref="V1.EntityRef"/> to its domain form.</summary>
-    public static Abstractions.EntityRef FromProto(V1.EntityRef p) => new(p.Type, p.Id);
+    /// <summary>Converts a proto <see cref="Api.EntityRef"/> to its domain form.</summary>
+    public static Abstractions.EntityRef FromProto(Api.EntityRef p) => new(p.Type, p.Id);
 
     /// <summary>
     /// Converts a domain <see cref="Abstractions.SubjectRef"/> to its proto form. An empty
     /// <c>relation</c> field encodes a plain subject (not a subject-set).
     /// </summary>
-    public static V1.SubjectRef ToProto(Abstractions.SubjectRef r) =>
+    public static Api.SubjectRef ToProto(Abstractions.SubjectRef r) =>
         new() { Type = r.Type, Id = r.Id, Relation = r.Relation ?? string.Empty };
 
     /// <summary>
-    /// Converts a proto <see cref="V1.SubjectRef"/> to its domain form. An empty <c>relation</c>
+    /// Converts a proto <see cref="Api.SubjectRef"/> to its domain form. An empty <c>relation</c>
     /// field maps to <see langword="null"/> so <see cref="Abstractions.SubjectRef.IsSubjectSet"/> stays correct.
     /// </summary>
-    public static Abstractions.SubjectRef FromProto(V1.SubjectRef p) =>
+    public static Abstractions.SubjectRef FromProto(Api.SubjectRef p) =>
         new(p.Type, p.Id, string.IsNullOrEmpty(p.Relation) ? null : p.Relation);
 
     /// <summary>Converts a domain <see cref="Abstractions.TenantContext"/> to its proto form.</summary>
-    public static V1.TenantContext ToProto(Abstractions.TenantContext t) =>
+    public static Api.TenantContext ToProto(Abstractions.TenantContext t) =>
         new() { Store = t.Store, Tenant = t.Tenant };
 
-    /// <summary>Converts a proto <see cref="V1.TenantContext"/> to its domain form.</summary>
-    public static Abstractions.TenantContext FromProto(V1.TenantContext p) => new(p.Store, p.Tenant);
+    /// <summary>Converts a proto <see cref="Api.TenantContext"/> to its domain form.</summary>
+    public static Abstractions.TenantContext FromProto(Api.TenantContext p) => new(p.Store, p.Tenant);
 
     /// <summary>Converts a domain <see cref="Abstractions.ConditionRef"/> to its proto form.</summary>
-    public static V1.ConditionRef ToProto(Abstractions.ConditionRef c) =>
+    public static Api.ConditionRef ToProto(Abstractions.ConditionRef c) =>
         new() { Name = c.Name, Parameters = ToStruct(c.Parameters) };
 
-    /// <summary>Converts a proto <see cref="V1.ConditionRef"/> to its domain form.</summary>
-    public static Abstractions.ConditionRef FromProto(V1.ConditionRef p) =>
+    /// <summary>Converts a proto <see cref="Api.ConditionRef"/> to its domain form.</summary>
+    public static Abstractions.ConditionRef FromProto(Api.ConditionRef p) =>
         new(p.Name, FromStruct(p.Parameters));
 
     /// <summary>Converts a domain <see cref="Abstractions.RelationTuple"/> to its proto form.</summary>
-    public static V1.RelationTuple ToProto(Abstractions.RelationTuple t)
+    public static Api.RelationTuple ToProto(Abstractions.RelationTuple t)
     {
-        var proto = new V1.RelationTuple
+        var proto = new Api.RelationTuple
         {
             Object = ToProto(t.Object),
             Relation = t.Relation,
@@ -61,13 +59,13 @@ public static class ProtoMap
         return proto;
     }
 
-    /// <summary>Converts a proto <see cref="V1.RelationTuple"/> to its domain form.</summary>
-    public static Abstractions.RelationTuple FromProto(V1.RelationTuple p) =>
+    /// <summary>Converts a proto <see cref="Api.RelationTuple"/> to its domain form.</summary>
+    public static Abstractions.RelationTuple FromProto(Api.RelationTuple p) =>
         new(FromProto(p.Object), p.Relation, FromProto(p.Subject),
             p.Condition is { Name.Length: > 0 } ? FromProto(p.Condition) : null);
 
     /// <summary>Converts a domain <see cref="Abstractions.RequestContext"/> to its proto form.</summary>
-    public static V1.RequestContext ToProto(Abstractions.RequestContext ctx) => new()
+    public static Api.RequestContext ToProto(Abstractions.RequestContext ctx) => new()
     {
         Now = Timestamp.FromDateTimeOffset(ctx.Now),
         Subject = ToProto(ctx.Subject),
@@ -75,25 +73,25 @@ public static class ProtoMap
     };
 
     /// <summary>
-    /// Converts a proto <see cref="V1.RequestContext"/> to its domain form. A missing <c>now</c> or
+    /// Converts a proto <see cref="Api.RequestContext"/> to its domain form. A missing <c>now</c> or
     /// <c>subject</c> decodes to a default rather than throwing.
     /// </summary>
-    public static Abstractions.RequestContext FromProto(V1.RequestContext p) => new(
+    public static Abstractions.RequestContext FromProto(Api.RequestContext p) => new(
         p.Now is null ? DateTimeOffset.UtcNow : p.Now.ToDateTimeOffset(),
         p.Subject is null ? new Abstractions.SubjectRef("*", "*") : FromProto(p.Subject),
         FromStruct(p.Attributes));
 
     /// <summary>Converts a domain <see cref="Abstractions.ExplainNode"/> to its proto form.</summary>
-    public static V1.ExplainNode ToProto(Abstractions.ExplainNode n)
+    public static Api.ExplainNode ToProto(Abstractions.ExplainNode n)
     {
-        var proto = new V1.ExplainNode { Description = n.Description, Allowed = n.Allowed };
+        var proto = new Api.ExplainNode { Description = n.Description, Allowed = n.Allowed };
         foreach (var child in n.Children)
             proto.Children.Add(ToProto(child));
         return proto;
     }
 
-    /// <summary>Converts a proto <see cref="V1.ExplainNode"/> to its domain form.</summary>
-    public static Abstractions.ExplainNode FromProto(V1.ExplainNode p) =>
+    /// <summary>Converts a proto <see cref="Api.ExplainNode"/> to its domain form.</summary>
+    public static Abstractions.ExplainNode FromProto(Api.ExplainNode p) =>
         new(p.Description, p.Allowed, [.. p.Children.Select(FromProto)]);
 
     /// <summary>

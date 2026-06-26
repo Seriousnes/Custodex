@@ -1,6 +1,6 @@
 using System.Data;
 using System.Data.Common;
-using Npgsql;
+
 using Shouldly;
 
 namespace Custodex.Storage.Postgres.Tests;

@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
@@ -27,7 +28,7 @@ public class ListSubjectsTests
 
     private SubjectRef User(string id) => _world.User(id);
 
-    private Schema Build() => new SchemaBuilder(_world.Version)
+    private Schema Build() => new SchemaBuilder(TestWorld.Version)
         .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
             s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
         .Type(_objType, t => t
@@ -39,8 +40,8 @@ public class ListSubjectsTests
     private Task<EngineDrivenAuthorizer> NewAsync(params RelationTuple[] tuples) =>
         _world.BuildAsync(Build(), tuples);
 
-    private RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
-        _world.Tuple(ot, oid, rel, s);
+    private static RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
+        TestWorld.Tuple(ot, oid, rel, s);
 
     private ListSubjectsRequest Req(int pageSize = 100, string? token = null) => new(
         _world.Tenant, new EntityRef(_objType, _objId), _view,
@@ -51,7 +52,7 @@ public class ListSubjectsTests
     {
         var ids = new string[count];
         for (var i = 0; i < count; i++) ids[i] = _world.SubjectId();
-        return ids.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        return [.. ids.OrderBy(x => x, StringComparer.Ordinal)];
     }
 
     [Fact]
@@ -67,7 +68,7 @@ public class ListSubjectsTests
             Tuple(_objType, _objId, _blocked, User(revoked)));
 
         var result = await auth.ListSubjectsAsync(Req());
-        result.Subjects.Select(s => s.Id).ShouldBe(new[] { allowed });
+        result.Subjects.Select(s => s.Id).ShouldBe([allowed]);
     }
 
     [Fact]
@@ -82,11 +83,11 @@ public class ListSubjectsTests
             Tuple(_world.GroupType, groupId, _world.MemberRelation, User(ids[2])));
 
         var page1 = await auth.ListSubjectsAsync(Req(pageSize: 2));
-        page1.Subjects.Select(s => s.Id).ShouldBe(new[] { ids[0], ids[1] });
+        page1.Subjects.Select(s => s.Id).ShouldBe([ids[0], ids[1]]);
         page1.ContinuationToken.ShouldNotBeNull();
 
         var page2 = await auth.ListSubjectsAsync(Req(pageSize: 2, token: page1.ContinuationToken));
-        page2.Subjects.Select(s => s.Id).ShouldBe(new[] { ids[2] });
+        page2.Subjects.Select(s => s.Id).ShouldBe([ids[2]]);
         page2.ContinuationToken.ShouldBeNull();
     }
 
@@ -101,11 +102,11 @@ public class ListSubjectsTests
 
         var page1 = await auth.ListSubjectsAsync(Req(pageSize: 2));
         page1.Subjects.Count.ShouldBe(2);
-        page1.Subjects.Select(s => s.Id).ShouldBe(new[] { "*", ids[0] });
+        page1.Subjects.Select(s => s.Id).ShouldBe(["*", ids[0]]);
         page1.ContinuationToken.ShouldNotBeNull();
 
         var page2 = await auth.ListSubjectsAsync(Req(pageSize: 2, token: page1.ContinuationToken));
-        page2.Subjects.Select(s => s.Id).ShouldBe(new[] { ids[1] });
+        page2.Subjects.Select(s => s.Id).ShouldBe([ids[1]]);
         page2.ContinuationToken.ShouldBeNull();
     }
 
@@ -121,22 +122,22 @@ public class ListSubjectsTests
         var objType = _world.EntityType();
         var objId = _world.ObjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(grant, s => s.Type(typeA).Type(typeB))
                 .Permission(perm, p => p.Relation(grant)))
             .Build();
         var auth = await _world.BuildAsync(schema,
-            _world.Tuple(objType, objId, grant, _world.Subject(typeA, idA)),
-            _world.Tuple(objType, objId, grant, _world.Subject(typeB, idB)));
+            TestWorld.Tuple(objType, objId, grant, TestWorld.Subject(typeA, idA)),
+            TestWorld.Tuple(objType, objId, grant, TestWorld.Subject(typeB, idB)));
 
         var result = await auth.ListSubjectsAsync(new ListSubjectsRequest(
             _world.Tenant, new EntityRef(objType, objId), perm,
-            new RequestContext(DateTimeOffset.UnixEpoch, _world.Subject(typeA, idA),
+            new RequestContext(DateTimeOffset.UnixEpoch, TestWorld.Subject(typeA, idA),
                 new Dictionary<string, object?>())));
 
         result.Subjects.ShouldBe(
-            new[] { _world.Subject(typeA, idA), _world.Subject(typeB, idB) }, ignoreOrder: true);
+            [TestWorld.Subject(typeA, idA), TestWorld.Subject(typeB, idB)], ignoreOrder: true);
     }
 
     [Fact]
@@ -152,6 +153,6 @@ public class ListSubjectsTests
             Tuple(_world.GroupType, groupA, _world.MemberRelation, User(subject)));
 
         var result = await auth.ListSubjectsAsync(Req());
-        result.Subjects.Select(s => s.Id).ShouldBe(new[] { subject });
+        result.Subjects.Select(s => s.Id).ShouldBe([subject]);
     }
 }

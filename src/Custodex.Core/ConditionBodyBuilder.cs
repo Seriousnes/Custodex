@@ -8,11 +8,12 @@ namespace Custodex.Core;
 /// a request attribute, context, or a literal); the remaining methods compose those values into the
 /// boolean predicate the condition evaluates to.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Members form the fluent surface invoked on the builder instance passed to a condition-body lambda; making them static would break that call shape.")]
 public sealed class ConditionBodyBuilder
 {
     /// <summary>References a declared condition parameter by name.</summary>
     /// <param name="name">The parameter name, as declared for the condition.</param>
-    /// <returns>The parameter reference.</returns>
+    /// <returns>The parameter reference.</returns>    
     public ConditionExpr Param(string name) => new ParamRef(name);
 
     /// <summary>References a field of the request's resource attributes.</summary>

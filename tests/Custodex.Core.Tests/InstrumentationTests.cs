@@ -1,8 +1,10 @@
 using System.Diagnostics;
+
+using Custodex.Abstractions;
+
 using OpenTelemetry;
 using OpenTelemetry.Trace;
-using Custodex.Abstractions;
-using Custodex.Core;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests;

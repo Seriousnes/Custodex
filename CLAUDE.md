@@ -8,15 +8,9 @@ Custodex is a runtime-configurable **ReBAC (relationship-based) + ABAC (conditio
 
 The engine answers four questions: **Check** (point decision), **ListObjects** (which objects a subject may act on), **ListSubjects** (who may act on an object), and **BatchCheck**.
 
-## The design docs are the source of truth
+## Source of truth
 
-This is a plan-driven build. Before non-trivial work, read:
-
-- `docs/superpowers/specs/2026-06-23-rebac-engine-design.md` — the full design (architecture, evaluation algebra, storage model, and the six **worked examples** in §12).
-- `docs/superpowers/plans/2026-06-23-rebac-engine-design/README.md` — the **canonical public contract**: every normative type name and signature (`IAuthorizer`, `Schema` AST, storage interfaces, etc.), global constraints, and project layout. Plans reference types by their exact names here. **If a change needs a new shared type, add it to this README first, then propagate.**
-- `docs/.../m0/`–`m3/` — milestone-by-milestone implementation plans (`mN/0X-*.md`).
-
-The README's "Post-dispatch contract reconciliations" section overrides any conflicting plan text — read it when a plan and the contract disagree.
+The contract is the code. `Custodex.Abstractions` holds the canonical, consumer-facing contract (interfaces + records) — when a change needs a new shared type, add it there first, then propagate. Behaviour is pinned by the test suite: the declarative conformance cases and the differential property harness (see Architecture below) are the durable spec, and the implementation is a candidate proven against them.
 
 ## Build / test / run
 
@@ -27,18 +21,18 @@ dotnet build Custodex.slnx
 dotnet test  Custodex.slnx                              # whole suite
 dotnet test  tests/Custodex.Core.Tests                 # one project
 dotnet test  tests/Custodex.Core.Tests --filter "FullyQualifiedName~ListObjects"   # one class/test
-dotnet run --project src/Custodex.AppHost              # local Aspire stack (Postgres + Service), M1+
+dotnet run --project src/Custodex.AppHost              # local Aspire stack (Postgres + Service)
 ```
 
 - **Target:** `net10.0`, C# 14. `Nullable`, `ImplicitUsings`, and **`TreatWarningsAsErrors=true`** are all on (in `Directory.Build.props`) — a warning fails the build.
-- **Test stack:** xUnit + **Shouldly** assertions (not FluentAssertions — it's banned by license). Property tests use **CsCheck**. Postgres integration tests (M1+) use **Testcontainers** and need Docker running.
+- **Test stack:** xUnit + **Shouldly** assertions (not FluentAssertions — it's banned by license). Property tests use **CsCheck**. Postgres integration tests use **Testcontainers** and need Docker running.
 - Python is not available on this machine; for throwaway scripts use PowerShell or `dotnet run script.cs`.
 
 **Untracked cruft:** directories named `... (2)` under `src/` and `tests/` are stale copy artifacts, not tracked by git and not in `Custodex.slnx`. Ignore them; they are not part of the build.
 
 ## Architecture
 
-Three conceptual layers (spec §3): the **engine** (generic, this repo), the **application schema** (a versioned developer artifact), and **tenant data** (tuples/attributes, runtime-configurable with no engineers in the loop).
+Three conceptual layers: the **engine** (generic, this repo), the **application schema** (a versioned developer artifact), and **tenant data** (tuples/attributes, runtime-configurable with no engineers in the loop).
 
 ### Project dependency direction
 
@@ -46,22 +40,22 @@ Three conceptual layers (spec §3): the **engine** (generic, this repo), the **a
 Custodex.Abstractions   ← contracts ONLY (interfaces + records, no logic). The dependency for consumers and 3rd-party providers.
 Custodex.Core           ← the engine. Depends only on Abstractions. Zero domain concepts, zero DB code.
 Custodex.Storage.InMemory  ← in-memory providers for fast unit tests + the correctness oracle's backing store.
-Custodex.Storage.Postgres  ← (M1) Dapper/Npgsql provider. May reference Core (for SchemaIndex etc.); Core never references it.
-Custodex.Service / .Client ← (M3) gRPC/REST host + client, both over the SAME Core.
+Custodex.Storage.Postgres  ← Dapper/Npgsql provider. May reference Core (for SchemaIndex etc.); Core never references it.
+Custodex.Service / .Client ← gRPC/REST host + client, both over the SAME Core.
 Custodex.AppHost / .ServiceDefaults ← .NET Aspire orchestration + shared OTel/health defaults.
 tests/Custodex.TestKit ← test-only support lib (not a test project): a Bogus-backed TestWorld vending neutral, deterministic identifiers. Referenced by every *.Tests project.
 ```
 
-`Storage.Postgres` is allowed to reference `Core`; the rule the spec enforces is **no database code inside Core**, not "nothing may reference Core."
+`Storage.Postgres` is allowed to reference `Core`; the enforced rule is **no database code inside Core**, not "nothing may reference Core."
 
 ### Two evaluation paths, one set of semantics
 
 This is the central architectural idea. The algebra (union `+`, intersection `&`, exclusion `-`, arrow/traversal `rel->perm`, group nesting, conditions) has two execution paths that **must produce identical results**:
 
 1. **Engine-driven traversal** (`Custodex.Core`, `EngineDrivenAuthorizer`) — a C# walk over the permission expression issuing batched indexed lookups through `IRelationStore`. This is the portable path, the in-memory test path, and the **correctness oracle**.
-2. **Postgres recursive CTEs** (`Custodex.Storage.Postgres`, M1) — the primary production path.
+2. **Postgres recursive CTEs** (`Custodex.Storage.Postgres`) — the primary production path.
 
-A **differential property-based harness** (M1/08, M2/06) generates random schemas + tuples and asserts `CTE ≡ engine-driven oracle ≡ reverse index`. The fast paths are trusted only when the oracle agrees. When implementing an algorithm-heavy path, the **tests are the durable spec**; the implementation is a candidate proven by the harness.
+A **differential property-based harness** generates random schemas + tuples and asserts `CTE ≡ engine-driven oracle ≡ reverse index`. The fast paths are trusted only when the oracle agrees. When implementing an algorithm-heavy path, the **tests are the durable spec**; the implementation is a candidate proven by the harness.
 
 ### Engine internals (Custodex.Core)
 
@@ -70,7 +64,7 @@ A **differential property-based harness** (M1/08, M2/06) generates random schema
 - `EvalContext` carries per-request state: memoization, cycle guards, depth bound, and the `ConditionTouched` latch.
 - **Conditions** (`Conditions/`) are evaluated through the `IConditionEvaluator` seam: `NullConditionEvaluator` (always pass), `ConditionEvaluator`/`CelConditionEvaluator` (the real CEL-shaped predicate evaluator). A failed/missing-attribute condition is **default-deny with a diagnostic, never an exception**.
 - **Caching** (`Caching/`): `CachingAuthorizer` decorates an `ICacheableAuthorizer` (the internal `CheckInternalAsync` seam returning `(Allowed, ConditionTouched)`). Only **unconditioned** results are cached; invalidation is a coarse per-`(store, tenant)` epoch.
-- **Schema authoring**: fluent `SchemaBuilder` (`.Type().Relation().Permission().Condition().Build()`) produces the canonical `Schema` AST. The AST (`PermExpr`/`ConditionExpr`) uses `System.Text.Json` polymorphism so it serializes to jsonb and to the DSL (M3).
+- **Schema authoring**: fluent `SchemaBuilder` (`.Type().Relation().Permission().Condition().Build()`) produces the canonical `Schema` AST. The AST (`PermExpr`/`ConditionExpr`) uses `System.Text.Json` polymorphism so it serializes to jsonb and to the DSL.
 
 ### Domain-neutral tests and the conformance harness
 

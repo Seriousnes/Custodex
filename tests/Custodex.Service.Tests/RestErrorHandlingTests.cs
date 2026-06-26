@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+
 using Custodex.Core;
 using Custodex.Service.Rest;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests;
@@ -34,10 +37,10 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
             .Build();
         var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
 
-        await adminClient.PostAsJsonAsync("/v1/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
-        await adminClient.PostAsJsonAsync("/v1/tenants",
+        await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
+        await adminClient.PostAsJsonAsync("/api/tenants",
             new CreateTenantRequestDto(TestAuthHelper.AdminStore, tenantId));
-        await adminClient.PutAsJsonAsync($"/v1/schema/{TestAuthHelper.AdminStore}",
+        await adminClient.PutAsJsonAsync($"/api/schema/{TestAuthHelper.AdminStore}",
             new SetActiveSchemaRequestDto(schemaJson));
 
         var tenantClient = factory.CreateAuthenticatedClient();
@@ -53,7 +56,7 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
                 Now: null,
                 Attributes: null));
 
-        var resp = await tenantClient.PostAsJsonAsync("/v1/check", req);
+        var resp = await tenantClient.PostAsJsonAsync("/api/check", req);
         resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
@@ -82,7 +85,7 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
                 Now: null,
                 Attributes: null));
 
-        var resp = await client.PostAsJsonAsync("/v1/check", req);
+        var resp = await client.PostAsJsonAsync("/api/check", req);
 
         resp.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
         var problem = await resp.Content.ReadFromJsonAsync<JsonElement>();

@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
@@ -14,8 +15,8 @@ public class AlgebraTests
     private CheckRequest Req(EntityRef obj, string perm, string subjectId) =>
         _world.Check(obj, perm, _world.User(subjectId));
 
-    private RelationTuple Tuple(string objType, string objId, string rel, SubjectRef subject) =>
-        _world.Tuple(objType, objId, rel, subject);
+    private static RelationTuple Tuple(string objType, string objId, string rel, SubjectRef subject) =>
+        TestWorld.Tuple(objType, objId, rel, subject);
 
     [Fact]
     public async Task Union_grants_if_either_branch_holds()
@@ -28,7 +29,7 @@ public class AlgebraTests
         var granted = _world.SubjectId();
         var denied = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(viewer, s => s.Type(_world.UserType))
                 .Relation(editor, s => s.Type(_world.UserType))
@@ -50,7 +51,7 @@ public class AlgebraTests
         var both = _world.SubjectId();
         var leftOnly = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(left, s => s.Type(_world.UserType))
                 .Relation(right, s => s.Type(_world.UserType))
@@ -75,7 +76,7 @@ public class AlgebraTests
         var allowed = _world.SubjectId();
         var revoked = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(viewer, s => s.Type(_world.UserType))
                 .Relation(blocked, s => s.Type(_world.UserType))
@@ -98,7 +99,7 @@ public class AlgebraTests
         var objId = _world.ObjectId();
         var subjectId = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(viewer, s => s.Type(_world.UserType))
                 .Permission(access, p => p.Relation(viewer).Exclude(x => x.Relation(viewer))))
@@ -120,7 +121,7 @@ public class AlgebraTests
         var granted = _world.SubjectId();
         var denied = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(parentType, t => t
                 .Relation(editor, s => s.Type(_world.UserType))
                 .Permission(edit, p => p.Relation(editor)))
@@ -148,7 +149,7 @@ public class AlgebraTests
         var childId = _world.ObjectId();
         var revoked = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(parentType, t => t
                 .Relation(editor, s => s.Type(_world.UserType))
                 .Relation(blocked, s => s.Type(_world.UserType))
@@ -176,7 +177,7 @@ public class AlgebraTests
         var childId = _world.ObjectId();
         var anyone = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(parentType, t => t
                 .Relation(gate, s => s.Wildcard(_world.UserType))
                 .Permission(gate, p => p.Relation(gate)))
@@ -202,7 +203,7 @@ public class AlgebraTests
         var childId = _world.ObjectId();
         var anyone = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(parentType, t => t
                 .Relation(gate, s => s.Wildcard(_world.UserType)))
             .Type(childType, t => t
@@ -226,7 +227,7 @@ public class AlgebraTests
         var granted = _world.SubjectId();
         var denied = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(viewer, s => s.Type(_world.UserType))
                 .Permission(view, p => p.Relation(viewer).Conditioned(condition)))

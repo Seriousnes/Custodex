@@ -1,6 +1,8 @@
 using Grpc.Net.Client;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+
 using Testcontainers.PostgreSql;
 
 namespace Custodex.Client.Tests;
@@ -10,8 +12,7 @@ public sealed class ClientParityCollection : ICollectionFixture<ServiceFixture> 
 
 public sealed class ServiceFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;

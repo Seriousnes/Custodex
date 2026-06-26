@@ -1,8 +1,10 @@
 using Custodex.Abstractions;
 using Custodex.Client.Transport;
 using Custodex.Protos;
+
 using Google.Protobuf.WellKnownTypes;
-using ProtoV1 = Custodex.V1;
+
+using Proto = Custodex.Api;
 
 namespace Custodex.Client;
 
@@ -10,13 +12,13 @@ namespace Custodex.Client;
 /// Implements <see cref="IRelationManager"/> by forwarding calls to a remote
 /// <c>Custodex.Service</c> via the gRPC <c>Relations</c> service.
 /// </summary>
-public sealed class GrpcRelationManager(ProtoV1.Relations.RelationsClient client) : IRelationManager
+public sealed class GrpcRelationManager(Proto.Relations.RelationsClient client) : IRelationManager
 {
     /// <inheritdoc/>
     public async Task WriteTuplesAsync(TenantContext tenant, string actor,
         IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
     {
-        var proto = new ProtoV1.WriteTuplesRequest { Actor = actor };
+        var proto = new Proto.WriteTuplesRequest { Actor = actor };
         foreach (var t in tuples) proto.Tuples.Add(ProtoMap.ToProto(t));
         await RemoteStatus.UnwrapAsync(() =>
             client.WriteTuplesAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
@@ -26,7 +28,7 @@ public sealed class GrpcRelationManager(ProtoV1.Relations.RelationsClient client
     public async Task DeleteTuplesAsync(TenantContext tenant, string actor,
         IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
     {
-        var proto = new ProtoV1.DeleteTuplesRequest { Actor = actor };
+        var proto = new Proto.DeleteTuplesRequest { Actor = actor };
         foreach (var t in tuples) proto.Tuples.Add(ProtoMap.ToProto(t));
         await RemoteStatus.UnwrapAsync(() =>
             client.DeleteTuplesAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
@@ -36,7 +38,7 @@ public sealed class GrpcRelationManager(ProtoV1.Relations.RelationsClient client
     public async Task WriteAttributesAsync(TenantContext tenant, string actor,
         EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default)
     {
-        var proto = new ProtoV1.WriteAttributesRequest
+        var proto = new Proto.WriteAttributesRequest
         {
             Actor = actor,
             Object = ProtoMap.ToProto(obj),
@@ -50,9 +52,9 @@ public sealed class GrpcRelationManager(ProtoV1.Relations.RelationsClient client
     public async Task<IReadOnlyList<RelationTuple>> ReadTuplesAsync(
         TenantContext tenant, TupleFilter filter, CancellationToken ct = default)
     {
-        var proto = new ProtoV1.ReadTuplesRequest
+        var proto = new Proto.ReadTuplesRequest
         {
-            Filter = new ProtoV1.TupleFilter
+            Filter = new Proto.TupleFilter
             {
                 ObjectType = filter.ObjectType ?? string.Empty,
                 ObjectId = filter.ObjectId ?? string.Empty,
@@ -63,14 +65,14 @@ public sealed class GrpcRelationManager(ProtoV1.Relations.RelationsClient client
         };
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.ReadTuplesAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
-        return response.Tuples.Select(ProtoMap.FromProto).ToList();
+        return [.. response.Tuples.Select(ProtoMap.FromProto)];
     }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<ChangeLogEntry>> ReadChangeLogAsync(
         TenantContext tenant, ChangeLogFilter filter, CancellationToken ct = default)
     {
-        var proto = new ProtoV1.ReadChangeLogRequest
+        var proto = new Proto.ReadChangeLogRequest
         {
             Actor = filter.Actor ?? string.Empty,
             Limit = filter.Limit,
@@ -79,10 +81,10 @@ public sealed class GrpcRelationManager(ProtoV1.Relations.RelationsClient client
             proto.Since = Timestamp.FromDateTimeOffset(filter.Since.Value);
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.ReadChangeLogAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
-        return response.Entries.Select(e => new ChangeLogEntry(
+        return [.. response.Entries.Select(e => new ChangeLogEntry(
             e.Id, e.Actor, e.Operation, e.Target,
             string.IsNullOrEmpty(e.BeforeJson) ? null : (object)e.BeforeJson,
             string.IsNullOrEmpty(e.AfterJson) ? null : (object)e.AfterJson,
-            e.OccurredAt.ToDateTimeOffset())).ToList();
+            e.OccurredAt.ToDateTimeOffset()))];
     }
 }

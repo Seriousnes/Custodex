@@ -1,4 +1,5 @@
 using Custodex.Abstractions;
+
 using CoreJson = Custodex.Core.Serialization.SchemaJson;
 
 namespace Custodex.Service.Mapping;
@@ -13,5 +14,5 @@ public static class SchemaJson
     public static string Serialize(Schema schema) => CoreJson.Serialize(schema);
 
     /// <summary>Deserializes a <see cref="Schema"/> from its canonical JSON representation.</summary>
-    public static Schema? Deserialize(string json) => CoreJson.Deserialize(json);
+    public static Schema? Deserialize(string? json) => CoreJson.Deserialize(json);
 }

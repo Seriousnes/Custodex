@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests;
@@ -20,7 +21,7 @@ public class SchemaBuilderTests
         var start = world.ParamName();
         var end = world.ParamName();
 
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(world.GroupType, t => t.Relation(world.MemberRelation,
                 s => s.Type(world.UserType).SubjectSet(world.GroupType, world.MemberRelation)))
             .Type(objType, t => t
@@ -31,9 +32,9 @@ public class SchemaBuilderTests
             .Condition(condition, c => c.Int(start).Int(end))
             .Build();
 
-        schema.Version.ShouldBe(world.Version);
+        schema.Version.ShouldBe(TestWorld.Version);
         var type = schema.Types.Single(x => x.Name == objType);
-        type.Relations.Select(r => r.Name).ShouldBe(new[] { grant, link, blocked });
+        type.Relations.Select(r => r.Name).ShouldBe([grant, link, blocked]);
         type.Permissions.Single().Name.ShouldBe(edit);
         type.Permissions.Single().Expression.ShouldBeOfType<Exclude>();
         schema.Conditions.Single().Name.ShouldBe(condition);

@@ -1,7 +1,8 @@
-using Npgsql;
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
+
+using Npgsql;
 
 namespace Custodex.Storage.Postgres;
 
@@ -11,29 +12,20 @@ namespace Custodex.Storage.Postgres;
 /// the boolean algebra and conditions run in C# with the same semantics as the
 /// <c>EngineDrivenAuthorizer</c>, so the two paths return identical answers.
 /// </summary>
-public sealed partial class NpgsqlCteAuthorizer : IAuthorizer
+/// <remarks>
+/// Creates the CTE-backed authorizer. It opens a short-lived connection per
+/// <see cref="CheckAsync"/>/<see cref="BatchCheckAsync"/> from <paramref name="connectionString"/>
+/// and reads the active schema and attributes through the supplied stores.
+/// </remarks>
+public sealed partial class NpgsqlCteAuthorizer(
+    string connectionString, ISchemaStore schemaStore, IAttributeStore attributes,
+    IConditionEvaluator conditions, EvaluationOptions? options = null) : IAuthorizer
 {
-    private readonly string _connectionString;
-    private readonly ISchemaStore _schemaStore;
-    private readonly IAttributeStore _attributes;
-    private readonly IConditionEvaluator _conditions;
-    private readonly EvaluationOptions _options;
-
-    /// <summary>
-    /// Creates the CTE-backed authorizer. It opens a short-lived connection per
-    /// <see cref="CheckAsync"/>/<see cref="BatchCheckAsync"/> from <paramref name="connectionString"/>
-    /// and reads the active schema and attributes through the supplied stores.
-    /// </summary>
-    public NpgsqlCteAuthorizer(
-        string connectionString, ISchemaStore schemaStore, IAttributeStore attributes,
-        IConditionEvaluator conditions, EvaluationOptions? options = null)
-    {
-        _connectionString = CustodexSchema.Apply(connectionString);
-        _schemaStore = schemaStore;
-        _attributes = attributes;
-        _conditions = conditions;
-        _options = options ?? new EvaluationOptions();
-    }
+    private readonly string _connectionString = CustodexSchema.Apply(connectionString);
+    private readonly ISchemaStore _schemaStore = schemaStore;
+    private readonly IAttributeStore _attributes = attributes;
+    private readonly IConditionEvaluator _conditions = conditions;
+    private readonly EvaluationOptions _options = options ?? new EvaluationOptions();
 
     private async Task<SchemaIndex> LoadSchemaAsync(string store, CancellationToken ct)
     {

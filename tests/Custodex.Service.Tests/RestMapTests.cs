@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Service.Rest;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests;

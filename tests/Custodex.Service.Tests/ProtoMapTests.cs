@@ -1,7 +1,5 @@
-using Custodex.Abstractions;
 using Custodex.Protos;
-using Custodex.V1;
-using Google.Protobuf.WellKnownTypes;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests;
@@ -22,7 +20,7 @@ public sealed class ProtoMapTests
     [Fact]
     public void SubjectRef_with_empty_relation_maps_to_null_Relation()
     {
-        var proto = new V1.SubjectRef { Type = "user", Id = "alice", Relation = "" };
+        var proto = new Api.SubjectRef { Type = "user", Id = "alice", Relation = "" };
         var back = ProtoMap.FromProto(proto);
 
         back.Relation.ShouldBeNull();
@@ -95,13 +93,13 @@ public sealed class ProtoMapTests
     [Fact]
     public void ExplainNode_with_two_children_maps_recursively()
     {
-        var node = new V1.ExplainNode
+        var node = new Api.ExplainNode
         {
             Description = "root",
             Allowed = true,
         };
-        node.Children.Add(new V1.ExplainNode { Description = "child1", Allowed = true });
-        node.Children.Add(new V1.ExplainNode { Description = "child2", Allowed = false });
+        node.Children.Add(new Api.ExplainNode { Description = "child1", Allowed = true });
+        node.Children.Add(new Api.ExplainNode { Description = "child2", Allowed = false });
 
         var back = ProtoMap.FromProto(node);
 

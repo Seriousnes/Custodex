@@ -1,7 +1,10 @@
-using Dapper;
-using Npgsql;
-using NpgsqlTypes;
 using Custodex.Abstractions;
+
+using Dapper;
+
+using Npgsql;
+
+using NpgsqlTypes;
 
 namespace Custodex.Storage.Postgres;
 
@@ -59,9 +62,9 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
             new { store = t.Store, tenant = t.Tenant, since = filter.Since, actor = filter.Actor, limit = filter.Limit },
             cancellationToken: ct));
 
-        return rows.Select(r => new ChangeLogEntry(
+        return [.. rows.Select(r => new ChangeLogEntry(
             r.Id, r.Actor, r.Operation, r.Target,
             Json.Deserialize<object?>(r.Before), Json.Deserialize<object?>(r.After),
-            new DateTimeOffset(r.OccurredAt, TimeSpan.Zero))).ToList();
+            new DateTimeOffset(r.OccurredAt, TimeSpan.Zero)))];
     }
 }

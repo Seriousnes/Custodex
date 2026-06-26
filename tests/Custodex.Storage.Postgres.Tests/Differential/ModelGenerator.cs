@@ -1,4 +1,5 @@
 using CsCheck;
+
 using Custodex.Abstractions;
 using Custodex.Core;
 
@@ -69,7 +70,7 @@ public static class ModelGenerator
                 if (wildcard) tuples.Add(T("doc", "d1", "viewer", new SubjectRef("user", "*")));
                 return new GeneratedModel(S1Schema(), tuples, [],
                     [new EntityRef("doc", "d1"), new EntityRef("doc", "d2"), new EntityRef("doc", "d3")],
-                    Users.Select(u => new SubjectRef("user", u)).ToList());
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
             });
 
     /// <summary>S2: asset.edit = crate->edit; crate.edit = editor - blocked (inner-exclusion-through-arrow shape).</summary>
@@ -102,7 +103,7 @@ public static class ModelGenerator
                 ];
                 return new GeneratedModel(S2Schema(), tuples, [],
                     [new EntityRef("asset", assetId)],
-                    Users.Select(u => new SubjectRef("user", u)).ToList());
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
             });
 
     /// <summary>S3: intersection-through-arrow wildcard gate; access requires either a direct grant outside
@@ -145,7 +146,7 @@ public static class ModelGenerator
                 if (flagged) tuples.Add(T("crate", "en", "is_quarantine", new SubjectRef("user", "*")));
                 return new GeneratedModel(S3Schema(), tuples, [],
                     [new EntityRef("asset", "an")],
-                    Users.Select(u => new SubjectRef("user", u)).ToList());
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
             });
 
     /// <summary>S4: subject-set nesting under non-group/member identifiers: type <c>team</c> with
@@ -176,7 +177,7 @@ public static class ModelGenerator
                 ];
                 return new GeneratedModel(S4Schema(), tuples, [],
                     [new EntityRef("repo", "r1"), new EntityRef("repo", "r2")],
-                    Users.Select(u => new SubjectRef("user", u)).ToList());
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
             });
 
     /// <summary>A <see cref="CsCheck.Gen{T}"/> that randomly selects one of the four curated

@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package custodex.v1;
+package Custodex.Api;
 
-option csharp_namespace = "Custodex.V1";
+option csharp_namespace = "Custodex.Api";
 
 import "Protos/custodex_common.proto";
 import "google/protobuf/struct.proto";

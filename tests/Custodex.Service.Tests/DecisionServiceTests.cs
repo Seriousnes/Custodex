@@ -1,13 +1,16 @@
 using Custodex.Abstractions;
 using Custodex.Core;
-using Custodex.Service.Mapping;
+
 using Grpc.Core;
 using Grpc.Net.Client;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+
 using Shouldly;
-using ProtoV1 = Custodex.V1;
+
+using Proto = Custodex.Api;
 
 namespace Custodex.Service.Tests;
 
@@ -67,13 +70,13 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         ]);
 
         var channel = CreateChannel(factory);
-        var client = new ProtoV1.Decision.DecisionClient(channel);
-        var req = new ProtoV1.CheckRequest
+        var client = new Proto.Decision.DecisionClient(channel);
+        var req = new Proto.CheckRequest
         {
-            Object = new ProtoV1.EntityRef { Type = "widget", Id = "1" },
+            Object = new Proto.EntityRef { Type = "widget", Id = "1" },
             Permission = "view",
-            Subject = new ProtoV1.SubjectRef { Type = "user", Id = "alice" },
-            Context = new ProtoV1.RequestContext(),
+            Subject = new Proto.SubjectRef { Type = "user", Id = "alice" },
+            Context = new Proto.RequestContext(),
         };
 
         var resp = await client.CheckAsync(req, headers: TenantHeaders(tenant));
@@ -96,13 +99,13 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
 
         var channel = CreateChannel(factory);
-        var client = new ProtoV1.Decision.DecisionClient(channel);
-        var req = new ProtoV1.CheckRequest
+        var client = new Proto.Decision.DecisionClient(channel);
+        var req = new Proto.CheckRequest
         {
-            Object = new ProtoV1.EntityRef { Type = "widget", Id = "1" },
+            Object = new Proto.EntityRef { Type = "widget", Id = "1" },
             Permission = "view",
-            Subject = new ProtoV1.SubjectRef { Type = "user", Id = "bob" },
-            Context = new ProtoV1.RequestContext(),
+            Subject = new Proto.SubjectRef { Type = "user", Id = "bob" },
+            Context = new Proto.RequestContext(),
         };
 
         var resp = await client.CheckAsync(req, headers: TenantHeaders(tenant));
@@ -133,13 +136,13 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         ]);
 
         var channel = CreateChannel(factory);
-        var client = new ProtoV1.Decision.DecisionClient(channel);
-        var req = new ProtoV1.ListObjectsRequest
+        var client = new Proto.Decision.DecisionClient(channel);
+        var req = new Proto.ListObjectsRequest
         {
-            Subject = new ProtoV1.SubjectRef { Type = "user", Id = "alice" },
+            Subject = new Proto.SubjectRef { Type = "user", Id = "alice" },
             ObjectType = "widget",
             Permission = "view",
-            Context = new ProtoV1.RequestContext(),
+            Context = new Proto.RequestContext(),
         };
 
         var resp = await client.ListObjectsAsync(req, headers: TenantHeaders(tenant));
@@ -172,22 +175,22 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         ]);
 
         var channel = CreateChannel(factory);
-        var client = new ProtoV1.Decision.DecisionClient(channel);
-        var req = new ProtoV1.BatchCheckRequest
+        var client = new Proto.Decision.DecisionClient(channel);
+        var req = new Proto.BatchCheckRequest
         {
-            Context = new ProtoV1.RequestContext(),
+            Context = new Proto.RequestContext(),
         };
-        req.Items.Add(new ProtoV1.CheckItem
+        req.Items.Add(new Proto.CheckItem
         {
-            Object = new ProtoV1.EntityRef { Type = "widget", Id = "1" },
+            Object = new Proto.EntityRef { Type = "widget", Id = "1" },
             Permission = "view",
-            Subject = new ProtoV1.SubjectRef { Type = "user", Id = "alice" },
+            Subject = new Proto.SubjectRef { Type = "user", Id = "alice" },
         });
-        req.Items.Add(new ProtoV1.CheckItem
+        req.Items.Add(new Proto.CheckItem
         {
-            Object = new ProtoV1.EntityRef { Type = "widget", Id = "1" },
+            Object = new Proto.EntityRef { Type = "widget", Id = "1" },
             Permission = "view",
-            Subject = new ProtoV1.SubjectRef { Type = "user", Id = "bob" },
+            Subject = new Proto.SubjectRef { Type = "user", Id = "bob" },
         });
 
         var resp = await client.BatchCheckAsync(req, headers: TenantHeaders(tenant));

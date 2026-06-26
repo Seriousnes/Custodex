@@ -1,5 +1,6 @@
-using Npgsql;
 using Custodex.Abstractions;
+
+using Npgsql;
 
 namespace Custodex.Storage.Postgres;
 

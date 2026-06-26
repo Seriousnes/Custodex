@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
@@ -35,7 +36,7 @@ public class BatchCheckTests
 
     private Task<EngineDrivenAuthorizer> NewAsync()
     {
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
                 s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
             .Type(_objType, t => t
@@ -43,9 +44,9 @@ public class BatchCheckTests
                 .Permission(_view, p => p.Relation(_viewer)))
             .Build();
         return _world.BuildAsync(schema,
-            _world.Tuple(_objType, _objId1, _viewer, _world.Member(_groupId)),
-            _world.Tuple(_objType, _objId2, _viewer, _world.User(_direct)),
-            _world.Tuple(_world.GroupType, _groupId, _world.MemberRelation, _world.User(_viaGroup)));
+            TestWorld.Tuple(_objType, _objId1, _viewer, _world.Member(_groupId)),
+            TestWorld.Tuple(_objType, _objId2, _viewer, _world.User(_direct)),
+            TestWorld.Tuple(_world.GroupType, _groupId, _world.MemberRelation, _world.User(_viaGroup)));
     }
 
     [Fact]
@@ -54,12 +55,12 @@ public class BatchCheckTests
         var auth = await NewAsync();
         var ctx = new RequestContext(DateTimeOffset.UnixEpoch, _world.User(_actor),
             new Dictionary<string, object?>());
-        var req = new BatchCheckRequest(T, new[]
-        {
+        var req = new BatchCheckRequest(T,
+        [
             new CheckItem(new EntityRef(_objType, _objId1), _view, _world.User(_viaGroup)),
             new CheckItem(new EntityRef(_objType, _objId1), _view, _world.User(_direct)),
             new CheckItem(new EntityRef(_objType, _objId2), _view, _world.User(_direct)),
-        }, ctx);
+        ], ctx);
 
         var results = await auth.BatchCheckAsync(req);
         results.Count.ShouldBe(3);
@@ -74,7 +75,7 @@ public class BatchCheckTests
         var auth = await NewAsync();
         var ctx = new RequestContext(DateTimeOffset.UnixEpoch, _world.User(_actor),
             new Dictionary<string, object?>());
-        var results = await auth.BatchCheckAsync(new BatchCheckRequest(T, Array.Empty<CheckItem>(), ctx));
+        var results = await auth.BatchCheckAsync(new BatchCheckRequest(T, [], ctx));
         results.ShouldBeEmpty();
     }
 }

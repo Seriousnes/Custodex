@@ -1,51 +1,50 @@
 using System.Net;
 using System.Net.Http.Json;
+
+using Custodex.Core;
+
 using Shouldly;
 
 namespace Custodex.Storage.Postgres.Tests.Container;
 
 [Trait("category", "container")]
-public sealed class ComposeSmokeTests
+public sealed class ComposeSmokeTests(ComposeStackFixture stack) : IClassFixture<ComposeStackFixture>
 {
     private const string AdminKey = "admin-key";
     private const string Store = "default";
-    private const string ServiceUrl = "http://localhost:8080";
 
     [Fact]
     public async Task Running_container_answers_direct_grant_check()
     {
-        using var client = new HttpClient { BaseAddress = new Uri(ServiceUrl) };
+        using var client = stack.CreateClient();
         client.DefaultRequestHeaders.Add("X-Custodex-Key", AdminKey);
 
-        var storeResp = await client.PostAsJsonAsync("/v1/stores", new { store = Store });
+        var storeResp = await client.PostAsJsonAsync("/api/stores", new { store = Store });
         (storeResp.StatusCode == HttpStatusCode.Created || storeResp.StatusCode == HttpStatusCode.Conflict)
             .ShouldBeTrue($"create store: {storeResp.StatusCode}");
 
         var tenantId = $"t-{Guid.NewGuid():N}";
 
-        var tenantResp = await client.PostAsJsonAsync("/v1/tenants", new { store = Store, tenant = tenantId });
+        var tenantResp = await client.PostAsJsonAsync("/api/tenants", new { store = Store, tenant = tenantId });
         tenantResp.IsSuccessStatusCode.ShouldBeTrue($"create tenant: {tenantResp.StatusCode}");
 
         client.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenantId);
 
-        var schemaResp = await client.PutAsJsonAsync($"/v1/schema/{Store}", new
-        {
-            schemaJson = """
-                schema "v1" {
-                    type res {
-                        relation owner: user
-                        permission read = owner
-                    }
-                    type user {}
-                }
-                """
-        });
+        var schema = new SchemaBuilder("v1")
+            .Type("user", _ => { })
+            .Type("res", t => t
+                .Relation("owner", s => s.Type("user"))
+                .Permission("read", p => p.Relation("owner")))
+            .Build();
+
+        var schemaResp = await client.PutAsJsonAsync($"/api/schema/{Store}",
+            new { schemaJson = Custodex.Core.Serialization.SchemaJson.Serialize(schema) });
         schemaResp.IsSuccessStatusCode.ShouldBeTrue($"set schema: {schemaResp.StatusCode}");
 
         var objId = $"obj-{Guid.NewGuid():N}";
         var userId = $"u-{Guid.NewGuid():N}";
 
-        var tuplesResp = await client.PostAsJsonAsync("/v1/tuples", new
+        var tuplesResp = await client.PostAsJsonAsync("/api/tuples", new
         {
             store = Store,
             tenant = tenantId,
@@ -62,7 +61,7 @@ public sealed class ComposeSmokeTests
         });
         tuplesResp.IsSuccessStatusCode.ShouldBeTrue($"write tuples: {tuplesResp.StatusCode}");
 
-        var checkResp = await client.PostAsJsonAsync("/v1/check", new
+        var checkResp = await client.PostAsJsonAsync("/api/check", new
         {
             @object = new { type = "res", id = objId },
             permission = "read",

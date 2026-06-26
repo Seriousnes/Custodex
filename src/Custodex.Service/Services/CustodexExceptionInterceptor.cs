@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Service.Tenancy;
+
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 
@@ -61,7 +62,7 @@ public sealed class CustodexExceptionInterceptor : Interceptor
             var trailers = new Metadata { { "custodex-error-kind", "schema_invalid" } };
             foreach (var error in ex.Errors)
                 trailers.Add("custodex-error-message", error);
-            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message), trailers);
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message), trailers);
         }
         catch (EvaluationLimitException ex)
         {
@@ -71,6 +72,11 @@ public sealed class CustodexExceptionInterceptor : Interceptor
                 { "custodex-error-detail", ex.Message },
             };
             throw new RpcException(new Status(StatusCode.ResourceExhausted, ex.Message), trailers);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            var trailers = new Metadata { { "custodex-error-kind", "malformed_json" } };
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message), trailers);
         }
     }
 }

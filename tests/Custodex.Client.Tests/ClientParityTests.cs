@@ -1,12 +1,14 @@
-using Custodex.Client;
 using Custodex.Abstractions;
 using Custodex.Core;
+
 using Microsoft.Extensions.DependencyInjection;
+
 using Shouldly;
-using DecisionClient = Custodex.V1.Decision.DecisionClient;
-using ProvisioningClient = Custodex.V1.Provisioning.ProvisioningClient;
-using RelationsClient = Custodex.V1.Relations.RelationsClient;
-using SchemaGrpcClient = Custodex.V1.Schema.SchemaClient;
+
+using DecisionClient = Custodex.Api.Decision.DecisionClient;
+using ProvisioningClient = Custodex.Api.Provisioning.ProvisioningClient;
+using RelationsClient = Custodex.Api.Relations.RelationsClient;
+using SchemaGrpcClient = Custodex.Api.Schema.SchemaClient;
 
 namespace Custodex.Client.Tests;
 
@@ -219,5 +221,22 @@ public sealed class ClientParityTests(ServiceFixture fx)
             new SubjectRef("user", userId, null), Ctx(new SubjectRef("user", userId, null)));
 
         await Should.ThrowAsync<UnknownPermissionException>(() => remote.CheckAsync(req));
+    }
+
+    [Fact]
+    public async Task Invalid_schema_via_remote_throws_SchemaValidationException_with_errors()
+    {
+        var storeMgr = new GrpcStoreManager(new ProvisioningClient(fx.GrpcChannel));
+        var schemaMgr = new GrpcSchemaManager(new SchemaGrpcClient(fx.GrpcChannel));
+        await storeMgr.CreateStoreAsync(ServiceFixture.AdminStore);
+
+        var invalid = new SchemaBuilder("v1")
+            .Type("res", t => t
+                .Permission("read", p => p.Relation("nonexistent")))
+            .Build();
+
+        var ex = await Should.ThrowAsync<SchemaValidationException>(
+            () => schemaMgr.SetActiveSchemaAsync(ServiceFixture.AdminStore, invalid));
+        ex.Errors.ShouldNotBeEmpty();
     }
 }

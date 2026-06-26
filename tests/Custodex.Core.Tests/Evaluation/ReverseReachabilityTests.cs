@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
@@ -21,7 +22,7 @@ public class ReverseReachabilityTests
 
     private TenantContext T => _world.Tenant;
 
-    private Schema Build() => new SchemaBuilder(_world.Version)
+    private Schema Build() => new SchemaBuilder(TestWorld.Version)
         .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
             s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
         .Type(_objType, t => t
@@ -32,8 +33,8 @@ public class ReverseReachabilityTests
     private Task<EngineDrivenAuthorizer> NewAsync(params RelationTuple[] tuples) =>
         _world.BuildAsync(Build(), tuples);
 
-    private RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
-        _world.Tuple(ot, oid, rel, s);
+    private static RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
+        TestWorld.Tuple(ot, oid, rel, s);
 
     [Fact]
     public async Task Gathers_objects_reachable_via_direct_and_nested_group_grants()
@@ -69,7 +70,7 @@ public class ReverseReachabilityTests
             Tuple(_world.GroupType, groupA, _world.MemberRelation, _world.User(subject)));
 
         var candidates = await auth.CandidateObjectsForTest(T, _world.User(subject), _objType);
-        candidates.Select(c => c.Id).ShouldBe(new[] { objId });
+        candidates.Select(c => c.Id).ShouldBe([objId]);
     }
 
     [Fact]
@@ -84,9 +85,9 @@ public class ReverseReachabilityTests
         var ids = new[] { _world.ObjectId(), _world.ObjectId() }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
 
         var auth = await NewAsync(
-            Tuple(_objType, ids[0], _editor, _world.SubjectSet(teamType, teamId, teamRel)),
+            Tuple(_objType, ids[0], _editor, TestWorld.SubjectSet(teamType, teamId, teamRel)),
             Tuple(teamType, teamId, teamRel, _world.User(subject)),
-            Tuple(_objType, ids[1], _editor, _world.SubjectSet(_world.GroupType, altGroupId, altGroupRel)),
+            Tuple(_objType, ids[1], _editor, TestWorld.SubjectSet(_world.GroupType, altGroupId, altGroupRel)),
             Tuple(_world.GroupType, altGroupId, altGroupRel, _world.User(subject)));
 
         var candidates = await auth.CandidateObjectsForTest(T, _world.User(subject), _objType);

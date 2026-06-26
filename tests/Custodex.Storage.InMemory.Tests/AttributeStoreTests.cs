@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Storage.InMemory.Tests;
@@ -12,7 +13,7 @@ public class AttributeStoreTests
     public async Task Missing_object_returns_null()
     {
         var world = TestWorld.New();
-        var obj = world.Object(world.EntityType(), world.ObjectId());
+        var obj = TestWorld.Object(world.EntityType(), world.ObjectId());
 
         (await new InMemoryAttributeStore().GetAsync(world.Tenant, obj)).ShouldBeNull();
     }
@@ -21,7 +22,7 @@ public class AttributeStoreTests
     public async Task Set_then_get_returns_the_attribute_bag()
     {
         var world = TestWorld.New();
-        var obj = world.Object(world.EntityType(), world.ObjectId());
+        var obj = TestWorld.Object(world.EntityType(), world.ObjectId());
         var key = world.ParamName();
         var store = new InMemoryAttributeStore();
         await store.SetAsync(world.Tenant, obj, new Dictionary<string, object?> { [key] = 42 }, Uow);
@@ -35,7 +36,7 @@ public class AttributeStoreTests
     public async Task Stored_bag_is_isolated_from_later_caller_mutation()
     {
         var world = TestWorld.New();
-        var obj = world.Object(world.EntityType(), world.ObjectId());
+        var obj = TestWorld.Object(world.EntityType(), world.ObjectId());
         var key = world.ParamName();
         var store = new InMemoryAttributeStore();
         var input = new Dictionary<string, object?> { [key] = 42 };
@@ -49,7 +50,7 @@ public class AttributeStoreTests
     public async Task Attributes_do_not_leak_across_tenants()
     {
         var world = TestWorld.New();
-        var obj = world.Object(world.EntityType(), world.ObjectId());
+        var obj = TestWorld.Object(world.EntityType(), world.ObjectId());
         var key = world.ParamName();
         var t1 = world.Tenant;
         var t2 = new TenantContext(world.Tenant.Store, world.EntityType());

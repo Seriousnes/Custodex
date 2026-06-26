@@ -1,4 +1,5 @@
 using CsCheck;
+
 using Custodex.Abstractions;
 
 namespace Custodex.Storage.Postgres.Tests.Differential;

@@ -1,4 +1,5 @@
 using Custodex.Abstractions;
+
 using CoreJson = Custodex.Core.Serialization.SchemaJson;
 
 namespace Custodex.Client.Serialization;

@@ -1,10 +1,12 @@
 using System.Diagnostics.Metrics;
+
 using Custodex.Abstractions;
 using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
 using Custodex.Storage.InMemory;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Caching;
@@ -31,11 +33,10 @@ public class CachingAuthorizerTests
 
     private TenantContext T => _world.Tenant;
 
-    private sealed class CountingRelationStore : IRelationStore
+    private sealed class CountingRelationStore(InMemoryRelationStore inner) : IRelationStore
     {
-        private readonly InMemoryRelationStore _inner;
+        private readonly InMemoryRelationStore _inner = inner;
         public int GetByObjectCalls { get; private set; }
-        public CountingRelationStore(InMemoryRelationStore inner) => _inner = inner;
 
         public Task<IReadOnlyList<RelationTuple>> GetByObjectAsync(TenantContext t, EntityRef obj, string relation, CancellationToken ct = default)
         { GetByObjectCalls++; return _inner.GetByObjectAsync(t, obj, relation, ct); }
@@ -47,13 +48,13 @@ public class CachingAuthorizerTests
             => _inner.ListObjectIdsAsync(t, objectType, ct);
     }
 
-    private Schema UnconditionedSchema() => new SchemaBuilder(_world.Version)
+    private Schema UnconditionedSchema() => new SchemaBuilder(TestWorld.Version)
         .Type(_objType, t => t
             .Relation(_viewer, s => s.Type(_world.UserType))
             .Permission(_view, p => p.Relation(_viewer)))
         .Build();
 
-    private Schema ConditionedSchema() => new SchemaBuilder(_world.Version)
+    private Schema ConditionedSchema() => new SchemaBuilder(TestWorld.Version)
         .Type(_objType, t => t
             .Relation(_viewer, s => s.Type(_world.UserType))
             .Permission(_view, p => p.Relation(_viewer)))
@@ -70,7 +71,7 @@ public class CachingAuthorizerTests
         var cache = new InMemoryCacheStore();
         var uow = new NoOpUnitOfWork();
         await schemaStore.SetActiveAsync(T.Store, schema, uow);
-        await raw.WriteAsync(T, tuples, Array.Empty<RelationTuple>(), uow);
+        await raw.WriteAsync(T, tuples, [], uow);
         await uow.CommitAsync();
         var inner = new EngineDrivenAuthorizer(schemaStore, counter, attributes, conditions);
         return (new CachingAuthorizer(inner, schemaStore, cache), counter, cache, new NoOpUnitOfWork());

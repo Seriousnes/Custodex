@@ -1,7 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
-using Custodex.Core.Evaluation;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Conditions;
@@ -54,15 +54,15 @@ public class CelConditionEvaluatorTests
         var subject = _world.SubjectId();
         var nonMatch = _world.SubjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(viewer, s => s.Type(_world.UserType))
                 .Permission(view, p => p.Relation(viewer).Conditioned(_condition)))
             .Condition(_condition, p => { }, b => b.Eq(b.Attribute(_attribute), b.Subject()))
             .Build();
 
-        var viewerTuple = _world.Tuple(objType, objId, viewer, _world.User(subject));
-        var obj = _world.Object(objType, objId);
+        var viewerTuple = TestWorld.Tuple(objType, objId, viewer, _world.User(subject));
+        var obj = TestWorld.Object(objType, objId);
 
         {
             var auth = await _world.BuildAsync(schema, new CelConditionEvaluator(), [viewerTuple],

@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests.Auth;
@@ -25,7 +27,7 @@ public sealed class ApiKeyAuthTests(PostgresFixture pg)
         await using var factory = CreateFactory("secret-reader-key", "s1", "reader");
         var client = factory.CreateClient();
 
-        var resp = await client.PostAsJsonAsync("/v1/check", new { });
+        var resp = await client.PostAsJsonAsync("/api/check", new { });
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
@@ -38,7 +40,7 @@ public sealed class ApiKeyAuthTests(PostgresFixture pg)
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Custodex-Key", "secret-reader-key");
 
-        var resp = await client.PostAsJsonAsync("/v1/check", new
+        var resp = await client.PostAsJsonAsync("/api/check", new
         {
             store,
             tenant = $"t-{Guid.NewGuid():N}",
@@ -57,7 +59,7 @@ public sealed class ApiKeyAuthTests(PostgresFixture pg)
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Custodex-Key", "wrong-key");
 
-        var resp = await client.PostAsJsonAsync("/v1/check", new { });
+        var resp = await client.PostAsJsonAsync("/api/check", new { });
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }

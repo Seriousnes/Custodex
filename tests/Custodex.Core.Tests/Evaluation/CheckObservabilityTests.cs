@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
@@ -29,14 +31,14 @@ public class CheckObservabilityTests
 
     private Task<EngineDrivenAuthorizer> NewAsync()
     {
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(_objType, t => t
                 .Relation(_viewer, s => s.Type(_world.UserType))
                 .Relation(_editor, s => s.Type(_world.UserType))
                 .Permission(_access, p => p.Relation(_viewer).Union(x => x.Relation(_editor))))
             .Build();
         return _world.BuildAsync(schema,
-            _world.Tuple(_objType, _objId, _editor, _world.User(_subjectId)));
+            TestWorld.Tuple(_objType, _objId, _editor, _world.User(_subjectId)));
     }
 
     private CheckRequest Req(bool explain) => new(
@@ -66,7 +68,7 @@ public class CheckObservabilityTests
         using var listener = new ActivityListener
         {
             ShouldListenTo = src => src.Name == "Custodex",
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            Sample = (ref _) => ActivitySamplingResult.AllData,
             ActivityStopped = captured.Add
         };
         ActivitySource.AddActivityListener(listener);

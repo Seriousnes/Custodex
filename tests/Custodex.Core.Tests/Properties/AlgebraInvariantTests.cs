@@ -1,4 +1,5 @@
 using CsCheck;
+
 using Custodex.Abstractions;
 using Custodex.TestKit;
 
@@ -7,7 +8,7 @@ namespace Custodex.Core.Tests.Properties;
 public class AlgebraInvariantTests
 {
     private static CheckRequest View(AlgebraWorld w, string user) =>
-        w.World.Check(w.World.Object(w.ObjectType, w.ObjectId), w.View, w.World.User(user));
+        w.World.Check(TestWorld.Object(w.ObjectType, w.ObjectId), w.View, w.World.User(user));
 
     [Fact]
     public async Task SelfExclusion_always_denies()
@@ -16,7 +17,7 @@ public class AlgebraInvariantTests
         await Check.SampleAsync(w.UserId, async user =>
         {
             var auth = await w.World.BuildAsync(w.SelfExcludeSchema(),
-                w.World.Tuple(w.ObjectType, w.ObjectId, w.Viewer, w.World.User(user)));
+                TestWorld.Tuple(w.ObjectType, w.ObjectId, w.Viewer, w.World.User(user)));
             var r = await auth.CheckAsync(View(w, user));
             return r.Allowed == false;
         });
@@ -29,7 +30,7 @@ public class AlgebraInvariantTests
         await Check.SampleAsync(w.UserId, async user =>
         {
             var auth = await w.World.BuildAsync(w.MonotoneSchema(),
-                w.World.Tuple(w.ObjectType, w.ObjectId, w.Viewer, w.World.Subject(w.World.UserType, "*")));
+                TestWorld.Tuple(w.ObjectType, w.ObjectId, w.Viewer, TestWorld.Subject(w.World.UserType, "*")));
             var r = await auth.CheckAsync(View(w, user));
             return r.Allowed == true;
         });
@@ -43,7 +44,7 @@ public class AlgebraInvariantTests
             async (length, user) =>
             {
                 var tuples = w.NestedChainTuples(length, user);
-                var auth = await w.World.BuildAsync(w.MonotoneSchema(), tuples.ToArray());
+                var auth = await w.World.BuildAsync(w.MonotoneSchema(), [.. tuples]);
                 var r = await auth.CheckAsync(View(w, user));
                 return r.Allowed == true;
             });
@@ -59,7 +60,7 @@ public class AlgebraInvariantTests
             var before = (await without.CheckAsync(View(w, user))).Allowed;
 
             var with = await w.World.BuildAsync(w.MonotoneSchema(),
-                w.World.Tuple(w.ObjectType, w.ObjectId, w.Viewer, w.World.User(user)));
+                TestWorld.Tuple(w.ObjectType, w.ObjectId, w.Viewer, w.World.User(user)));
             var after = (await with.CheckAsync(View(w, user))).Allowed;
 
             return (!before || after) && after;

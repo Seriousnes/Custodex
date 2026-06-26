@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
+
 using Bogus;
+
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
@@ -34,19 +36,19 @@ public sealed class TestWorld
 
     public string MemberRelation { get; }
 
-    public string Version => "v1";
+    public static string Version => "v1";
 
     public TenantContext Tenant { get; }
 
-    public string EntityType() => Vend(() => _ids.Noun());
+    public string EntityType() => Vend(_ids.Noun);
 
-    public string Relation() => Vend(() => _ids.Verb());
+    public string Relation() => Vend(_ids.Verb);
 
-    public string Permission() => Vend(() => _ids.Verb());
+    public string Permission() => Vend(_ids.Verb);
 
-    public string ConditionName() => Vend(() => _ids.Adjective());
+    public string ConditionName() => Vend(_ids.Adjective);
 
-    public string ParamName() => Vend(() => _ids.Word());
+    public string ParamName() => Vend(_ids.Word);
 
     public string SubjectId() => Vend(() => _ids.Noun() + "-" + _ids.Token(4));
 
@@ -54,15 +56,15 @@ public sealed class TestWorld
 
     public SubjectRef User(string id) => new(UserType, id);
 
-    public SubjectRef Subject(string type, string id) => new(type, id);
+    public static SubjectRef Subject(string type, string id) => new(type, id);
 
-    public SubjectRef SubjectSet(string type, string id, string relation) => new(type, id, relation);
+    public static SubjectRef SubjectSet(string type, string id, string relation) => new(type, id, relation);
 
     public SubjectRef Member(string groupId) => new(GroupType, groupId, MemberRelation);
 
-    public EntityRef Object(string type, string id) => new(type, id);
+    public static EntityRef Object(string type, string id) => new(type, id);
 
-    public RelationTuple Tuple(
+    public static RelationTuple Tuple(
         string objType, string objId, string relation, SubjectRef subject, ConditionRef? condition = null) =>
         new(new EntityRef(objType, objId), relation, subject, condition);
 

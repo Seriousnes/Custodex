@@ -1,7 +1,8 @@
-using Microsoft.Extensions.DependencyInjection;
 using Custodex.Abstractions;
 using Custodex.Core;
-using Custodex.Storage.Postgres;
+
+using Microsoft.Extensions.DependencyInjection;
+
 using Shouldly;
 
 namespace Custodex.Storage.Postgres.Tests.Di;

@@ -1,5 +1,6 @@
 using Custodex.Core.Dsl;
 using Custodex.Core.Dsl.Lexing;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Dsl;

@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests.Tenancy;
@@ -30,7 +32,7 @@ public sealed class TenantResolutionTests(PostgresFixture pg)
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Custodex-Key", ReaderKey);
 
-        var resp = await client.PostAsJsonAsync("/v1/check", new
+        var resp = await client.PostAsJsonAsync("/api/check", new
         {
             @object = new { type = "res", id = "1" },
             permission = "view",
@@ -56,7 +58,7 @@ public sealed class TenantResolutionTests(PostgresFixture pg)
         client.DefaultRequestHeaders.Add("X-Custodex-Key", ReaderKey);
         client.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenantId);
 
-        var resp = await client.PostAsJsonAsync("/v1/check", new
+        var resp = await client.PostAsJsonAsync("/api/check", new
         {
             @object = new { type = "res", id = "1" },
             permission = "view",

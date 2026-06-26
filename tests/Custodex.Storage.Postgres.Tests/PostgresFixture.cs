@@ -1,4 +1,5 @@
 using Npgsql;
+
 using Testcontainers.PostgreSql;
 
 namespace Custodex.Storage.Postgres.Tests;
@@ -6,8 +7,7 @@ namespace Custodex.Storage.Postgres.Tests;
 public sealed class PostgresFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _container =
-        new PostgreSqlBuilder()
-            .WithImage("postgres:18-alpine")
+        new PostgreSqlBuilder("postgres:18-alpine")
             .WithEnvironment("POSTGRES_INITDB_ARGS",
                 "--locale-provider=icu --icu-locale=en-US --encoding=UTF8 --locale=C.UTF-8")
             .Build();

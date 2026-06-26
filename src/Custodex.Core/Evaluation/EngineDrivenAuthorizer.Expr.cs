@@ -14,7 +14,7 @@ public sealed partial class EngineDrivenAuthorizer
             case RelationRef r:
             {
                 var ok = await ResolveRelationAsync(index, tenant, obj, r.Relation, subject, context, ctx, ct);
-                explain?.Add(new ExplainNode($"relation {r.Relation}", ok, Array.Empty<ExplainNode>()));
+                explain?.Add(new ExplainNode($"relation {r.Relation}", ok, []));
                 return ok;
             }
 

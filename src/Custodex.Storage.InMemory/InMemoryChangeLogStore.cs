@@ -7,9 +7,9 @@ public sealed class InMemoryChangeLogStore : IChangeLogStore
 {
     private readonly record struct Key(string Store, string Tenant);
 
-    private readonly object _gate = new();
-    private readonly Dictionary<Key, List<ChangeLogEntry>> _data = new();
-    private readonly Dictionary<Key, long> _nextId = new();
+    private readonly Lock _gate = new();
+    private readonly Dictionary<Key, List<ChangeLogEntry>> _data = [];
+    private readonly Dictionary<Key, long> _nextId = [];
 
     private static Key KeyOf(TenantContext t) => new(t.Store, t.Tenant);
 
@@ -44,10 +44,9 @@ public sealed class InMemoryChangeLogStore : IChangeLogStore
             if (filter.Actor is { } actor)
                 query = query.Where(e => string.Equals(e.Actor, actor, StringComparison.Ordinal));
 
-            IReadOnlyList<ChangeLogEntry> result = query
+            IReadOnlyList<ChangeLogEntry> result = [.. query
                 .OrderByDescending(e => e.Id)
-                .Take(filter.Limit)
-                .ToList();
+                .Take(filter.Limit)];
             return Task.FromResult(result);
         }
     }

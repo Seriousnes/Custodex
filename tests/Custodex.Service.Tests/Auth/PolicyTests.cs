@@ -1,9 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
+
 using Custodex.Service.Rest;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+
 using Shouldly;
 
 namespace Custodex.Service.Tests.Auth;
@@ -36,7 +39,7 @@ public sealed class PolicyTests(PostgresFixture pg)
         client.DefaultRequestHeaders.Add("X-Custodex-Key", ReaderKey);
         client.DefaultRequestHeaders.Add("X-Custodex-Tenant", "any-tenant");
 
-        var resp = await client.PostAsJsonAsync("/v1/tuples",
+        var resp = await client.PostAsJsonAsync("/api/tuples",
             new WriteTuplesRequestDto(Store, "any-tenant", "test", []));
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -57,7 +60,7 @@ public sealed class PolicyTests(PostgresFixture pg)
         client.DefaultRequestHeaders.Add("X-Custodex-Key", AdminKey);
         client.DefaultRequestHeaders.Add("X-Custodex-Tenant", "tnt-admin");
 
-        var resp = await client.PostAsJsonAsync("/v1/tuples",
+        var resp = await client.PostAsJsonAsync("/api/tuples",
             new WriteTuplesRequestDto(Store, "tnt-admin", "test", []));
 
         resp.StatusCode.ShouldNotBe(HttpStatusCode.Forbidden);

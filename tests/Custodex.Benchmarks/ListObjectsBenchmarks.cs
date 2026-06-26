@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Attributes;
+
 using Custodex.Abstractions;
 
 namespace Custodex.Benchmarks;
@@ -25,7 +26,7 @@ public class ListObjectsBenchmarks
         _fx = new ZooScaleFixture();
         await _fx.InitializeAsync();
         _auth = Select(_fx, ExecPath);
-        _request = new ListObjectsRequest(_fx.Tenant, _fx.ProbeSubject, "item", _fx.Permission, _fx.Context, PageSize: 100);
+        _request = new ListObjectsRequest(_fx.Tenant, _fx.ProbeSubject, "item", ZooScaleFixture.Permission, _fx.Context, PageSize: 100);
     }
 
     private static IAuthorizer Select(ZooScaleFixture fx, Path path) => path switch

@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core.Caching;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Caching;
@@ -18,8 +19,8 @@ public class CheckCacheKeyTests
         var perm = _world.Permission();
         var subjectId = _world.SubjectId();
 
-        var a = CheckCacheKey.Build(t, _world.Version, new EntityRef(objType, objId), perm, _world.User(subjectId));
-        var b = CheckCacheKey.Build(t, _world.Version, new EntityRef(objType, objId), perm, _world.User(subjectId));
+        var a = CheckCacheKey.Build(t, TestWorld.Version, new EntityRef(objType, objId), perm, _world.User(subjectId));
+        var b = CheckCacheKey.Build(t, TestWorld.Version, new EntityRef(objType, objId), perm, _world.User(subjectId));
         a.ShouldBe(b);
     }
 
@@ -40,12 +41,12 @@ public class CheckCacheKeyTests
         var otherPerm = _world.Permission();
         var otherSubjectId = _world.SubjectId();
 
-        var baseKey = CheckCacheKey.Build(t, _world.Version, obj, perm, subject);
+        var baseKey = CheckCacheKey.Build(t, TestWorld.Version, obj, perm, subject);
         CheckCacheKey.Build(t, otherVersion, obj, perm, subject).ShouldNotBe(baseKey);
-        CheckCacheKey.Build(otherTenant, _world.Version, obj, perm, subject).ShouldNotBe(baseKey);
-        CheckCacheKey.Build(t, _world.Version, new EntityRef(objType, otherObjId), perm, subject).ShouldNotBe(baseKey);
-        CheckCacheKey.Build(t, _world.Version, obj, otherPerm, subject).ShouldNotBe(baseKey);
-        CheckCacheKey.Build(t, _world.Version, obj, perm, _world.User(otherSubjectId)).ShouldNotBe(baseKey);
+        CheckCacheKey.Build(otherTenant, TestWorld.Version, obj, perm, subject).ShouldNotBe(baseKey);
+        CheckCacheKey.Build(t, TestWorld.Version, new EntityRef(objType, otherObjId), perm, subject).ShouldNotBe(baseKey);
+        CheckCacheKey.Build(t, TestWorld.Version, obj, otherPerm, subject).ShouldNotBe(baseKey);
+        CheckCacheKey.Build(t, TestWorld.Version, obj, perm, _world.User(otherSubjectId)).ShouldNotBe(baseKey);
     }
 
     [Fact]
@@ -58,8 +59,8 @@ public class CheckCacheKeyTests
         var groupId = _world.SubjectId();
         var obj = new EntityRef(objType, objId);
 
-        var plain = CheckCacheKey.Build(t, _world.Version, obj, perm, new SubjectRef(_world.GroupType, groupId));
-        var set = CheckCacheKey.Build(t, _world.Version, obj, perm, _world.Member(groupId));
+        var plain = CheckCacheKey.Build(t, TestWorld.Version, obj, perm, new SubjectRef(_world.GroupType, groupId));
+        var set = CheckCacheKey.Build(t, TestWorld.Version, obj, perm, _world.Member(groupId));
         plain.ShouldNotBe(set);
     }
 }

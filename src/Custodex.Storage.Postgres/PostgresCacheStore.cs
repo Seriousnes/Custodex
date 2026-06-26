@@ -1,6 +1,8 @@
-using Dapper;
-using Npgsql;
 using Custodex.Abstractions;
+
+using Dapper;
+
+using Npgsql;
 
 namespace Custodex.Storage.Postgres;
 
@@ -11,17 +13,11 @@ namespace Custodex.Storage.Postgres;
 /// so epoch changes commit or roll back with the surrounding data write.
 /// Cache entries are persisted to <c>cache_entries</c> for the fixed <see cref="TenantContext"/> scope.
 /// </summary>
-public sealed partial class PostgresCacheStore : ICacheStore
+/// <remarks>Initializes a new <see cref="PostgresCacheStore"/> for the given store/tenant scope.</remarks>
+public sealed partial class PostgresCacheStore(string connectionString, TenantContext scope) : ICacheStore
 {
-    private readonly string _connectionString;
-    private readonly TenantContext _scope;
-
-    /// <summary>Initializes a new <see cref="PostgresCacheStore"/> for the given store/tenant scope.</summary>
-    public PostgresCacheStore(string connectionString, TenantContext scope)
-    {
-        _connectionString = CustodexSchema.Apply(connectionString);
-        _scope = scope;
-    }
+    private readonly string _connectionString = CustodexSchema.Apply(connectionString);
+    private readonly TenantContext _scope = scope;
 
     /// <inheritdoc />
     public async Task<long> GetEpochAsync(TenantContext t, CancellationToken ct = default)

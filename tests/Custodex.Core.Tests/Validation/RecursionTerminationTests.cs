@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core.Validation;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Validation;
@@ -13,7 +14,7 @@ public class RecursionTerminationTests
         var world = TestWorld.New();
         var objType = world.EntityType();
         var edit = world.Permission();
-        var schema = new Schema(world.Version,
+        var schema = new Schema(TestWorld.Version,
             [new EntityTypeDef(objType,
                 [],
                 [new PermissionDef(edit, new RelationRef(edit))])],
@@ -34,7 +35,7 @@ public class RecursionTerminationTests
         var linkAtoB = world.Relation();
         var linkBtoA = world.Relation();
         var edit = world.Permission();
-        var schema = new Schema(world.Version,
+        var schema = new Schema(TestWorld.Version,
             [
                 new EntityTypeDef(typeA,
                     [new RelationDef(linkAtoB, [new SubjectTypeRef(typeB)])],
@@ -59,7 +60,7 @@ public class RecursionTerminationTests
         var grant = world.Relation();
         var edit = world.Permission();
         var manage = world.Permission();
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(grant, s => s.Type(world.UserType))
                 .Permission(edit, p => p.Relation(grant))
@@ -74,7 +75,7 @@ public class RecursionTerminationTests
     {
         var world = TestWorld.New();
         var read = world.Permission();
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(world.GroupType, t => t
                 .Relation(world.MemberRelation,
                     s => s.Type(world.UserType).SubjectSet(world.GroupType, world.MemberRelation))
@@ -90,7 +91,7 @@ public class RecursionTerminationTests
         var world = TestWorld.New();
         var objType = world.EntityType();
         var gate = world.Relation();
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(gate, s => s.Wildcard(world.UserType))
                 .Permission(gate, p => p.Relation(gate)))

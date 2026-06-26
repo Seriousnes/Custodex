@@ -1,4 +1,5 @@
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.TestKit;
@@ -11,7 +12,7 @@ public class TestWorldTests
         var w = TestWorld.New("custodex-golden-seed");
         string[] actual =
         [
-            w.UserType, w.GroupType, w.MemberRelation, w.Version,
+            w.UserType, w.GroupType, w.MemberRelation, TestWorld.Version,
             w.EntityType(), w.EntityType(), w.Relation(), w.Permission(),
             w.SubjectId(), w.ObjectId(), w.ConditionName(), w.ParamName(),
             w.Tenant.Store, w.Tenant.Tenant,

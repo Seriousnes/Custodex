@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests;
@@ -27,6 +28,6 @@ public class FillerAndParamBuilderTests
         var start = world.ParamName();
         var end = world.ParamName();
         var ps = new ConditionParamBuilder().Int(start).Int(end).Build();
-        ps.ShouldBe(new[] { new ConditionParam(start, ConditionType.Int), new ConditionParam(end, ConditionType.Int) });
+        ps.ShouldBe([new ConditionParam(start, ConditionType.Int), new ConditionParam(end, ConditionType.Int)]);
     }
 }

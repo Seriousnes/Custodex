@@ -1,4 +1,5 @@
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Conformance;
@@ -15,15 +16,15 @@ public class CaseFormatTests
         var objId = world.ObjectId();
         var subjectId = world.SubjectId();
 
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t.Relation(viewer, s => s.Type(world.UserType)).Permission(view, p => p.Relation(viewer)))
             .Build();
         var c = new ConformanceCase(
             Name: "direct grant",
             Schema: schema,
-            Tuples: new[] { world.Tuple(objType, objId, viewer, world.User(subjectId)) },
-            Attributes: Array.Empty<AttributeSeed>(),
-            Object: world.Object(objType, objId),
+            Tuples: [TestWorld.Tuple(objType, objId, viewer, world.User(subjectId))],
+            Attributes: [],
+            Object: TestWorld.Object(objType, objId),
             Permission: view,
             Subject: world.User(subjectId),
             Now: DateTimeOffset.UnixEpoch,

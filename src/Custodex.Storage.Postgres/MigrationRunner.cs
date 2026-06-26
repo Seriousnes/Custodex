@@ -1,4 +1,5 @@
 using System.Reflection;
+
 using Npgsql;
 
 namespace Custodex.Storage.Postgres;
@@ -79,13 +80,12 @@ public sealed partial class MigrationRunner
     private static IEnumerable<(string Version, string Sql)> LoadScripts()
     {
         var assembly = typeof(MigrationRunner).Assembly;
-        return assembly.GetManifestResourceNames()
+        return [.. assembly.GetManifestResourceNames()
             .Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal)
                         && n.EndsWith(".sql", StringComparison.Ordinal))
             .Select(n => (Version: VersionFromResourceName(n), ResourceName: n))
             .OrderBy(x => x.Version, StringComparer.Ordinal)
-            .Select(x => (x.Version, Sql: ReadResource(assembly, x.ResourceName)))
-            .ToList();
+            .Select(x => (x.Version, Sql: ReadResource(assembly, x.ResourceName)))];
     }
 
     private static string VersionFromResourceName(string resourceName)

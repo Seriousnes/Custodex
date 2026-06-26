@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Storage.InMemory.Tests;
@@ -22,9 +23,9 @@ public class SchemaStoreTests
         var world = TestWorld.New();
         var store = world.Tenant.Store;
         var schemaStore = new InMemorySchemaStore();
-        await schemaStore.SetActiveAsync(store, SchemaV(world.Version), Uow);
+        await schemaStore.SetActiveAsync(store, SchemaV(TestWorld.Version), Uow);
 
-        (await schemaStore.GetActiveAsync(store))!.Version.ShouldBe(world.Version);
+        (await schemaStore.GetActiveAsync(store))!.Version.ShouldBe(TestWorld.Version);
     }
 
     [Fact]

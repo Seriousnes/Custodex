@@ -1,6 +1,5 @@
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
-using Custodex.Storage.Postgres;
 using Custodex.Storage.Postgres.Index;
 
 namespace Custodex.Storage.Postgres.Tests.Differential;

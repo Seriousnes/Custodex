@@ -1,6 +1,6 @@
 using Custodex.Client.Serialization;
-using Custodex.Abstractions;
 using Custodex.Core;
+
 using Shouldly;
 
 namespace Custodex.Client.Tests;

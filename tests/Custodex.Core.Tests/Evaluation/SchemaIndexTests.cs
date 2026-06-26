@@ -1,6 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core.Evaluation;
 using Custodex.TestKit;
+
 using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
@@ -23,7 +24,7 @@ public class SchemaIndexTests
         _edit = _world.Permission();
     }
 
-    private Schema Build() => new SchemaBuilder(_world.Version)
+    private Schema Build() => new SchemaBuilder(TestWorld.Version)
         .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
             s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
         .Type(_objType, t => t
