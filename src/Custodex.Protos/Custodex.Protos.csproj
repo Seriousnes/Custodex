@@ -8,9 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
-    <PackageReference Include="Grpc.Core.Api" Version="2.64.0" />
-    <PackageReference Include="Grpc.Tools" Version="2.64.0" PrivateAssets="All" />
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Core.Api" />
+    <PackageReference Include="Grpc.Tools" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>
