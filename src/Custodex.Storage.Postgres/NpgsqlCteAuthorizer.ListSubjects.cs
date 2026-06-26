@@ -8,11 +8,6 @@ public sealed partial class NpgsqlCteAuthorizer
 {
     private static readonly string Nul = ((char)0).ToString();
 
-    /// <summary>
-    /// Composite (type, id) ordinal sort key used as the continuation-cursor payload. The NUL
-    /// separator keeps a type that is a prefix of another ordered ahead of it and prevents distinct
-    /// (type, id) pairs from colliding on a single key.
-    /// </summary>
     private static string SubjectKey(SubjectRef s) => s.Type + Nul + s.Id;
 
     private static readonly IComparer<SubjectRef> SubjectOrder =
@@ -60,10 +55,6 @@ public sealed partial class NpgsqlCteAuthorizer
         return new ListSubjectsResult(confirmed, token);
     }
 
-    /// <summary>
-    /// Returns <see langword="true"/> if at least one candidate whose composite key is strictly
-    /// after <paramref name="afterKey"/> also confirms the permission.
-    /// </summary>
     private async Task<bool> AnySubjectConfirmedAfterAsync(
         NpgsqlConnection conn, SchemaIndex index, ListSubjectsRequest request,
         SortedSet<SubjectRef> subjects, string afterKey, CancellationToken ct)
@@ -80,11 +71,6 @@ public sealed partial class NpgsqlCteAuthorizer
         return false;
     }
 
-    /// <summary>
-    /// Walks a permission expression forward, collecting every concrete leaf subject (of any
-    /// principal type) reachable through relations, nested group membership, and arrow targets.
-    /// A wildcard subject (type:*) is collected as a candidate. Cycle-guarded via <paramref name="visited"/>.
-    /// </summary>
     private async Task CollectLeafSubjectsAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, string permission,
         SortedSet<SubjectRef> subjects, HashSet<EvalFrame> visited, CancellationToken ct)
@@ -96,10 +82,6 @@ public sealed partial class NpgsqlCteAuthorizer
         await CollectFromExprAsync(conn, index, tenant, obj, def.Expression, subjects, visited, ct);
     }
 
-    /// <summary>
-    /// Collects candidate subjects from a permission expression. Both sides of an exclusion are
-    /// collected as candidates; the per-candidate confirm step is what actually applies the exclusion.
-    /// </summary>
     private async Task CollectFromExprAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, PermExpr expr,
         SortedSet<SubjectRef> subjects, HashSet<EvalFrame> visited, CancellationToken ct)
@@ -140,12 +122,6 @@ public sealed partial class NpgsqlCteAuthorizer
         }
     }
 
-    /// <summary>
-    /// Collects the subjects filling a relation: concrete subjects (any type) and wildcards directly,
-    /// recursing into subject-sets. A sentinel frame guards against relation-level cycles without
-    /// colliding with permission-level frames; global dedup is correct because each (object, relation)
-    /// contributes the same candidates on every visit.
-    /// </summary>
     private async Task CollectFromRelationAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
         SortedSet<SubjectRef> subjects, HashSet<EvalFrame> visited, CancellationToken ct)

@@ -6,11 +6,6 @@ namespace Custodex.Storage.Postgres;
 
 public sealed partial class NpgsqlCteAuthorizer
 {
-    /// <summary>
-    /// Pointwise evaluation of a permission sub-expression. Boolean operators short-circuit;
-    /// Arrow recurses into the related object's full permission (so inner exclusions and
-    /// intersections are honoured). Matches the <c>EngineDrivenAuthorizer</c> semantics exactly.
-    /// </summary>
     private async Task<bool> EvalExprAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, PermExpr expr,
         SubjectRef subject, RequestContext context, EvalContext ctx, List<ExplainNode>? explain, CancellationToken ct)
@@ -79,11 +74,6 @@ public sealed partial class NpgsqlCteAuthorizer
         }
     }
 
-    /// <summary>
-    /// Arrow: follow <paramref name="arrow"/>.Relation edges to the related objects and recurse into
-    /// each one's <paramref name="arrow"/>.Permission — its full permission expression when the target
-    /// type defines that permission, otherwise a direct relation resolve. Edge conditions are evaluated here.
-    /// </summary>
     private async Task<bool> EvalArrowAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, Arrow arrow,
         SubjectRef subject, RequestContext context, EvalContext ctx, List<ExplainNode>? explain, CancellationToken ct)
@@ -101,7 +91,6 @@ public sealed partial class NpgsqlCteAuthorizer
         return false;
     }
 
-    /// <summary>Branch-level condition gate (a <see cref="Conditioned"/> node), empty params, against attributes and request context.</summary>
     private async Task<bool> BranchConditionSatisfiedAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string conditionName,
         RequestContext context, EvalContext ctx, CancellationToken ct)
