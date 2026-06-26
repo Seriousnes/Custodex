@@ -4,7 +4,7 @@ using Grpc.Net.Client;
 
 using Microsoft.Extensions.DependencyInjection;
 
-using ProtoV1 = Custodex.V1;
+using Proto = Custodex.Api;
 
 namespace Custodex.Client;
 
@@ -30,20 +30,20 @@ public static class CustodexClientServiceCollectionExtensions
     public static IServiceCollection AddCustodexClient(this IServiceCollection services, Uri address)
     {
         services.AddSingleton(_ => GrpcChannel.ForAddress(address));
-        services.AddSingleton(sp => new ProtoV1.Decision.DecisionClient(sp.GetRequiredService<GrpcChannel>()));
-        services.AddSingleton(sp => new ProtoV1.Relations.RelationsClient(sp.GetRequiredService<GrpcChannel>()));
-        services.AddSingleton(sp => new ProtoV1.Schema.SchemaClient(sp.GetRequiredService<GrpcChannel>()));
-        services.AddSingleton(sp => new ProtoV1.Provisioning.ProvisioningClient(sp.GetRequiredService<GrpcChannel>()));
+        services.AddSingleton(sp => new Proto.Decision.DecisionClient(sp.GetRequiredService<GrpcChannel>()));
+        services.AddSingleton(sp => new Proto.Relations.RelationsClient(sp.GetRequiredService<GrpcChannel>()));
+        services.AddSingleton(sp => new Proto.Schema.SchemaClient(sp.GetRequiredService<GrpcChannel>()));
+        services.AddSingleton(sp => new Proto.Provisioning.ProvisioningClient(sp.GetRequiredService<GrpcChannel>()));
         services.AddSingleton<IAuthorizer>(sp =>
-            new GrpcAuthorizer(sp.GetRequiredService<ProtoV1.Decision.DecisionClient>()));
+            new GrpcAuthorizer(sp.GetRequiredService<Proto.Decision.DecisionClient>()));
         services.AddSingleton<IRelationManager>(sp =>
-            new GrpcRelationManager(sp.GetRequiredService<ProtoV1.Relations.RelationsClient>()));
+            new GrpcRelationManager(sp.GetRequiredService<Proto.Relations.RelationsClient>()));
         services.AddSingleton<ISchemaManager>(sp =>
-            new GrpcSchemaManager(sp.GetRequiredService<ProtoV1.Schema.SchemaClient>()));
+            new GrpcSchemaManager(sp.GetRequiredService<Proto.Schema.SchemaClient>()));
         services.AddSingleton<IStoreManager>(sp =>
-            new GrpcStoreManager(sp.GetRequiredService<ProtoV1.Provisioning.ProvisioningClient>()));
+            new GrpcStoreManager(sp.GetRequiredService<Proto.Provisioning.ProvisioningClient>()));
         services.AddSingleton<ITenantManager>(sp =>
-            new GrpcTenantManager(sp.GetRequiredService<ProtoV1.Provisioning.ProvisioningClient>()));
+            new GrpcTenantManager(sp.GetRequiredService<Proto.Provisioning.ProvisioningClient>()));
         return services;
     }
 }

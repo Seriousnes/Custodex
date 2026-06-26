@@ -47,7 +47,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
                 Now: null,
                 Attributes: null));
 
-        var resp = await client.PostAsJsonAsync("/v1/check", req);
+        var resp = await client.PostAsJsonAsync("/api/check", req);
         resp.EnsureSuccessStatusCode();
         var result = await resp.Content.ReadFromJsonAsync<CheckResponseDto>();
 
@@ -71,7 +71,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
                 Now: null,
                 Attributes: null));
 
-        var resp = await client.PostAsJsonAsync("/v1/check", req);
+        var resp = await client.PostAsJsonAsync("/api/check", req);
         resp.EnsureSuccessStatusCode();
         var result = await resp.Content.ReadFromJsonAsync<CheckResponseDto>();
 
@@ -96,7 +96,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
                 Attributes: null),
             Explain: true);
 
-        var resp = await client.PostAsJsonAsync("/v1/check", req);
+        var resp = await client.PostAsJsonAsync("/api/check", req);
         resp.EnsureSuccessStatusCode();
         var result = await resp.Content.ReadFromJsonAsync<CheckResponseDto>();
 
@@ -121,7 +121,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
                 Now: null,
                 Attributes: null));
 
-        var resp = await client.PostAsJsonAsync("/v1/list-objects", req);
+        var resp = await client.PostAsJsonAsync("/api/list-objects", req);
         resp.EnsureSuccessStatusCode();
         var result = await resp.Content.ReadFromJsonAsync<ListObjectsResponseDto>();
 
@@ -148,7 +148,7 @@ public sealed class DecisionRestTests(PostgresFixture pg)
             ],
             Context: ctx);
 
-        var resp = await client.PostAsJsonAsync("/v1/batch-check", req);
+        var resp = await client.PostAsJsonAsync("/api/batch-check", req);
         resp.EnsureSuccessStatusCode();
         var result = await resp.Content.ReadFromJsonAsync<BatchCheckResponseDto>();
 

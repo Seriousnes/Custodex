@@ -1,6 +1,6 @@
 using Custodex.Service.Mapping;
 using Custodex.Service.Tenancy;
-using Custodex.V1;
+using Custodex.Api;
 
 using Grpc.Core;
 

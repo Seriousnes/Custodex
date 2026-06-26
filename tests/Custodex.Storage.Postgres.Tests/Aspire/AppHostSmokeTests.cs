@@ -34,16 +34,16 @@ public sealed class AppHostSmokeTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         await WaitForHealthyAsync(client, cts.Token);
 
-        var storeResp = await client.PostAsJsonAsync("/v1/stores", new { store = Store });
+        var storeResp = await client.PostAsJsonAsync("/api/stores", new { store = Store });
         storeResp.IsSuccessStatusCode.ShouldBeTrue($"create store: {storeResp.StatusCode}");
 
         var tenantId = $"t-{Guid.NewGuid():N}";
-        var tenantResp = await client.PostAsJsonAsync("/v1/tenants", new { store = Store, tenant = tenantId });
+        var tenantResp = await client.PostAsJsonAsync("/api/tenants", new { store = Store, tenant = tenantId });
         tenantResp.IsSuccessStatusCode.ShouldBeTrue($"create tenant: {tenantResp.StatusCode}");
 
         client.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenantId);
 
-        var schemaResp = await client.PutAsJsonAsync($"/v1/schema/{Store}", new
+        var schemaResp = await client.PutAsJsonAsync($"/api/schema/{Store}", new
         {
             schemaJson = """
                 schema "v1" {
@@ -60,7 +60,7 @@ public sealed class AppHostSmokeTests
         var objId = $"obj-{Guid.NewGuid():N}";
         var userId = $"u-{Guid.NewGuid():N}";
 
-        var tuplesResp = await client.PostAsJsonAsync("/v1/tuples", new
+        var tuplesResp = await client.PostAsJsonAsync("/api/tuples", new
         {
             store = Store,
             tenant = tenantId,
@@ -77,7 +77,7 @@ public sealed class AppHostSmokeTests
         });
         tuplesResp.IsSuccessStatusCode.ShouldBeTrue($"write tuples: {tuplesResp.StatusCode}");
 
-        var checkResp = await client.PostAsJsonAsync("/v1/check", new
+        var checkResp = await client.PostAsJsonAsync("/api/check", new
         {
             @object = new { type = "res", id = objId },
             permission = "read",

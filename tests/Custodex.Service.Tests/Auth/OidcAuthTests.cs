@@ -56,7 +56,7 @@ public sealed class OidcAuthTests(PostgresFixture pg)
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-        var resp = await client.PostAsJsonAsync("/v1/check", new
+        var resp = await client.PostAsJsonAsync("/api/check", new
         {
             store,
             tenant = $"t-{Guid.NewGuid():N}",
@@ -84,7 +84,7 @@ public sealed class OidcAuthTests(PostgresFixture pg)
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-        var resp = await client.PostAsJsonAsync("/v1/check", new
+        var resp = await client.PostAsJsonAsync("/api/check", new
         {
             store,
             tenant = $"t-{Guid.NewGuid():N}",

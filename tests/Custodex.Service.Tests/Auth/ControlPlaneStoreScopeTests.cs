@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 using Shouldly;
 
-using ProtoV1 = Custodex.V1;
+using Proto = Custodex.Api;
 
 namespace Custodex.Service.Tests;
 
@@ -38,10 +38,10 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
     {
         await using var factory = CreateFactory();
         var channel = CreateChannel(factory);
-        var pClient = new ProtoV1.Provisioning.ProvisioningClient(channel);
+        var pClient = new Proto.Provisioning.ProvisioningClient(channel);
 
         var ex = await Should.ThrowAsync<RpcException>(async () =>
-            await pClient.CreateStoreAsync(new ProtoV1.CreateStoreRequest { Store = OtherStore }));
+            await pClient.CreateStoreAsync(new Proto.CreateStoreRequest { Store = OtherStore }));
 
         ex.StatusCode.ShouldBe(StatusCode.PermissionDenied);
     }
@@ -51,9 +51,9 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
     {
         await using var factory = CreateFactory();
         var channel = CreateChannel(factory);
-        var pClient = new ProtoV1.Provisioning.ProvisioningClient(channel);
+        var pClient = new Proto.Provisioning.ProvisioningClient(channel);
 
-        await pClient.CreateStoreAsync(new ProtoV1.CreateStoreRequest { Store = TestAuthHelper.AdminStore });
+        await pClient.CreateStoreAsync(new Proto.CreateStoreRequest { Store = TestAuthHelper.AdminStore });
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var adminClient = factory.CreateAuthenticatedClient();
 
-        var resp = await adminClient.PostAsJsonAsync("/v1/stores", new CreateStoreRequestDto(OtherStore));
+        var resp = await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(OtherStore));
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
@@ -72,7 +72,7 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
     {
         await using var factory = CreateFactory();
         var channel = CreateChannel(factory);
-        var sClient = new ProtoV1.Schema.SchemaClient(channel);
+        var sClient = new Proto.Schema.SchemaClient(channel);
 
         var schema = new SchemaBuilder("v1")
             .Type("widget", t => t
@@ -81,7 +81,7 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
             .Build();
 
         var ex = await Should.ThrowAsync<RpcException>(async () =>
-            await sClient.SetActiveAsync(new ProtoV1.SetActiveSchemaRequest
+            await sClient.SetActiveAsync(new Proto.SetActiveSchemaRequest
             {
                 Store = OtherStore,
                 SchemaJson = SchemaJson.Serialize(schema),
@@ -95,10 +95,10 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
     {
         await using var factory = CreateFactory();
         var channel = CreateChannel(factory);
-        var sClient = new ProtoV1.Schema.SchemaClient(channel);
+        var sClient = new Proto.Schema.SchemaClient(channel);
 
         var ex = await Should.ThrowAsync<RpcException>(async () =>
-            await sClient.GetActiveAsync(new ProtoV1.GetActiveSchemaRequest { Store = OtherStore }));
+            await sClient.GetActiveAsync(new Proto.GetActiveSchemaRequest { Store = OtherStore }));
 
         ex.StatusCode.ShouldBe(StatusCode.PermissionDenied);
     }
@@ -108,12 +108,12 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
     {
         await using var factory = CreateFactory();
         var channel = CreateChannel(factory);
-        var pClient = new ProtoV1.Provisioning.ProvisioningClient(channel);
+        var pClient = new Proto.Provisioning.ProvisioningClient(channel);
 
         var ex = await Should.ThrowAsync<RpcException>(async () =>
-            await pClient.CreateTenantAsync(new ProtoV1.CreateTenantRequest
+            await pClient.CreateTenantAsync(new Proto.CreateTenantRequest
             {
-                Tenant = new ProtoV1.TenantContext
+                Tenant = new Proto.TenantContext
                 {
                     Store = OtherStore,
                     Tenant = $"t-{Guid.NewGuid():N}",
@@ -128,10 +128,10 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
     {
         await using var factory = CreateFactory();
         var channel = CreateChannel(factory);
-        var pClient = new ProtoV1.Provisioning.ProvisioningClient(channel);
-        var sClient = new ProtoV1.Schema.SchemaClient(channel);
+        var pClient = new Proto.Provisioning.ProvisioningClient(channel);
+        var sClient = new Proto.Schema.SchemaClient(channel);
 
-        await pClient.CreateStoreAsync(new ProtoV1.CreateStoreRequest { Store = TestAuthHelper.AdminStore });
+        await pClient.CreateStoreAsync(new Proto.CreateStoreRequest { Store = TestAuthHelper.AdminStore });
 
         var schema = new SchemaBuilder("v1")
             .Type("widget", t => t
@@ -139,14 +139,14 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        await sClient.SetActiveAsync(new ProtoV1.SetActiveSchemaRequest
+        await sClient.SetActiveAsync(new Proto.SetActiveSchemaRequest
         {
             Store = TestAuthHelper.AdminStore,
             SchemaJson = SchemaJson.Serialize(schema),
         });
 
         var resp = await sClient.GetActiveAsync(
-            new ProtoV1.GetActiveSchemaRequest { Store = TestAuthHelper.AdminStore });
+            new Proto.GetActiveSchemaRequest { Store = TestAuthHelper.AdminStore });
 
         resp.Found.ShouldBeTrue();
     }
@@ -165,7 +165,7 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
         var schemaJson = SchemaJson.Serialize(schema);
 
         var resp = await adminClient.PutAsJsonAsync(
-            $"/v1/schema/{OtherStore}", new SetActiveSchemaRequestDto(schemaJson));
+            $"/api/schema/{OtherStore}", new SetActiveSchemaRequestDto(schemaJson));
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
@@ -176,7 +176,7 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var adminClient = factory.CreateAuthenticatedClient();
 
-        var resp = await adminClient.GetAsync($"/v1/schema/{OtherStore}");
+        var resp = await adminClient.GetAsync($"/api/schema/{OtherStore}");
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
@@ -187,7 +187,7 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var adminClient = factory.CreateAuthenticatedClient();
 
-        var resp = await adminClient.PostAsJsonAsync("/v1/tenants",
+        var resp = await adminClient.PostAsJsonAsync("/api/tenants",
             new CreateTenantRequestDto(OtherStore, $"t-{Guid.NewGuid():N}"));
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -199,7 +199,7 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var adminClient = factory.CreateAuthenticatedClient();
 
-        await adminClient.PostAsJsonAsync("/v1/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
+        await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
 
         var schema = new SchemaBuilder("v1")
             .Type("doc", t => t
@@ -209,7 +209,7 @@ public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)
         var schemaJson = SchemaJson.Serialize(schema);
 
         var resp = await adminClient.PutAsJsonAsync(
-            $"/v1/schema/{TestAuthHelper.AdminStore}", new SetActiveSchemaRequestDto(schemaJson));
+            $"/api/schema/{TestAuthHelper.AdminStore}", new SetActiveSchemaRequestDto(schemaJson));
 
         resp.EnsureSuccessStatusCode();
     }

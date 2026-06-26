@@ -5,10 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Shouldly;
 
-using DecisionClient = Custodex.V1.Decision.DecisionClient;
-using ProvisioningClient = Custodex.V1.Provisioning.ProvisioningClient;
-using RelationsClient = Custodex.V1.Relations.RelationsClient;
-using SchemaGrpcClient = Custodex.V1.Schema.SchemaClient;
+using DecisionClient = Custodex.Api.Decision.DecisionClient;
+using ProvisioningClient = Custodex.Api.Provisioning.ProvisioningClient;
+using RelationsClient = Custodex.Api.Relations.RelationsClient;
+using SchemaGrpcClient = Custodex.Api.Schema.SchemaClient;
 
 namespace Custodex.Client.Tests;
 

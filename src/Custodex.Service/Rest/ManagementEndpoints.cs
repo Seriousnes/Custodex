@@ -128,7 +128,7 @@ public static partial class RestEndpoints
                 return Results.Forbid();
 
             await stores.CreateStoreAsync(req.Store, ct);
-            return Results.Created($"/v1/schema/{req.Store}", null);
+            return Results.Created($"/api/schema/{req.Store}", null);
         })
         .WithName("CreateStore")
         .WithSummary("Provision a new store.");

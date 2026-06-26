@@ -18,7 +18,7 @@ public sealed class OpenApiTests(PostgresFixture pg)
         });
 
         var client = factory.CreateClient();
-        var resp = await client.GetAsync("/swagger/v1/swagger.json");
+        var resp = await client.GetAsync("/swagger/api/swagger.json");
 
         resp.StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
         var body = await resp.Content.ReadAsStringAsync();

@@ -1,7 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Protos;
 using Custodex.Service.Tenancy;
-using Custodex.V1;
+using Custodex.Api;
 
 using Grpc.Core;
 

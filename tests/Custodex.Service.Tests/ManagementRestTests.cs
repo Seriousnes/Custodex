@@ -44,16 +44,16 @@ public sealed class ManagementRestTests(PostgresFixture pg)
             .Build();
         var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
 
-        var createStore = await adminClient.PostAsJsonAsync("/v1/stores",
+        var createStore = await adminClient.PostAsJsonAsync("/api/stores",
             new CreateStoreRequestDto(TestAuthHelper.AdminStore));
         createStore.StatusCode.ShouldBeOneOf(HttpStatusCode.Created, HttpStatusCode.Conflict);
 
-        var createTenant = await adminClient.PostAsJsonAsync("/v1/tenants",
+        var createTenant = await adminClient.PostAsJsonAsync("/api/tenants",
             new CreateTenantRequestDto(TestAuthHelper.AdminStore, tenantId));
         createTenant.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         var setSchema = await adminClient.PutAsJsonAsync(
-            $"/v1/schema/{TestAuthHelper.AdminStore}", new SetActiveSchemaRequestDto(schemaJson));
+            $"/api/schema/{TestAuthHelper.AdminStore}", new SetActiveSchemaRequestDto(schemaJson));
         setSchema.EnsureSuccessStatusCode();
 
         var objId = $"obj-{Guid.NewGuid():N}";
@@ -62,18 +62,18 @@ public sealed class ManagementRestTests(PostgresFixture pg)
             Relation: "owner",
             Subject: new SubjectRefDto("user", "u-1", null),
             Condition: null);
-        var writeTuples = await tenantClient.PostAsJsonAsync("/v1/tuples",
+        var writeTuples = await tenantClient.PostAsJsonAsync("/api/tuples",
             new WriteTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, "test", [tuple]));
         writeTuples.EnsureSuccessStatusCode();
 
-        var readTuples = await tenantClient.PostAsJsonAsync("/v1/tuples/query",
+        var readTuples = await tenantClient.PostAsJsonAsync("/api/tuples/query",
             new ReadTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, ObjectType: "doc"));
         readTuples.EnsureSuccessStatusCode();
         var tupleResult = await readTuples.Content.ReadFromJsonAsync<ReadTuplesResponseDto>();
         tupleResult!.Tuples.ShouldNotBeEmpty();
         tupleResult.Tuples.ShouldContain(t => t.Object.Id == objId);
 
-        var readLog = await tenantClient.PostAsJsonAsync("/v1/change-log/query",
+        var readLog = await tenantClient.PostAsJsonAsync("/api/change-log/query",
             new ReadChangeLogRequestDto(TestAuthHelper.AdminStore, tenantId, Limit: 50));
         readLog.EnsureSuccessStatusCode();
         var logResult = await readLog.Content.ReadFromJsonAsync<ReadChangeLogResponseDto>();
@@ -87,7 +87,7 @@ public sealed class ManagementRestTests(PostgresFixture pg)
         await using var factory = CreateFactory();
         var adminClient = factory.CreateAuthenticatedClient();
 
-        var createStore = await adminClient.PostAsJsonAsync("/v1/stores",
+        var createStore = await adminClient.PostAsJsonAsync("/api/stores",
             new CreateStoreRequestDto(TestAuthHelper.AdminStore));
         createStore.StatusCode.ShouldBeOneOf(HttpStatusCode.Created, HttpStatusCode.Conflict);
 
@@ -98,7 +98,7 @@ public sealed class ManagementRestTests(PostgresFixture pg)
         var badJson = Custodex.Service.Mapping.SchemaJson.Serialize(badSchema);
 
         var resp = await adminClient.PutAsJsonAsync(
-            $"/v1/schema/{TestAuthHelper.AdminStore}", new SetActiveSchemaRequestDto(badJson));
+            $"/api/schema/{TestAuthHelper.AdminStore}", new SetActiveSchemaRequestDto(badJson));
         resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
@@ -117,10 +117,10 @@ public sealed class ManagementRestTests(PostgresFixture pg)
             .Build();
         var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
 
-        await adminClient.PostAsJsonAsync("/v1/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
-        await adminClient.PostAsJsonAsync("/v1/tenants",
+        await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
+        await adminClient.PostAsJsonAsync("/api/tenants",
             new CreateTenantRequestDto(TestAuthHelper.AdminStore, tenantId));
-        await adminClient.PutAsJsonAsync($"/v1/schema/{TestAuthHelper.AdminStore}",
+        await adminClient.PutAsJsonAsync($"/api/schema/{TestAuthHelper.AdminStore}",
             new SetActiveSchemaRequestDto(schemaJson));
 
         var objId = $"obj-{Guid.NewGuid():N}";
@@ -130,15 +130,15 @@ public sealed class ManagementRestTests(PostgresFixture pg)
             Subject: new SubjectRefDto("user", "u-2", null),
             Condition: null);
 
-        await tenantClient.PostAsJsonAsync("/v1/tuples",
+        await tenantClient.PostAsJsonAsync("/api/tuples",
             new WriteTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, "test", [tuple]));
 
-        await tenantClient.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/v1/tuples")
+        await tenantClient.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/api/tuples")
         {
             Content = JsonContent.Create(new DeleteTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, "test", [tuple])),
         });
 
-        var readTuples = await tenantClient.PostAsJsonAsync("/v1/tuples/query",
+        var readTuples = await tenantClient.PostAsJsonAsync("/api/tuples/query",
             new ReadTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, ObjectType: "doc", ObjectId: objId));
         var result = await readTuples.Content.ReadFromJsonAsync<ReadTuplesResponseDto>();
 

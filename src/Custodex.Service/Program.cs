@@ -25,7 +25,7 @@ builder.Services.AddSingleton<CustodexExceptionInterceptor>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Custodex Authorization API", Version = "v1" });
+    c.SwaggerDoc("api", new OpenApiInfo { Title = "Custodex Authorization API", Version = "1.0" });
 });
 
 var jwtSection = builder.Configuration.GetSection("Custodex:Jwt");
@@ -106,7 +106,7 @@ if (app.Configuration.GetValue("Custodex:ApplyMigrationsOnStartup", true))
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/api/swagger.json", "Custodex Authorization API"));
 }
 
 app.UseCustodexProblemDetails();
