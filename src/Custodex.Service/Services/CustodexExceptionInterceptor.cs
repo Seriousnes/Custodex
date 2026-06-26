@@ -62,7 +62,7 @@ public sealed class CustodexExceptionInterceptor : Interceptor
             var trailers = new Metadata { { "custodex-error-kind", "schema_invalid" } };
             foreach (var error in ex.Errors)
                 trailers.Add("custodex-error-message", error);
-            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message), trailers);
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message), trailers);
         }
         catch (EvaluationLimitException ex)
         {

@@ -222,4 +222,21 @@ public sealed class ClientParityTests(ServiceFixture fx)
 
         await Should.ThrowAsync<UnknownPermissionException>(() => remote.CheckAsync(req));
     }
+
+    [Fact]
+    public async Task Invalid_schema_via_remote_throws_SchemaValidationException_with_errors()
+    {
+        var storeMgr = new GrpcStoreManager(new ProvisioningClient(fx.GrpcChannel));
+        var schemaMgr = new GrpcSchemaManager(new SchemaGrpcClient(fx.GrpcChannel));
+        await storeMgr.CreateStoreAsync(ServiceFixture.AdminStore);
+
+        var invalid = new SchemaBuilder("v1")
+            .Type("res", t => t
+                .Permission("read", p => p.Relation("nonexistent")))
+            .Build();
+
+        var ex = await Should.ThrowAsync<SchemaValidationException>(
+            () => schemaMgr.SetActiveSchemaAsync(ServiceFixture.AdminStore, invalid));
+        ex.Errors.ShouldNotBeEmpty();
+    }
 }
