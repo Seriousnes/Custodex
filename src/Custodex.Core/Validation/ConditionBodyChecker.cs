@@ -10,7 +10,6 @@ namespace Custodex.Core.Validation;
 /// </summary>
 public static class ConditionBodyChecker
 {
-    // Inferred static kind; null means "unknown until request time" (attributes).
     private enum K { Bool, Number, String, Timestamp, Unknown }
 
     /// <summary>Type-checks a condition's body.</summary>

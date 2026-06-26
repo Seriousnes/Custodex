@@ -13,10 +13,8 @@ public static class CteCandidates
 {
     private const string ReachableSql = """
         WITH RECURSIVE principals (ptype, pid, prelation) AS (
-            -- base: the subject itself as a plain leaf principal
             SELECT @stype::text COLLATE "C", @sid::text COLLATE "C", @srel::text COLLATE "C"
           UNION
-            -- climb: any object whose tuple subject matches a current principal becomes the next principal
             SELECT rt.object_type, rt.object_id, rt.relation
             FROM principals p
             JOIN custodex.relation_tuples rt
@@ -25,7 +23,6 @@ public static class CteCandidates
              AND COALESCE(rt.subject_relation, '') = COALESCE(p.prelation, '')
         ),
         reached_objects (otype, oid) AS (
-            -- objects any principal appears on
             SELECT rt.object_type, rt.object_id
             FROM principals p
             JOIN custodex.relation_tuples rt
@@ -33,7 +30,6 @@ public static class CteCandidates
              AND rt.subject_type = p.ptype AND rt.subject_id = p.pid
              AND COALESCE(rt.subject_relation, '') = COALESCE(p.prelation, '')
           UNION
-            -- follow structural edges transitively: objects whose tuples point at already-reached objects
             SELECT rt.object_type, rt.object_id
             FROM reached_objects ro
             JOIN custodex.relation_tuples rt

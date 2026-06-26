@@ -49,7 +49,6 @@ public sealed partial class NpgsqlCteAuthorizer
         return new ListObjectsResult(confirmed, token);
     }
 
-    /// <summary>True if at least one candidate strictly after <paramref name="afterId"/> confirms the permission.</summary>
     private async Task<bool> AnyConfirmedAfterAsync(
         NpgsqlConnection conn, SchemaIndex index, ListObjectsRequest request, SortedSet<string> candidates,
         string afterId, CancellationToken ct)

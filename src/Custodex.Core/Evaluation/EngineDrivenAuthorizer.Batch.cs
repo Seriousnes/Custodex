@@ -8,7 +8,7 @@ public sealed partial class EngineDrivenAuthorizer
     public async Task<IReadOnlyList<CheckResult>> BatchCheckAsync(BatchCheckRequest request, CancellationToken ct = default)
     {
         var index = await LoadSchemaAsync(request.Tenant.Store, ct);
-        var ctx = new EvalContext(_options);   // one shared memo across all items
+        var ctx = new EvalContext(_options);
         var results = new List<CheckResult>(request.Items.Count);
 
         foreach (var item in request.Items)

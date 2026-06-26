@@ -6,11 +6,6 @@ public sealed partial class EngineDrivenAuthorizer
 {
     private static readonly string Nul = ((char)0).ToString();
 
-    /// <summary>
-    /// Composite (type, id) ordinal sort key, also used as the continuation-cursor payload. The NUL
-    /// separator orders a type that is a prefix of another ahead of it and keeps distinct (type, id)
-    /// pairs from colliding on a single key.
-    /// </summary>
     private static string SubjectKey(SubjectRef s) => s.Type + Nul + s.Id;
 
     private static readonly IComparer<SubjectRef> SubjectOrder =
@@ -60,10 +55,6 @@ public sealed partial class EngineDrivenAuthorizer
         return new ListSubjectsResult(confirmed, token);
     }
 
-    /// <summary>
-    /// Over-fetch lookahead used to decide whether a continuation token is emitted: is any candidate
-    /// ordered strictly after <paramref name="afterKey"/> also confirmed?
-    /// </summary>
     private async Task<bool> AnySubjectConfirmedAfterAsync(
         SchemaIndex index, ListSubjectsRequest request, SortedSet<SubjectRef> subjects, string afterKey, CancellationToken ct)
     {
@@ -79,11 +70,6 @@ public sealed partial class EngineDrivenAuthorizer
         return false;
     }
 
-    /// <summary>
-    /// Walks a permission expression forward, collecting every concrete leaf subject (of any
-    /// principal type) reachable through relations, nested group membership, and arrow targets.
-    /// A wildcard subject (type:*) is collected as a "*" candidate. Cycle-guarded via <paramref name="visited"/>.
-    /// </summary>
     private async Task CollectLeafSubjectsAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string permission,
         SortedSet<SubjectRef> subjects, HashSet<EvalFrame> visited, CancellationToken ct)
@@ -95,10 +81,6 @@ public sealed partial class EngineDrivenAuthorizer
         await CollectFromExprAsync(index, tenant, obj, def.Expression, subjects, visited, ct);
     }
 
-    /// <summary>
-    /// Collects candidate subjects from a permission expression. Both sides of an exclusion are
-    /// collected as candidates; the per-candidate confirm step is what actually applies the exclusion.
-    /// </summary>
     private async Task CollectFromExprAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, PermExpr expr,
         SortedSet<SubjectRef> subjects, HashSet<EvalFrame> visited, CancellationToken ct)
@@ -139,12 +121,6 @@ public sealed partial class EngineDrivenAuthorizer
         }
     }
 
-    /// <summary>
-    /// Collects the subjects filling a relation: concrete subjects (any type) and wildcards directly,
-    /// recursing subject-sets. A sentinel frame subject cycle-guards relation recursion without
-    /// colliding with the permission frames; global dedup is correct because each (object, relation)
-    /// contributes the same candidates on every visit.
-    /// </summary>
     private async Task CollectFromRelationAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
         SortedSet<SubjectRef> subjects, HashSet<EvalFrame> visited, CancellationToken ct)

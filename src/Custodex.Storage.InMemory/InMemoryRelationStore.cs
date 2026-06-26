@@ -7,7 +7,6 @@ public sealed class InMemoryRelationStore : IRelationStore
 {
     private readonly record struct Key(string Store, string Tenant);
 
-    // Identity excludes ConditionRef.Parameters (reference-equality on the dictionary).
     private readonly record struct TupleIdentity(
         string ObjType, string ObjId, string Relation,
         string SubjType, string SubjId, string? SubjRelation, string? ConditionName);
