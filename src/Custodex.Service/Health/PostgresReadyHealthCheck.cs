@@ -23,7 +23,8 @@ public sealed class PostgresReadyHealthCheck(IConfiguration configuration) : IHe
 
         try
         {
-            await using var conn = new NpgsqlConnection(connectionString);
+            await using var conn = new NpgsqlConnection(
+                new NpgsqlConnectionStringBuilder(connectionString) { SearchPath = "custodex" }.ToString());
             await conn.OpenAsync(cancellationToken);
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT 1 FROM schema_migrations LIMIT 1";

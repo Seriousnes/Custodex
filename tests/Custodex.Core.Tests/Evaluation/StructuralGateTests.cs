@@ -41,7 +41,7 @@ public class StructuralGateTests
         _setAOnlySubject = _world.SubjectId();
     }
 
-    private Schema Build() => new SchemaBuilder(_world.Version)
+    private Schema Build() => new SchemaBuilder(TestWorld.Version)
         .Type(_groupType, t => t.Relation(_world.MemberRelation,
             s => s.Type(_world.UserType).SubjectSet(_groupType, _world.MemberRelation)))
         .Type(_parentType, t => t
@@ -62,17 +62,17 @@ public class StructuralGateTests
         .Build();
 
     private CheckRequest Access(string childId, string subjectId) =>
-        _world.Check(_world.Object(_childType, childId), _access, _world.User(subjectId));
+        _world.Check(TestWorld.Object(_childType, childId), _access, _world.User(subjectId));
 
     private RelationTuple[] Members(string childId) =>
     [
-        _world.Tuple(_childType, childId, _setA, _world.Member(_groupA)),
-        _world.Tuple(_childType, childId, _setB, _world.Member(_groupB)),
-        _world.Tuple(_groupType, _groupA, _world.MemberRelation, _world.User(_bothSubject)),
-        _world.Tuple(_groupType, _groupA, _world.MemberRelation, _world.User(_setAOnlySubject)),
-        _world.Tuple(_groupType, _groupB, _world.MemberRelation, _world.User(_bothSubject)),
-        _world.Tuple(_childType, childId, _baseRel, _world.User(_bothSubject)),
-        _world.Tuple(_childType, childId, _baseRel, _world.User(_setAOnlySubject)),
+        TestWorld.Tuple(_childType, childId, _setA, _world.Member(_groupA)),
+        TestWorld.Tuple(_childType, childId, _setB, _world.Member(_groupB)),
+        TestWorld.Tuple(_groupType, _groupA, _world.MemberRelation, _world.User(_bothSubject)),
+        TestWorld.Tuple(_groupType, _groupA, _world.MemberRelation, _world.User(_setAOnlySubject)),
+        TestWorld.Tuple(_groupType, _groupB, _world.MemberRelation, _world.User(_bothSubject)),
+        TestWorld.Tuple(_childType, childId, _baseRel, _world.User(_bothSubject)),
+        TestWorld.Tuple(_childType, childId, _baseRel, _world.User(_setAOnlySubject)),
     ];
 
     [Fact]
@@ -82,8 +82,8 @@ public class StructuralGateTests
         var parentId = _world.ObjectId();
         var tuples = new List<RelationTuple>(Members(childId))
         {
-            _world.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
-            _world.Tuple(_parentType, parentId, _gate, new SubjectRef(_world.UserType, "*")),
+            TestWorld.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
+            TestWorld.Tuple(_parentType, parentId, _gate, new SubjectRef(_world.UserType, "*")),
         };
         var auth = await _world.BuildAsync(Build(), [.. tuples]);
         (await auth.CheckAsync(Access(childId, _bothSubject))).Allowed.ShouldBeTrue();
@@ -96,8 +96,8 @@ public class StructuralGateTests
         var parentId = _world.ObjectId();
         var tuples = new List<RelationTuple>(Members(childId))
         {
-            _world.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
-            _world.Tuple(_parentType, parentId, _gate, new SubjectRef(_world.UserType, "*")),
+            TestWorld.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
+            TestWorld.Tuple(_parentType, parentId, _gate, new SubjectRef(_world.UserType, "*")),
         };
         var auth = await _world.BuildAsync(Build(), [.. tuples]);
         (await auth.CheckAsync(Access(childId, _setAOnlySubject))).Allowed.ShouldBeFalse();
@@ -110,7 +110,7 @@ public class StructuralGateTests
         var parentId = _world.ObjectId();
         var tuples = new List<RelationTuple>(Members(childId))
         {
-            _world.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
+            TestWorld.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
         };
         var auth = await _world.BuildAsync(Build(), [.. tuples]);
         (await auth.CheckAsync(Access(childId, _setAOnlySubject))).Allowed.ShouldBeTrue();

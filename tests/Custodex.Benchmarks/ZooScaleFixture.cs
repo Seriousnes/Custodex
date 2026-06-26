@@ -47,7 +47,7 @@ public sealed class ZooScaleFixture
     public EntityRef ProbeObject { get; } = new("item", "item-1");
 
     /// <summary>The probe permission.</summary>
-    public string Permission => "edit";
+    public static string Permission => "edit";
 
     /// <summary>A fresh request context for the probe subject.</summary>
     public RequestContext Context => new(DateTimeOffset.UnixEpoch, ProbeSubject, new Dictionary<string, object?>());
@@ -73,7 +73,7 @@ public sealed class ZooScaleFixture
         .Condition("is_creator", c => { })
         .Build();
 
-    private static IReadOnlyList<RelationTuple> BuildTuples()
+    private static List<RelationTuple> BuildTuples()
     {
         var rng = new Random(20260623);
         var tuples = new List<RelationTuple>();

@@ -15,7 +15,7 @@ public class ConditionBodyBuilderTests
         var condition = world.ConditionName();
         var start = world.ParamName();
         var end = world.ParamName();
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Condition(condition,
                 p => p.Int(start).Int(end),
                 b => b.And(
@@ -33,7 +33,7 @@ public class ConditionBodyBuilderTests
     public void Params_only_overload_still_attaches_empty_body()
     {
         var world = TestWorld.New();
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Condition(world.ConditionName(), c => c.Int(world.ParamName()))
             .Build();
 
@@ -47,7 +47,7 @@ public class ConditionBodyBuilderTests
         var condition = world.ConditionName();
         var n = world.ParamName();
         var measure = world.ParamName();
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Condition(condition,
                 p => p.Int(n),
                 b => b.Ge(b.Attribute(measure), b.Param(n)))

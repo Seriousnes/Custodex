@@ -123,7 +123,7 @@ public sealed partial class NpgsqlCteAuthorizer
         }
     }
 
-    private async Task CollectFromRelationAsync(
+    private static async Task CollectFromRelationAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
         SortedSet<SubjectRef> subjects, HashSet<EvalFrame> visited, CancellationToken ct)
     {

@@ -48,13 +48,13 @@ public class CachingAuthorizerTests
             => _inner.ListObjectIdsAsync(t, objectType, ct);
     }
 
-    private Schema UnconditionedSchema() => new SchemaBuilder(_world.Version)
+    private Schema UnconditionedSchema() => new SchemaBuilder(TestWorld.Version)
         .Type(_objType, t => t
             .Relation(_viewer, s => s.Type(_world.UserType))
             .Permission(_view, p => p.Relation(_viewer)))
         .Build();
 
-    private Schema ConditionedSchema() => new SchemaBuilder(_world.Version)
+    private Schema ConditionedSchema() => new SchemaBuilder(TestWorld.Version)
         .Type(_objType, t => t
             .Relation(_viewer, s => s.Type(_world.UserType))
             .Permission(_view, p => p.Relation(_viewer)))

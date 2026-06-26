@@ -42,11 +42,11 @@ public class SeamVsNaiveTests(PostgresFixture fx) : IAsyncLifetime
         )
         """;
 
-    private async Task<bool> NaiveAllowsAsync(NpgsqlConnection conn, string oid, string sid) =>
+    private static async Task<bool> NaiveAllowsAsync(NpgsqlConnection conn, string oid, string sid) =>
         await conn.ExecuteScalarAsync<bool>(NaiveSql,
             new { store = SpikeData.Store, tenant = SpikeData.Tenant, oid, sid });
 
-    private async Task<bool> SeamAllowsAsync(NpgsqlConnection conn, string docId, string sid)
+    private static async Task<bool> SeamAllowsAsync(NpgsqlConnection conn, string docId, string sid)
     {
         var folders = await ReachabilityCte.SubjectsThroughRelationAsync(
             conn, SpikeData.Store, SpikeData.Tenant, "doc", docId, "folder");

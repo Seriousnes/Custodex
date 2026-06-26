@@ -26,7 +26,7 @@ public class CheckBenchmarks
         _fx = new ZooScaleFixture();
         await _fx.InitializeAsync();
         _auth = Select(_fx, ExecPath);
-        _request = new CheckRequest(_fx.Tenant, _fx.ProbeObject, _fx.Permission, _fx.ProbeSubject, _fx.Context);
+        _request = new CheckRequest(_fx.Tenant, _fx.ProbeObject, ZooScaleFixture.Permission, _fx.ProbeSubject, _fx.Context);
     }
 
     private static IAuthorizer Select(ZooScaleFixture fx, Path path) => path switch

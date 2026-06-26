@@ -50,11 +50,11 @@ public class SchemaManagerTests
         }
     }
 
-    private Schema ValidSchema() => new SchemaBuilder(_world.Version)
+    private Schema ValidSchema() => new SchemaBuilder(TestWorld.Version)
         .Type(_objType, t => t.Relation(_grant, s => s.Type(_world.UserType)).Permission(_edit, p => p.Relation(_grant)))
         .Build();
 
-    private Schema InvalidSchema() => new SchemaBuilder(_world.Version)
+    private Schema InvalidSchema() => new SchemaBuilder(TestWorld.Version)
         .Type(_objType, t => t.Relation(_grant, s => s.Type(_world.UserType)).Permission(_edit, p => p.Relation(_missing)))
         .Build();
 
@@ -76,7 +76,7 @@ public class SchemaManagerTests
 
         await mgr.SetActiveSchemaAsync(_world.Tenant.Store, ValidSchema());
 
-        (await mgr.GetActiveSchemaAsync(_world.Tenant.Store))!.Version.ShouldBe(_world.Version);
+        (await mgr.GetActiveSchemaAsync(_world.Tenant.Store))!.Version.ShouldBe(TestWorld.Version);
         factory.Last.Committed.ShouldBeTrue();
     }
 

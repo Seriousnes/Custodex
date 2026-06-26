@@ -33,7 +33,7 @@ public sealed class AlgebraWorld
         UserId = Gen.OneOf(pool.Select(Gen.Const).ToArray());
     }
 
-    public Schema MonotoneSchema() => new SchemaBuilder(World.Version)
+    public Schema MonotoneSchema() => new SchemaBuilder(TestWorld.Version)
         .Type(World.GroupType, t => t.Relation(World.MemberRelation,
             s => s.Type(World.UserType).SubjectSet(World.GroupType, World.MemberRelation)))
         .Type(ObjectType, t => t
@@ -42,7 +42,7 @@ public sealed class AlgebraWorld
             .Permission(View, p => p.Relation(Viewer)))
         .Build();
 
-    public Schema SelfExcludeSchema() => new SchemaBuilder(World.Version)
+    public Schema SelfExcludeSchema() => new SchemaBuilder(TestWorld.Version)
         .Type(ObjectType, t => t
             .Relation(Viewer, s => s.Type(World.UserType))
             .Permission(View, p => p.Relation(Viewer).Exclude(x => x.Relation(Viewer))))
@@ -52,11 +52,11 @@ public sealed class AlgebraWorld
     {
         var tuples = new List<RelationTuple>
         {
-            World.Tuple(ObjectType, ObjectId, Viewer, World.Member("g0")),
+            TestWorld.Tuple(ObjectType, ObjectId, Viewer, World.Member("g0")),
         };
         for (var i = 0; i < length - 1; i++)
-            tuples.Add(World.Tuple(World.GroupType, $"g{i}", World.MemberRelation, World.Member($"g{i + 1}")));
-        tuples.Add(World.Tuple(World.GroupType, $"g{length - 1}", World.MemberRelation, World.User(user)));
+            tuples.Add(TestWorld.Tuple(World.GroupType, $"g{i}", World.MemberRelation, World.Member($"g{i + 1}")));
+        tuples.Add(TestWorld.Tuple(World.GroupType, $"g{length - 1}", World.MemberRelation, World.User(user)));
         return tuples;
     }
 }

@@ -28,7 +28,7 @@ public class ListSubjectsTests
 
     private SubjectRef User(string id) => _world.User(id);
 
-    private Schema Build() => new SchemaBuilder(_world.Version)
+    private Schema Build() => new SchemaBuilder(TestWorld.Version)
         .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
             s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
         .Type(_objType, t => t
@@ -40,8 +40,8 @@ public class ListSubjectsTests
     private Task<EngineDrivenAuthorizer> NewAsync(params RelationTuple[] tuples) =>
         _world.BuildAsync(Build(), tuples);
 
-    private RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
-        _world.Tuple(ot, oid, rel, s);
+    private static RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
+        TestWorld.Tuple(ot, oid, rel, s);
 
     private ListSubjectsRequest Req(int pageSize = 100, string? token = null) => new(
         _world.Tenant, new EntityRef(_objType, _objId), _view,
@@ -122,22 +122,22 @@ public class ListSubjectsTests
         var objType = _world.EntityType();
         var objId = _world.ObjectId();
 
-        var schema = new SchemaBuilder(_world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t
                 .Relation(grant, s => s.Type(typeA).Type(typeB))
                 .Permission(perm, p => p.Relation(grant)))
             .Build();
         var auth = await _world.BuildAsync(schema,
-            _world.Tuple(objType, objId, grant, _world.Subject(typeA, idA)),
-            _world.Tuple(objType, objId, grant, _world.Subject(typeB, idB)));
+            TestWorld.Tuple(objType, objId, grant, TestWorld.Subject(typeA, idA)),
+            TestWorld.Tuple(objType, objId, grant, TestWorld.Subject(typeB, idB)));
 
         var result = await auth.ListSubjectsAsync(new ListSubjectsRequest(
             _world.Tenant, new EntityRef(objType, objId), perm,
-            new RequestContext(DateTimeOffset.UnixEpoch, _world.Subject(typeA, idA),
+            new RequestContext(DateTimeOffset.UnixEpoch, TestWorld.Subject(typeA, idA),
                 new Dictionary<string, object?>())));
 
         result.Subjects.ShouldBe(
-            [_world.Subject(typeA, idA), _world.Subject(typeB, idB)], ignoreOrder: true);
+            [TestWorld.Subject(typeA, idA), TestWorld.Subject(typeB, idB)], ignoreOrder: true);
     }
 
     [Fact]

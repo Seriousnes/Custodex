@@ -1,7 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 var postgres = builder.AddPostgres("postgres")
-    .WithImageTag("18")    
+    .WithImageTag("18")
     .WithDataVolume("custodex-postgres-data")
     .WithPgAdmin(c => c.WithImageTag("latest"))
     .AddDatabase("Custodex");

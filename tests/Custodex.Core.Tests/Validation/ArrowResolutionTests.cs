@@ -18,7 +18,7 @@ public class ArrowResolutionTests
         var link = world.Relation();
         var edit = world.Permission();
 
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(linkedType, t => t
                 .Relation(canEdit, s => s.Type(world.UserType))
                 .Permission(edit, p => p.Relation(canEdit)))
@@ -40,7 +40,7 @@ public class ArrowResolutionTests
         var link = world.Relation();
         var edit = world.Permission();
 
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(linkedType, t => t.Relation(canEdit, s => s.Type(world.UserType)))
             .Type(childType, t => t
                 .Relation(link, s => s.Type(linkedType))
@@ -64,7 +64,7 @@ public class ArrowResolutionTests
         var parent = world.Relation();
         var edit = world.Permission();
 
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(hasPermType, t => t
                 .Relation(canEdit, s => s.Type(world.UserType))
                 .Permission(edit, p => p.Relation(canEdit)))
@@ -89,7 +89,7 @@ public class ArrowResolutionTests
         var link = world.Relation();
         var edit = world.Permission();
 
-        var schema = new Schema(world.Version,
+        var schema = new Schema(TestWorld.Version,
             [new EntityTypeDef(childType,
                 [new RelationDef(link, [new SubjectTypeRef(linkedType)])],
                 [new PermissionDef(edit, new Arrow(link, edit))])],

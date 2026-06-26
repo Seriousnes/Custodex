@@ -27,7 +27,7 @@ public class ListObjectsTests
         }.OrderBy(x => x, StringComparer.Ordinal)];
     }
 
-    private Schema Build() => new SchemaBuilder(_world.Version)
+    private Schema Build() => new SchemaBuilder(TestWorld.Version)
         .Type(_world.GroupType, t => t.Relation(_world.MemberRelation,
             s => s.Type(_world.UserType).SubjectSet(_world.GroupType, _world.MemberRelation)))
         .Type(_objType, t => t
@@ -40,8 +40,8 @@ public class ListObjectsTests
     private Task<EngineDrivenAuthorizer> NewAsync(params RelationTuple[] tuples) =>
         _world.BuildAsync(Build(), tuples);
 
-    private RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
-        _world.Tuple(ot, oid, rel, s);
+    private static RelationTuple Tuple(string ot, string oid, string rel, SubjectRef s) =>
+        TestWorld.Tuple(ot, oid, rel, s);
 
     private ListObjectsRequest Req(string user, int pageSize = 100, string? token = null) => new(
         _world.Tenant, _world.User(user), _objType, _edit,

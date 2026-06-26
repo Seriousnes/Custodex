@@ -40,7 +40,7 @@ public class IndexedListObjectsTests(PostgresFixture fx) : IAsyncLifetime
     public Task DisposeAsync() => Task.CompletedTask;
 
     private async Task<(IndexedAuthorizer Auth, NpgsqlCteAuthorizer Oracle, TenantContext T)> SetupAsync(
-        string store, IReadOnlyList<RelationTuple> tuples, IReadOnlyList<(string Subject, string Perm, string Type, string Obj, bool Cond)> indexRows)
+        string store, IReadOnlyList<RelationTuple> tuples, List<(string Subject, string Perm, string Type, string Obj, bool Cond)> indexRows)
     {
         var t = new TenantContext(store, "t");
         await using var u = await _factory.BeginAsync();

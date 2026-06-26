@@ -17,13 +17,13 @@ public class RunnerTests
         var objId = world.ObjectId();
         var subjectId = world.SubjectId();
 
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t.Relation(viewer, s => s.Type(world.UserType)).Permission(view, p => p.Relation(viewer)))
             .Build();
         var c = new ConformanceCase("allow", schema,
-            [world.Tuple(objType, objId, viewer, world.User(subjectId))],
+            [TestWorld.Tuple(objType, objId, viewer, world.User(subjectId))],
             [],
-            world.Object(objType, objId), view, world.User(subjectId),
+            TestWorld.Object(objType, objId), view, world.User(subjectId),
             DateTimeOffset.UnixEpoch, new Dictionary<string, object?>(), Expected: true);
 
         var result = await ConformanceRunner.RunAsync(c);
@@ -41,12 +41,12 @@ public class RunnerTests
         var objId = world.ObjectId();
         var subjectId = world.SubjectId();
 
-        var schema = new SchemaBuilder(world.Version)
+        var schema = new SchemaBuilder(TestWorld.Version)
             .Type(objType, t => t.Relation(viewer, s => s.Type(world.UserType)).Permission(view, p => p.Relation(viewer)))
             .Build();
         var c = new ConformanceCase("deny", schema,
             [], [],
-            world.Object(objType, objId), view, world.User(subjectId),
+            TestWorld.Object(objType, objId), view, world.User(subjectId),
             DateTimeOffset.UnixEpoch, new Dictionary<string, object?>(), Expected: false);
 
         await ConformanceRunner.AssertAsync(c);

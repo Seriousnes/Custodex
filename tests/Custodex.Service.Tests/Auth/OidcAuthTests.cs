@@ -17,7 +17,7 @@ public sealed class OidcAuthTests(PostgresFixture pg)
     private static readonly byte[] SigningKeyBytes =
         System.Text.Encoding.UTF8.GetBytes("test-signing-key-must-be-at-least-32-chars");
 
-    private WebApplicationFactory<Program> CreateFactory(string store, string role) =>
+    private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
@@ -27,7 +27,7 @@ public sealed class OidcAuthTests(PostgresFixture pg)
             b.UseSetting("Custodex:Jwt:RoleClaim", "Custodex:role");
         });
 
-    private string CreateToken(string store, string role)
+    private static string CreateToken(string store, string role)
     {
         var key = new SymmetricSecurityKey(SigningKeyBytes);
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -50,7 +50,7 @@ public sealed class OidcAuthTests(PostgresFixture pg)
     public async Task Check_with_valid_bearer_token_returns_not_401()
     {
         var store = $"s-{Guid.NewGuid():N}";
-        await using var factory = CreateFactory(store, "reader");
+        await using var factory = CreateFactory();
         var client = factory.CreateClient();
         var token = CreateToken(store, "reader");
         client.DefaultRequestHeaders.Authorization =
