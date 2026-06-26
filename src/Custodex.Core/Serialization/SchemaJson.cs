@@ -31,9 +31,23 @@ public static class SchemaJson
     public static string Serialize(Schema schema) =>
         JsonSerializer.Serialize(schema, Options);
 
-    /// <summary>Deserializes a <see cref="Schema"/> from its canonical JSON representation.</summary>
-    public static Schema? Deserialize(string json) =>
-        JsonSerializer.Deserialize<Schema>(json, Options);
+    /// <summary>
+    /// Deserializes a <see cref="Schema"/> from its canonical JSON representation, returning
+    /// <see langword="null"/> when the input is null, empty, or not well-formed schema JSON.
+    /// </summary>
+    public static Schema? Deserialize(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<Schema>(json, Options);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private sealed class SchemaAstConverter : JsonConverterFactory
     {

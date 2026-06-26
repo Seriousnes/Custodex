@@ -103,6 +103,21 @@ public sealed class ManagementRestTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task SetActive_schema_with_malformed_json_returns_400()
+    {
+        await using var factory = CreateFactory();
+        var adminClient = factory.CreateAuthenticatedClient();
+
+        var createStore = await adminClient.PostAsJsonAsync("/api/stores",
+            new CreateStoreRequestDto(TestAuthHelper.AdminStore));
+        createStore.StatusCode.ShouldBeOneOf(HttpStatusCode.Created, HttpStatusCode.Conflict);
+
+        var resp = await adminClient.PutAsJsonAsync(
+            $"/api/schema/{TestAuthHelper.AdminStore}", new SetActiveSchemaRequestDto("{ not valid schema json"));
+        resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Write_then_delete_tuple_leaves_query_empty()
     {
         await using var factory = CreateFactory();
