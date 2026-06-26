@@ -43,8 +43,7 @@ public class RebuildEqualsOracleTests(PostgresFixture fx) : IAsyncLifetime
     [Fact]
     public async Task Rebuilt_index_rows_equal_the_oracle_list_objects_per_subject()
     {
-        var t = new TenantContext("rb-oracle", "t");
-        RelationTuple Tup(string ot, string oid, string rel, SubjectRef s) => new(new EntityRef(ot, oid), rel, s);
+        var t = new TenantContext("rb-oracle", "t");        
 
         await using (var u = await _factory.BeginAsync())
         {
@@ -82,5 +81,7 @@ public class RebuildEqualsOracleTests(PostgresFixture fx) : IAsyncLifetime
                 .Select(r => r.ObjectId).OrderBy(x => x);
             indexIds.ShouldBe(oracleIds, $"index must equal oracle for {user}");
         }
+
+        static RelationTuple Tup(string ot, string oid, string rel, SubjectRef s) => new(new EntityRef(ot, oid), rel, s);
     }
 }

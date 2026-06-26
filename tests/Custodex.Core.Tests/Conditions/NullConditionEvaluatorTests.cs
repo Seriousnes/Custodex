@@ -16,7 +16,7 @@ public class NullConditionEvaluatorTests
         var param = world.ParamName();
         var eval = new NullConditionEvaluator();
         var def = new ConditionDef(condition,
-            new[] { new ConditionParam(param, ConditionType.Int) },
+            [new ConditionParam(param, ConditionType.Int)],
             new TrueBody());
         var inv = new ConditionRef(condition, new Dictionary<string, object?> { [param] = 8 });
         var ctx = new RequestContext(DateTimeOffset.UnixEpoch, world.User(world.SubjectId()),

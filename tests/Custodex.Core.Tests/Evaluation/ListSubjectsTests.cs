@@ -52,7 +52,7 @@ public class ListSubjectsTests
     {
         var ids = new string[count];
         for (var i = 0; i < count; i++) ids[i] = _world.SubjectId();
-        return ids.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        return [.. ids.OrderBy(x => x, StringComparer.Ordinal)];
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class ListSubjectsTests
             Tuple(_objType, _objId, _blocked, User(revoked)));
 
         var result = await auth.ListSubjectsAsync(Req());
-        result.Subjects.Select(s => s.Id).ShouldBe(new[] { allowed });
+        result.Subjects.Select(s => s.Id).ShouldBe([allowed]);
     }
 
     [Fact]
@@ -83,11 +83,11 @@ public class ListSubjectsTests
             Tuple(_world.GroupType, groupId, _world.MemberRelation, User(ids[2])));
 
         var page1 = await auth.ListSubjectsAsync(Req(pageSize: 2));
-        page1.Subjects.Select(s => s.Id).ShouldBe(new[] { ids[0], ids[1] });
+        page1.Subjects.Select(s => s.Id).ShouldBe([ids[0], ids[1]]);
         page1.ContinuationToken.ShouldNotBeNull();
 
         var page2 = await auth.ListSubjectsAsync(Req(pageSize: 2, token: page1.ContinuationToken));
-        page2.Subjects.Select(s => s.Id).ShouldBe(new[] { ids[2] });
+        page2.Subjects.Select(s => s.Id).ShouldBe([ids[2]]);
         page2.ContinuationToken.ShouldBeNull();
     }
 
@@ -102,11 +102,11 @@ public class ListSubjectsTests
 
         var page1 = await auth.ListSubjectsAsync(Req(pageSize: 2));
         page1.Subjects.Count.ShouldBe(2);
-        page1.Subjects.Select(s => s.Id).ShouldBe(new[] { "*", ids[0] });
+        page1.Subjects.Select(s => s.Id).ShouldBe(["*", ids[0]]);
         page1.ContinuationToken.ShouldNotBeNull();
 
         var page2 = await auth.ListSubjectsAsync(Req(pageSize: 2, token: page1.ContinuationToken));
-        page2.Subjects.Select(s => s.Id).ShouldBe(new[] { ids[1] });
+        page2.Subjects.Select(s => s.Id).ShouldBe([ids[1]]);
         page2.ContinuationToken.ShouldBeNull();
     }
 
@@ -137,7 +137,7 @@ public class ListSubjectsTests
                 new Dictionary<string, object?>())));
 
         result.Subjects.ShouldBe(
-            new[] { _world.Subject(typeA, idA), _world.Subject(typeB, idB) }, ignoreOrder: true);
+            [_world.Subject(typeA, idA), _world.Subject(typeB, idB)], ignoreOrder: true);
     }
 
     [Fact]
@@ -153,6 +153,6 @@ public class ListSubjectsTests
             Tuple(_world.GroupType, groupA, _world.MemberRelation, User(subject)));
 
         var result = await auth.ListSubjectsAsync(Req());
-        result.Subjects.Select(s => s.Id).ShouldBe(new[] { subject });
+        result.Subjects.Select(s => s.Id).ShouldBe([subject]);
     }
 }

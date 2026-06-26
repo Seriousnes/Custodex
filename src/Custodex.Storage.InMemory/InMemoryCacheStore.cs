@@ -10,9 +10,9 @@ public sealed class InMemoryCacheStore(TimeProvider? timeProvider = null) : ICac
     private sealed record Slot(CacheEntry Entry, DateTimeOffset ExpiresAt);
 
     private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Dictionary<string, Slot> _entries = new(StringComparer.Ordinal);
-    private readonly Dictionary<Key, long> _epochs = new();
+    private readonly Dictionary<Key, long> _epochs = [];
 
     /// <inheritdoc/>
     public Task<CacheEntry?> GetAsync(string key, CancellationToken ct = default)

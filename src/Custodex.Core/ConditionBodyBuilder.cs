@@ -12,7 +12,7 @@ public sealed class ConditionBodyBuilder
 {
     /// <summary>References a declared condition parameter by name.</summary>
     /// <param name="name">The parameter name, as declared for the condition.</param>
-    /// <returns>The parameter reference.</returns>
+    /// <returns>The parameter reference.</returns>    
     public ConditionExpr Param(string name) => new ParamRef(name);
 
     /// <summary>References a field of the request's resource attributes.</summary>

@@ -44,7 +44,7 @@ public class AlgebraInvariantTests
             async (length, user) =>
             {
                 var tuples = w.NestedChainTuples(length, user);
-                var auth = await w.World.BuildAsync(w.MonotoneSchema(), tuples.ToArray());
+                var auth = await w.World.BuildAsync(w.MonotoneSchema(), [.. tuples]);
                 var r = await auth.CheckAsync(View(w, user));
                 return r.Allowed == true;
             });

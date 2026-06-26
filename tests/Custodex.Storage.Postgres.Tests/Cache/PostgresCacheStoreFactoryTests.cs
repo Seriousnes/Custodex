@@ -46,7 +46,7 @@ public class PostgresCacheStoreFactoryTests(PostgresFixture fx) : IAsyncLifetime
         var got = await reader.GetAsync("k");
 
         got.ShouldNotBeNull();
-        got!.Value.ShouldBe(new byte[] { 7 });
+        got!.Value.ShouldBe([7]);
         got.Epoch.ShouldBe(3);
     }
 

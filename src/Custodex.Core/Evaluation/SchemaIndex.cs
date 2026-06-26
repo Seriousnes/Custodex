@@ -20,8 +20,8 @@ public sealed class SchemaIndex
     {
         Schema = schema;
         _types = schema.Types.ToDictionary(t => t.Name, StringComparer.Ordinal);
-        _permissions = new();
-        _relations = new();
+        _permissions = [];
+        _relations = [];
         foreach (var t in schema.Types)
         {
             foreach (var p in t.Permissions) _permissions[(t.Name, p.Name)] = p;

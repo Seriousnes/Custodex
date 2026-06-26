@@ -45,7 +45,7 @@ public class CacheEntriesTests(PostgresFixture fx) : IAsyncLifetime
         var got = await cache.GetAsync("check:asset:r1:edit:user:alice");
         got.ShouldNotBeNull();
         got!.Epoch.ShouldBe(7);
-        got.Value.ShouldBe(new byte[] { 1, 0, 1 });
+        got.Value.ShouldBe([1, 0, 1]);
     }
 
     [Fact]

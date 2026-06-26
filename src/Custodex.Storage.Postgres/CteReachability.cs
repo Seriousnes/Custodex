@@ -66,7 +66,7 @@ public static class CteReachability
         var rows = await conn.QueryAsync<LeafRow>(new CommandDefinition(SubjectsSql,
             new { store = t.Store, tenant = t.Tenant, ot = obj.Type, oid = obj.Id, rel = relation },
             transaction: tx, cancellationToken: ct));
-        return rows.Select(r => new SubjectRef(r.SubjectType, r.SubjectId)).Distinct().ToList();
+        return [.. rows.Select(r => new SubjectRef(r.SubjectType, r.SubjectId)).Distinct()];
     }
 
     /// <summary>
@@ -80,15 +80,15 @@ public static class CteReachability
         var rows = await conn.QueryAsync<EdgeRow>(new CommandDefinition(EdgesSql,
             new { store = t.Store, tenant = t.Tenant, ot = obj.Type, oid = obj.Id, rel = relation },
             transaction: tx, cancellationToken: ct));
-        return rows.Select(r =>
+        return [.. rows.Select(r =>
         {
             ConditionRef? condition = r.ConditionName is null
                 ? null
                 : new ConditionRef(r.ConditionName,
-                    Json.Deserialize<Dictionary<string, object?>>(r.ConditionParams) ?? new());
+                    Json.Deserialize<Dictionary<string, object?>>(r.ConditionParams) ?? []);
             return new RelationTuple(obj, relation,
                 new SubjectRef(r.SubjectType, r.SubjectId, r.SubjectRelation), condition);
-        }).ToList();
+        })];
     }
 
     private sealed record EdgeRow(

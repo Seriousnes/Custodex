@@ -28,7 +28,7 @@ public static class RestMap
 
     /// <summary>Converts a contract <see cref="ExplainNode"/> to its DTO, mapping children recursively.</summary>
     public static ExplainNodeDto ToDto(ExplainNode node) =>
-        new(node.Description, node.Allowed, node.Children.Select(ToDto).ToList());
+        new(node.Description, node.Allowed, [.. node.Children.Select(ToDto)]);
 
     /// <summary>Converts a <see cref="ConditionRefDto"/> to the contract record.</summary>
     public static ConditionRef FromDto(ConditionRefDto dto) => new(dto.Name, dto.Parameters);

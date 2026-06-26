@@ -68,7 +68,7 @@ public class CheckObservabilityTests
         using var listener = new ActivityListener
         {
             ShouldListenTo = src => src.Name == "Custodex",
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            Sample = (ref _) => ActivitySamplingResult.AllData,
             ActivityStopped = captured.Add
         };
         ActivitySource.AddActivityListener(listener);

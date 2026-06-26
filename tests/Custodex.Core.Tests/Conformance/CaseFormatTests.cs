@@ -22,8 +22,8 @@ public class CaseFormatTests
         var c = new ConformanceCase(
             Name: "direct grant",
             Schema: schema,
-            Tuples: new[] { world.Tuple(objType, objId, viewer, world.User(subjectId)) },
-            Attributes: Array.Empty<AttributeSeed>(),
+            Tuples: [world.Tuple(objType, objId, viewer, world.User(subjectId))],
+            Attributes: [],
             Object: world.Object(objType, objId),
             Permission: view,
             Subject: world.User(subjectId),

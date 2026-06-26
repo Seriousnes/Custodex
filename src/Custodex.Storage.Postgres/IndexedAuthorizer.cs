@@ -9,21 +9,14 @@ namespace Custodex.Storage.Postgres;
 /// <see cref="CheckAsync"/>, <see cref="BatchCheckAsync"/>, and <see cref="ListSubjectsAsync"/>
 /// delegate to the inner authorizer unchanged.
 /// </summary>
-public sealed partial class IndexedAuthorizer : IAuthorizer
+/// <remarks>
+/// Initializes the decorator with the inner CTE authorizer, the index store, and the schema store.
+/// </remarks>
+public sealed partial class IndexedAuthorizer(NpgsqlCteAuthorizer inner, IIndexStore index, ISchemaStore schemaStore) : IAuthorizer
 {
-    private readonly NpgsqlCteAuthorizer _inner;
-    private readonly IIndexStore _index;
-    private readonly ISchemaStore _schemaStore;
-
-    /// <summary>
-    /// Initializes the decorator with the inner CTE authorizer, the index store, and the schema store.
-    /// </summary>
-    public IndexedAuthorizer(NpgsqlCteAuthorizer inner, IIndexStore index, ISchemaStore schemaStore)
-    {
-        _inner = inner;
-        _index = index;
-        _schemaStore = schemaStore;
-    }
+    private readonly NpgsqlCteAuthorizer _inner = inner;
+    private readonly IIndexStore _index = index;
+    private readonly ISchemaStore _schemaStore = schemaStore;
 
     /// <inheritdoc />
     public Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)

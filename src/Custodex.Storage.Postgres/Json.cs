@@ -23,7 +23,7 @@ public static class Json
     /// so that abstract base types (such as <see cref="Custodex.Abstractions.PermExpr"/>) are
     /// dispatched through the registered polymorphic converter.
     /// </summary>
-    public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, typeof(T), Options);
+    public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
 
     /// <summary>
     /// Serializes a value whose static type is <see langword="object"/> to a JSON string using its

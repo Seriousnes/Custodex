@@ -66,7 +66,7 @@ public static class CteCandidates
         var ids = await conn.QueryAsync<string>(new CommandDefinition(ReachableSql,
             new { store = t.Store, tenant = t.Tenant, stype = subject.Type, sid = subject.Id, srel = subject.Relation, objtype = objectType },
             cancellationToken: ct));
-        return ids.ToList();
+        return [.. ids];
     }
 
     /// <summary>
@@ -79,6 +79,6 @@ public static class CteCandidates
     {
         var ids = await conn.QueryAsync<string>(new CommandDefinition(UniverseSql,
             new { store = t.Store, tenant = t.Tenant, objtype = objectType }, cancellationToken: ct));
-        return ids.ToList();
+        return [.. ids];
     }
 }

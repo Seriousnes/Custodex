@@ -42,10 +42,9 @@ public static class RemoteStatus
                     ex.Trailers.GetValue("custodex-error-name") ?? string.Empty),
             "schema_invalid" =>
                 new SchemaValidationException(
-                    ex.Trailers
+                    [.. ex.Trailers
                         .Where(e => e.Key == "custodex-error-message")
-                        .Select(e => e.Value)
-                        .ToList()),
+                        .Select(e => e.Value)]),
             "evaluation_limit" =>
                 new EvaluationLimitException(ex.Trailers.GetValue("custodex-error-detail") ?? ex.Message),
             _ => ex,

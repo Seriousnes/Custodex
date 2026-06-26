@@ -8,13 +8,12 @@ namespace Custodex.Core;
 /// Fluent registration surface for Custodex. Provider packages extend this with methods such as
 /// <c>UsePostgres</c>. Chain from <see cref="CustodexServiceCollectionExtensions.AddCustodex"/>.
 /// </summary>
-public sealed class CustodexBuilder
+/// <remarks>Initialises the builder over the given service collection.</remarks>
+public sealed class CustodexBuilder(IServiceCollection services)
 {
-    /// <summary>Initialises the builder over the given service collection.</summary>
-    public CustodexBuilder(IServiceCollection services) => Services = services;
 
     /// <summary>The service collection this builder was created from.</summary>
-    public IServiceCollection Services { get; }
+    public IServiceCollection Services { get; } = services;
 
     /// <summary>
     /// The schema to validate and activate at startup, captured by <see cref="UseSchema(Schema)"/>

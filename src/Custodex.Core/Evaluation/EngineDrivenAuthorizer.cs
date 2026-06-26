@@ -11,33 +11,24 @@ namespace Custodex.Core.Evaluation;
 /// It runs the same decision semantics on any storage provider and serves as the reference
 /// implementation other authorizers are validated against.
 /// </summary>
-public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuthorizer
+/// <remarks>Creates an authorizer over the given stores and condition evaluator.</remarks>
+/// <param name="schemaStore">Supplies the active schema for the request's store.</param>
+/// <param name="relations">The relation tuple store queried during evaluation.</param>
+/// <param name="attributes">The attribute store read when evaluating conditions.</param>
+/// <param name="conditions">Evaluates the predicate carried by a conditioned tuple.</param>
+/// <param name="options">Evaluation limits such as the maximum recursion depth; defaults are used when omitted.</param>
+public sealed partial class EngineDrivenAuthorizer(
+    ISchemaStore schemaStore,
+    IRelationStore relations,
+    IAttributeStore attributes,
+    IConditionEvaluator conditions,
+    EvaluationOptions? options = null) : IAuthorizer, ICacheableAuthorizer
 {
-    private readonly ISchemaStore _schemaStore;
-    private readonly IRelationStore _relations;
-    private readonly IAttributeStore _attributes;
-    private readonly IConditionEvaluator _conditions;
-    private readonly EvaluationOptions _options;
-
-    /// <summary>Creates an authorizer over the given stores and condition evaluator.</summary>
-    /// <param name="schemaStore">Supplies the active schema for the request's store.</param>
-    /// <param name="relations">The relation tuple store queried during evaluation.</param>
-    /// <param name="attributes">The attribute store read when evaluating conditions.</param>
-    /// <param name="conditions">Evaluates the predicate carried by a conditioned tuple.</param>
-    /// <param name="options">Evaluation limits such as the maximum recursion depth; defaults are used when omitted.</param>
-    public EngineDrivenAuthorizer(
-        ISchemaStore schemaStore,
-        IRelationStore relations,
-        IAttributeStore attributes,
-        IConditionEvaluator conditions,
-        EvaluationOptions? options = null)
-    {
-        _schemaStore = schemaStore;
-        _relations = relations;
-        _attributes = attributes;
-        _conditions = conditions;
-        _options = options ?? new EvaluationOptions();
-    }
+    private readonly ISchemaStore _schemaStore = schemaStore;
+    private readonly IRelationStore _relations = relations;
+    private readonly IAttributeStore _attributes = attributes;
+    private readonly IConditionEvaluator _conditions = conditions;
+    private readonly EvaluationOptions _options = options ?? new EvaluationOptions();
 
     private async Task<SchemaIndex> LoadSchemaAsync(string store, CancellationToken ct)
     {

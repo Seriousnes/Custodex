@@ -7,8 +7,8 @@ public sealed class InMemoryAttributeStore : IAttributeStore
 {
     private readonly record struct Key(string Store, string Tenant, string ObjType, string ObjId);
 
-    private readonly object _gate = new();
-    private readonly Dictionary<Key, Dictionary<string, object?>> _data = new();
+    private readonly Lock _gate = new();
+    private readonly Dictionary<Key, Dictionary<string, object?>> _data = [];
 
     private static Key KeyOf(TenantContext t, EntityRef obj) => new(t.Store, t.Tenant, obj.Type, obj.Id);
 

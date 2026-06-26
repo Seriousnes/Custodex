@@ -47,21 +47,14 @@ public sealed class GrpcAuthorizerMappingTests
         fake.LastListObjectsRequest!.ContinuationToken.ShouldBe(string.Empty);
     }
 
-    private sealed class FakeDecisionClient : Custodex.Api.Decision.DecisionClient
+    private sealed class FakeDecisionClient(bool allowed = false, IEnumerable<string>? objectIds = null, string continuationToken = "") : Custodex.Api.Decision.DecisionClient
     {
-        private readonly bool _allowed;
-        private readonly IEnumerable<string> _objectIds;
-        private readonly string _continuationToken;
+        private readonly bool _allowed = allowed;
+        private readonly IEnumerable<string> _objectIds = objectIds ?? [];
+        private readonly string _continuationToken = continuationToken;
 
         public Custodex.Api.CheckRequest? LastCheckRequest { get; private set; }
         public Custodex.Api.ListObjectsRequest? LastListObjectsRequest { get; private set; }
-
-        public FakeDecisionClient(bool allowed = false, IEnumerable<string>? objectIds = null, string continuationToken = "")
-        {
-            _allowed = allowed;
-            _objectIds = objectIds ?? [];
-            _continuationToken = continuationToken;
-        }
 
         public override AsyncUnaryCall<Custodex.Api.CheckResponse> CheckAsync(
             Custodex.Api.CheckRequest request,

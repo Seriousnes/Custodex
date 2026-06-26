@@ -11,8 +11,8 @@ public sealed class InMemoryRelationStore : IRelationStore
         string ObjType, string ObjId, string Relation,
         string SubjType, string SubjId, string? SubjRelation, string? ConditionName);
 
-    private readonly object _gate = new();
-    private readonly Dictionary<Key, Dictionary<TupleIdentity, RelationTuple>> _data = new();
+    private readonly Lock _gate = new();
+    private readonly Dictionary<Key, Dictionary<TupleIdentity, RelationTuple>> _data = [];
 
     private static Key KeyOf(TenantContext t) => new(t.Store, t.Tenant);
 
@@ -80,7 +80,7 @@ public sealed class InMemoryRelationStore : IRelationStore
         lock (_gate)
         {
             if (!_data.TryGetValue(KeyOf(t), out var bucket))
-                _data[KeyOf(t)] = bucket = new Dictionary<TupleIdentity, RelationTuple>();
+                _data[KeyOf(t)] = bucket = [];
 
             foreach (var tuple in remove)
                 bucket.Remove(IdentityOf(tuple));

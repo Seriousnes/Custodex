@@ -18,17 +18,15 @@ public readonly record struct EvalFrame(EntityRef Object, string Permission, Sub
 /// recording whether any condition was reached (so a condition-dependent decision
 /// is never cached).
 /// </summary>
-public sealed class EvalContext
+/// <remarks>Creates evaluation state bound to the given limits.</remarks>
+/// <param name="options">The evaluation limits to enforce for this request.</param>
+public sealed class EvalContext(EvaluationOptions options)
 {
-    private readonly EvaluationOptions _options;
-    private readonly Dictionary<EvalFrame, bool> _memo = new();
-    private readonly HashSet<EvalFrame> _onPath = new();
-    private readonly HashSet<EvalFrame> _relationOnPath = new();
+    private readonly EvaluationOptions _options = options;
+    private readonly Dictionary<EvalFrame, bool> _memo = [];
+    private readonly HashSet<EvalFrame> _onPath = [];
+    private readonly HashSet<EvalFrame> _relationOnPath = [];
     private int _depth;
-
-    /// <summary>Creates evaluation state bound to the given limits.</summary>
-    /// <param name="options">The evaluation limits to enforce for this request.</param>
-    public EvalContext(EvaluationOptions options) => _options = options;
 
     /// <summary>Whether any condition was reached during this evaluation.</summary>
     public bool ConditionTouched { get; private set; }

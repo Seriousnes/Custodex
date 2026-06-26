@@ -85,7 +85,7 @@ public class StructuralGateTests
             _world.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
             _world.Tuple(_parentType, parentId, _gate, new SubjectRef(_world.UserType, "*")),
         };
-        var auth = await _world.BuildAsync(Build(), tuples.ToArray());
+        var auth = await _world.BuildAsync(Build(), [.. tuples]);
         (await auth.CheckAsync(Access(childId, _bothSubject))).Allowed.ShouldBeTrue();
     }
 
@@ -99,7 +99,7 @@ public class StructuralGateTests
             _world.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
             _world.Tuple(_parentType, parentId, _gate, new SubjectRef(_world.UserType, "*")),
         };
-        var auth = await _world.BuildAsync(Build(), tuples.ToArray());
+        var auth = await _world.BuildAsync(Build(), [.. tuples]);
         (await auth.CheckAsync(Access(childId, _setAOnlySubject))).Allowed.ShouldBeFalse();
     }
 
@@ -112,7 +112,7 @@ public class StructuralGateTests
         {
             _world.Tuple(_childType, childId, _link, new SubjectRef(_parentType, parentId)),
         };
-        var auth = await _world.BuildAsync(Build(), tuples.ToArray());
+        var auth = await _world.BuildAsync(Build(), [.. tuples]);
         (await auth.CheckAsync(Access(childId, _setAOnlySubject))).Allowed.ShouldBeTrue();
         (await auth.CheckAsync(Access(childId, _bothSubject))).Allowed.ShouldBeTrue();
     }

@@ -55,6 +55,6 @@ public sealed partial class EngineDrivenAuthorizer
             }
         }
 
-        return found.Select(id => new EntityRef(objectType, id)).ToList();
+        return [.. found.Select(id => new EntityRef(objectType, id))];
     }
 }

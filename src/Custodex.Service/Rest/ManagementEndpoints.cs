@@ -50,7 +50,7 @@ public static partial class RestEndpoints
             var filter = new TupleFilter(
                 req.ObjectType, req.ObjectId, req.Relation, req.SubjectType, req.SubjectId);
             var tuples = await relations.ReadTuplesAsync(tc.Current, filter, ct);
-            return Results.Ok(new ReadTuplesResponseDto(tuples.Select(RestMap.ToDto).ToList()));
+            return Results.Ok(new ReadTuplesResponseDto([.. tuples.Select(RestMap.ToDto)]));
         })
         .WithName("ReadTuples")
         .WithSummary("Read relation tuples by filter.");
@@ -100,7 +100,7 @@ public static partial class RestEndpoints
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["schema"] = ex.Errors.ToArray(),
+                    ["schema"] = [.. ex.Errors],
                 });
             }
         })

@@ -49,11 +49,10 @@ public sealed class GrpcAuthorizer(Proto.Decision.DecisionClient client) : IAuth
         }
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.BatchCheckAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
-        return response.Results
+        return [.. response.Results
             .Select(r => new CheckResult(
                 r.Allowed,
-                r.Explain is { Description.Length: > 0 } ? ProtoMap.FromProto(r.Explain) : null))
-            .ToList();
+                r.Explain is { Description.Length: > 0 } ? ProtoMap.FromProto(r.Explain) : null))];
     }
 
     /// <inheritdoc/>
@@ -71,7 +70,7 @@ public sealed class GrpcAuthorizer(Proto.Decision.DecisionClient client) : IAuth
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.ListObjectsAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
         return new ListObjectsResult(
-            response.ObjectIds.ToList(),
+            [.. response.ObjectIds],
             string.IsNullOrEmpty(response.ContinuationToken) ? null : response.ContinuationToken);
     }
 
@@ -89,7 +88,7 @@ public sealed class GrpcAuthorizer(Proto.Decision.DecisionClient client) : IAuth
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.ListSubjectsAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
         return new ListSubjectsResult(
-            response.Subjects.Select(ProtoMap.FromProto).ToList(),
+            [.. response.Subjects.Select(ProtoMap.FromProto)],
             string.IsNullOrEmpty(response.ContinuationToken) ? null : response.ContinuationToken);
     }
 }

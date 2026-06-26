@@ -15,7 +15,7 @@ using Shouldly;
 
 using Proto = Custodex.Api;
 
-namespace Custodex.Service.Tests;
+namespace Custodex.Service.Tests.Auth;
 
 [Collection("service")]
 public sealed class ControlPlaneStoreScopeTests(PostgresFixture pg)

@@ -70,7 +70,7 @@ public class ReverseReachabilityTests
             Tuple(_world.GroupType, groupA, _world.MemberRelation, _world.User(subject)));
 
         var candidates = await auth.CandidateObjectsForTest(T, _world.User(subject), _objType);
-        candidates.Select(c => c.Id).ShouldBe(new[] { objId });
+        candidates.Select(c => c.Id).ShouldBe([objId]);
     }
 
     [Fact]

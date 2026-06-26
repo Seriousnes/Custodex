@@ -21,10 +21,10 @@ public class ListObjectsTests
         _editor = _world.Relation();
         _blocked = _world.Relation();
         _edit = _world.Permission();
-        _sortedIds = new[]
+        _sortedIds = [.. new[]
         {
             _world.ObjectId(), _world.ObjectId(), _world.ObjectId(), _world.ObjectId(), _world.ObjectId(),
-        }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        }.OrderBy(x => x, StringComparer.Ordinal)];
     }
 
     private Schema Build() => new SchemaBuilder(_world.Version)
@@ -62,7 +62,7 @@ public class ListObjectsTests
             Tuple(_world.GroupType, groupId, _world.MemberRelation, _world.User(subjectId)));
 
         var result = await auth.ListObjectsAsync(Req(subjectId));
-        result.ObjectIds.ShouldBe(new[] { allowedObj });
+        result.ObjectIds.ShouldBe([allowedObj]);
         result.ContinuationToken.ShouldBeNull();
     }
 
@@ -93,15 +93,15 @@ public class ListObjectsTests
             Tuple(_objType, ids[4], _editor, new SubjectRef(_world.UserType, "*")));
 
         var page1 = await auth.ListObjectsAsync(Req(anyone, pageSize: 2));
-        page1.ObjectIds.ShouldBe(new[] { ids[0], ids[1] });
+        page1.ObjectIds.ShouldBe([ids[0], ids[1]]);
         page1.ContinuationToken.ShouldNotBeNull();
 
         var page2 = await auth.ListObjectsAsync(Req(anyone, pageSize: 2, token: page1.ContinuationToken));
-        page2.ObjectIds.ShouldBe(new[] { ids[2], ids[3] });
+        page2.ObjectIds.ShouldBe([ids[2], ids[3]]);
         page2.ContinuationToken.ShouldNotBeNull();
 
         var page3 = await auth.ListObjectsAsync(Req(anyone, pageSize: 2, token: page2.ContinuationToken));
-        page3.ObjectIds.ShouldBe(new[] { ids[4] });
+        page3.ObjectIds.ShouldBe([ids[4]]);
         page3.ContinuationToken.ShouldBeNull();
     }
 

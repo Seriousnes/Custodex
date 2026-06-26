@@ -51,6 +51,6 @@ public static class AffectedClosure
             new { store = t.Store, tenant = t.Tenant, types = seedTypes.ToArray(), ids = seedIds.ToArray() },
             transaction: tx, cancellationToken: ct));
 
-        return rows.Select(r => new EntityRef(r.Otype, r.Oid)).Distinct().ToList();
+        return [.. rows.Select(r => new EntityRef(r.Otype, r.Oid)).Distinct()];
     }
 }

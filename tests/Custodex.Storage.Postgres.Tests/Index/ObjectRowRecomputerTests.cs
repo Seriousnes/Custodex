@@ -40,8 +40,7 @@ public class ObjectRowRecomputerTests(PostgresFixture fx) : IAsyncLifetime
     [Fact]
     public async Task Recompute_returns_the_objects_structural_rows_honouring_exclusion()
     {
-        var t = new TenantContext("recomp", "t");
-        RelationTuple Tup(string ot, string oid, string rel, SubjectRef s) => new(new EntityRef(ot, oid), rel, s);
+        var t = new TenantContext("recomp", "t");       
 
         await using (var u = await _factory.BeginAsync())
         {
@@ -67,5 +66,7 @@ public class ObjectRowRecomputerTests(PostgresFixture fx) : IAsyncLifetime
 
         rows.Select(r => $"{r.Subject}|{r.ObjectId}").ShouldBe(["user:alice|alpha"]);
         rows[0].Conditioned.ShouldBeFalse();
+
+        static RelationTuple Tup(string ot, string oid, string rel, SubjectRef s) => new(new EntityRef(ot, oid), rel, s);
     }
 }

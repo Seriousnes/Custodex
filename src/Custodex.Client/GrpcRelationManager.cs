@@ -65,7 +65,7 @@ public sealed class GrpcRelationManager(Proto.Relations.RelationsClient client) 
         };
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.ReadTuplesAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
-        return response.Tuples.Select(ProtoMap.FromProto).ToList();
+        return [.. response.Tuples.Select(ProtoMap.FromProto)];
     }
 
     /// <inheritdoc/>
@@ -81,10 +81,10 @@ public sealed class GrpcRelationManager(Proto.Relations.RelationsClient client) 
             proto.Since = Timestamp.FromDateTimeOffset(filter.Since.Value);
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.ReadChangeLogAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
-        return response.Entries.Select(e => new ChangeLogEntry(
+        return [.. response.Entries.Select(e => new ChangeLogEntry(
             e.Id, e.Actor, e.Operation, e.Target,
             string.IsNullOrEmpty(e.BeforeJson) ? null : (object)e.BeforeJson,
             string.IsNullOrEmpty(e.AfterJson) ? null : (object)e.AfterJson,
-            e.OccurredAt.ToDateTimeOffset())).ToList();
+            e.OccurredAt.ToDateTimeOffset()))];
     }
 }

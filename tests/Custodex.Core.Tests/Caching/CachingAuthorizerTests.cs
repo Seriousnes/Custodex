@@ -33,11 +33,10 @@ public class CachingAuthorizerTests
 
     private TenantContext T => _world.Tenant;
 
-    private sealed class CountingRelationStore : IRelationStore
+    private sealed class CountingRelationStore(InMemoryRelationStore inner) : IRelationStore
     {
-        private readonly InMemoryRelationStore _inner;
+        private readonly InMemoryRelationStore _inner = inner;
         public int GetByObjectCalls { get; private set; }
-        public CountingRelationStore(InMemoryRelationStore inner) => _inner = inner;
 
         public Task<IReadOnlyList<RelationTuple>> GetByObjectAsync(TenantContext t, EntityRef obj, string relation, CancellationToken ct = default)
         { GetByObjectCalls++; return _inner.GetByObjectAsync(t, obj, relation, ct); }
@@ -72,7 +71,7 @@ public class CachingAuthorizerTests
         var cache = new InMemoryCacheStore();
         var uow = new NoOpUnitOfWork();
         await schemaStore.SetActiveAsync(T.Store, schema, uow);
-        await raw.WriteAsync(T, tuples, Array.Empty<RelationTuple>(), uow);
+        await raw.WriteAsync(T, tuples, [], uow);
         await uow.CommitAsync();
         var inner = new EngineDrivenAuthorizer(schemaStore, counter, attributes, conditions);
         return (new CachingAuthorizer(inner, schemaStore, cache), counter, cache, new NoOpUnitOfWork());

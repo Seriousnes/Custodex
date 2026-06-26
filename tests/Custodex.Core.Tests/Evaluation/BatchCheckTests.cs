@@ -55,12 +55,12 @@ public class BatchCheckTests
         var auth = await NewAsync();
         var ctx = new RequestContext(DateTimeOffset.UnixEpoch, _world.User(_actor),
             new Dictionary<string, object?>());
-        var req = new BatchCheckRequest(T, new[]
-        {
+        var req = new BatchCheckRequest(T,
+        [
             new CheckItem(new EntityRef(_objType, _objId1), _view, _world.User(_viaGroup)),
             new CheckItem(new EntityRef(_objType, _objId1), _view, _world.User(_direct)),
             new CheckItem(new EntityRef(_objType, _objId2), _view, _world.User(_direct)),
-        }, ctx);
+        ], ctx);
 
         var results = await auth.BatchCheckAsync(req);
         results.Count.ShouldBe(3);
@@ -75,7 +75,7 @@ public class BatchCheckTests
         var auth = await NewAsync();
         var ctx = new RequestContext(DateTimeOffset.UnixEpoch, _world.User(_actor),
             new Dictionary<string, object?>());
-        var results = await auth.BatchCheckAsync(new BatchCheckRequest(T, Array.Empty<CheckItem>(), ctx));
+        var results = await auth.BatchCheckAsync(new BatchCheckRequest(T, [], ctx));
         results.ShouldBeEmpty();
     }
 }

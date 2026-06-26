@@ -21,8 +21,8 @@ public class RunnerTests
             .Type(objType, t => t.Relation(viewer, s => s.Type(world.UserType)).Permission(view, p => p.Relation(viewer)))
             .Build();
         var c = new ConformanceCase("allow", schema,
-            new[] { world.Tuple(objType, objId, viewer, world.User(subjectId)) },
-            Array.Empty<AttributeSeed>(),
+            [world.Tuple(objType, objId, viewer, world.User(subjectId))],
+            [],
             world.Object(objType, objId), view, world.User(subjectId),
             DateTimeOffset.UnixEpoch, new Dictionary<string, object?>(), Expected: true);
 
@@ -45,7 +45,7 @@ public class RunnerTests
             .Type(objType, t => t.Relation(viewer, s => s.Type(world.UserType)).Permission(view, p => p.Relation(viewer)))
             .Build();
         var c = new ConformanceCase("deny", schema,
-            Array.Empty<RelationTuple>(), Array.Empty<AttributeSeed>(),
+            [], [],
             world.Object(objType, objId), view, world.User(subjectId),
             DateTimeOffset.UnixEpoch, new Dictionary<string, object?>(), Expected: false);
 

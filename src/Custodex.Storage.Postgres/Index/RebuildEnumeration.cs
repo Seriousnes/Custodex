@@ -40,7 +40,7 @@ public static class RebuildEnumeration
 
         var byType = objects
             .GroupBy(o => o.ObjectType, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(o => o.ObjectId).ToList(), StringComparer.Ordinal);
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)[.. g.Select(o => o.ObjectId)], StringComparer.Ordinal);
 
         return new RebuildInputs(users, byType);
     }

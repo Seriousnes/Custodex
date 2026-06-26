@@ -160,11 +160,11 @@ public sealed class NpgsqlRelationStore : IRelationStore
         if (_bound is { } b)
         {
             var rows = await b.Connection.QueryAsync<Row>(new CommandDefinition(sql, args, transaction: b.Transaction, cancellationToken: ct));
-            return rows.Select(Map).ToList();
+            return [.. rows.Select(Map)];
         }
         await using var conn = new NpgsqlConnection(_connectionString);
         var ownRows = await conn.QueryAsync<Row>(new CommandDefinition(sql, args, cancellationToken: ct));
-        return ownRows.Select(Map).ToList();
+        return [.. ownRows.Select(Map)];
     }
 
     private async Task<IReadOnlyList<string>> QueryStringsAsync(string sql, object args, CancellationToken ct)
@@ -172,11 +172,11 @@ public sealed class NpgsqlRelationStore : IRelationStore
         if (_bound is { } b)
         {
             var rows = await b.Connection.QueryAsync<string>(new CommandDefinition(sql, args, transaction: b.Transaction, cancellationToken: ct));
-            return rows.ToList();
+            return [.. rows];
         }
         await using var conn = new NpgsqlConnection(_connectionString);
         var ownRows = await conn.QueryAsync<string>(new CommandDefinition(sql, args, cancellationToken: ct));
-        return ownRows.ToList();
+        return [.. ownRows];
     }
 
     private static void AddKeyParams(NpgsqlCommand cmd, TenantContext t, RelationTuple tuple)
@@ -197,7 +197,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
             ? null
             : new ConditionRef(r.ConditionName,
                 Json.Deserialize<Dictionary<string, object?>>(r.ConditionParams)
-                    ?? new Dictionary<string, object?>());
+                    ?? []);
 
         return new RelationTuple(
             new EntityRef(r.ObjectType, r.ObjectId),

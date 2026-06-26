@@ -95,6 +95,6 @@ public static partial class DifferentialHarness
             if (op.Add) live[key] = op.Tuple;
             else live.Remove(key);
         }
-        return live.Values.ToList();
+        return [.. live.Values];
     }
 }

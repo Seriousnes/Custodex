@@ -97,7 +97,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
                 store = t.Store, tenant = t.Tenant, sv = schemaVersion,
                 subject, permission, ot = objectType, after = afterObjectId, limit
             }, cancellationToken: ct));
-        return rows.Select(Map).ToList();
+        return [.. rows.Select(Map)];
     }
 
     /// <inheritdoc />
@@ -114,7 +114,7 @@ public sealed class NpgsqlIndexStore(string connectionString) : IIndexStore
               AND object_type = @ot AND object_id = @oid
             """, new { store = t.Store, tenant = t.Tenant, sv = schemaVersion, ot = objectType, oid = objectId },
             cancellationToken: ct));
-        return rows.Select(Map).ToList();
+        return [.. rows.Select(Map)];
     }
 
     /// <inheritdoc />

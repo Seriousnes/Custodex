@@ -34,7 +34,7 @@ public class SchemaBuilderTests
 
         schema.Version.ShouldBe(world.Version);
         var type = schema.Types.Single(x => x.Name == objType);
-        type.Relations.Select(r => r.Name).ShouldBe(new[] { grant, link, blocked });
+        type.Relations.Select(r => r.Name).ShouldBe([grant, link, blocked]);
         type.Permissions.Single().Name.ShouldBe(edit);
         type.Permissions.Single().Expression.ShouldBeOfType<Exclude>();
         schema.Conditions.Single().Name.ShouldBe(condition);

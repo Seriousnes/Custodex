@@ -42,10 +42,7 @@ public sealed class SchemaGrpcService(Contracts.ISchemaManager schemas, ITenantC
     {
         RequireStore(request.Store);
 
-        var schema = SchemaJson.Deserialize(request.SchemaJson);
-        if (schema is null)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Schema JSON is null or empty."));
-
+        var schema = SchemaJson.Deserialize(request.SchemaJson) ?? throw new RpcException(new Status(StatusCode.InvalidArgument, "Schema JSON is null or empty."));
         try
         {
             await schemas.SetActiveSchemaAsync(request.Store, schema, context.CancellationToken);

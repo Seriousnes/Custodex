@@ -18,7 +18,7 @@ public sealed class GrpcSchemaManager(Proto.Schema.SchemaClient client) : ISchem
         var proto = new Proto.ValidateSchemaRequest { SchemaJson = SchemaJson.Serialize(schema) };
         var response = RemoteStatus.Unwrap(() =>
             client.Validate(proto));
-        return new SchemaValidationResult(response.IsValid, response.Errors.ToList());
+        return new SchemaValidationResult(response.IsValid, [.. response.Errors]);
     }
 
     /// <inheritdoc/>
