@@ -92,12 +92,6 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuth
         }
     }
 
-    /// <summary>
-    /// Pointwise membership: does <paramref name="subject"/> hold
-    /// <paramref name="permission"/> on <paramref name="obj"/>? Evaluates the
-    /// permission's <see cref="PermExpr"/> recursively. The optional
-    /// <paramref name="explain"/> sink collects a trace node per visited branch.
-    /// </summary>
     private async Task<bool> CheckPermissionAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string permission,
         SubjectRef subject, RequestContext context, EvalContext ctx,
@@ -108,7 +102,7 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuth
             return memoized;
 
         if (!ctx.TryEnter(frame, out var scope))
-            return false;   // cycle on the current path: contributes nothing
+            return false;
 
         using (scope)
         {
@@ -121,13 +115,12 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuth
         }
     }
 
-    /// <summary>Evaluates whether <paramref name="subject"/> fills <paramref name="obj"/>#<paramref name="relation"/>.</summary>
     private async Task<bool> ResolveRelationAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
         SubjectRef subject, RequestContext context, EvalContext ctx, CancellationToken ct)
     {
         if (!ctx.TryEnterRelation(new EvalFrame(obj, relation, subject), out var scope))
-            return false;   // relation cycle on the current path: contributes nothing
+            return false;
         using (scope)
         {
             var tuples = await _relations.GetByObjectAsync(tenant, obj, relation, ct);
@@ -138,17 +131,14 @@ public sealed partial class EngineDrivenAuthorizer : IAuthorizer, ICacheableAuth
 
                 var s = tuple.Subject;
 
-                // Wildcard: type:* grants every subject of that type.
                 if (s.IsWildcard && string.Equals(s.Type, subject.Type, StringComparison.Ordinal))
                     return true;
 
-                // Direct subject match.
                 if (!s.IsSubjectSet && !s.IsWildcard
                     && string.Equals(s.Type, subject.Type, StringComparison.Ordinal)
                     && string.Equals(s.Id, subject.Id, StringComparison.Ordinal))
                     return true;
 
-                // Subject-set: group:G#rel — recurse into G's relation.
                 if (s.IsSubjectSet)
                 {
                     var nestedObj = new EntityRef(s.Type, s.Id);

@@ -56,7 +56,6 @@ public sealed partial class NpgsqlCteAuthorizer : IAuthorizer
         return new CheckResult(allowed, explainSink?.Count > 0 ? explainSink[0] : null);
     }
 
-    /// <summary>Pointwise membership: does <paramref name="subject"/> hold <paramref name="permission"/> on <paramref name="obj"/>?</summary>
     private async Task<bool> CheckPermissionAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, string permission,
         SubjectRef subject, RequestContext context, EvalContext ctx, List<ExplainNode>? explain, CancellationToken ct)
@@ -78,13 +77,6 @@ public sealed partial class NpgsqlCteAuthorizer : IAuthorizer
         }
     }
 
-    /// <summary>
-    /// Does <paramref name="subject"/> fill <paramref name="obj"/>#<paramref name="relation"/>?
-    /// Direct / wildcard / nested subject-set. When no direct tuple on this relation carries a
-    /// condition, the expanded-CTE fast path resolves nesting in SQL; otherwise direct edges are
-    /// walked in C# so each tuple's condition is evaluated as the <c>EngineDrivenAuthorizer</c> does.
-    /// The whole body is guarded against relation cycles on the current path.
-    /// </summary>
     private async Task<bool> ResolveRelationAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
         SubjectRef subject, RequestContext context, EvalContext ctx, CancellationToken ct)
@@ -124,7 +116,6 @@ public sealed partial class NpgsqlCteAuthorizer : IAuthorizer
         }
     }
 
-    /// <summary>Evaluates a tuple's carried condition. A tuple with no condition is satisfied. Latches <see cref="EvalContext.ConditionTouched"/>.</summary>
     private async Task<bool> ConditionSatisfiedAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, RelationTuple tuple,
         RequestContext context, EvalContext ctx, CancellationToken ct)

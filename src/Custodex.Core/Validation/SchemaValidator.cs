@@ -29,8 +29,6 @@ public static class SchemaValidator
                 ValidateExpr(type, perm.Name, perm.Expression, types, conditions, errors);
         }
 
-        // Only run cycle detection when resolution succeeded; otherwise an unresolved
-        // name would be mistaken for a cycle.
         if (errors.Count == 0)
             DetectCycles(schema, types, errors);
 
@@ -131,7 +129,6 @@ public static class SchemaValidator
 
         foreach (var filler in relation.AllowedSubjects)
         {
-            // Subject-set fillers (e.g. group#member) name a relation, not an arrow target.
             if (filler.Relation is not null)
                 continue;
 
@@ -175,7 +172,7 @@ public static class SchemaValidator
         foreach (var next in Edges(node, types))
         {
             if (!marks.TryGetValue(next, out var mark))
-                continue;   // edge to a non-permission node; resolution already covered it
+                continue;
             if (mark == Mark.Grey)
             {
                 errors.Add($"Permission '{node.Type}.{node.Perm}' is part of a " +
@@ -213,7 +210,7 @@ public static class SchemaValidator
                 yield return (type.Name, r.Relation);
                 break;
             case RelationRef:
-                break;   // names a relation (possibly shadowing a same-named permission); resolved as a relation, not a permission edge
+                break;
             case Union u:
                 foreach (var e in ExprEdges(type, u.Left, types)) yield return e;
                 foreach (var e in ExprEdges(type, u.Right, types)) yield return e;

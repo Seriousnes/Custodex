@@ -4,13 +4,6 @@ namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
-    /// <summary>
-    /// Pointwise evaluation of a permission sub-expression for a single subject.
-    /// Returns true iff the subject is a member of the set the expression denotes
-    /// on <paramref name="obj"/>. Boolean operators short-circuit; Arrow recurses
-    /// into the related object's own permission expression (so inner exclusions and
-    /// intersections are always honoured).
-    /// </summary>
     private async Task<bool> EvalExprAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, PermExpr expr,
         SubjectRef subject, RequestContext context, EvalContext ctx,
@@ -29,8 +22,7 @@ public sealed partial class EngineDrivenAuthorizer
             {
                 var children = explain is null ? null : new List<ExplainNode>();
                 var left = await EvalExprAsync(index, tenant, obj, u.Left, subject, context, ctx, children, ct);
-                if (left && explain is null) return true;   // short-circuit when not explaining
-                // When explaining, always evaluate the right branch so the trace records both.
+                if (left && explain is null) return true;
                 var right = await EvalExprAsync(index, tenant, obj, u.Right, subject, context, ctx, children, ct);
                 var result = left || right;
                 explain?.Add(new ExplainNode("union (+)", result, children!));
@@ -41,7 +33,7 @@ public sealed partial class EngineDrivenAuthorizer
             {
                 var children = explain is null ? null : new List<ExplainNode>();
                 var left = await EvalExprAsync(index, tenant, obj, i.Left, subject, context, ctx, children, ct);
-                if (!left && explain is null) { return false; }   // short-circuit when not explaining
+                if (!left && explain is null) { return false; }
                 var right = await EvalExprAsync(index, tenant, obj, i.Right, subject, context, ctx, children, ct);
                 var result = left && right;
                 explain?.Add(new ExplainNode("intersect (&)", result, children!));
@@ -52,7 +44,7 @@ public sealed partial class EngineDrivenAuthorizer
             {
                 var children = explain is null ? null : new List<ExplainNode>();
                 var left = await EvalExprAsync(index, tenant, obj, e.Left, subject, context, ctx, children, ct);
-                if (!left && explain is null) { return false; }   // short-circuit when not explaining
+                if (!left && explain is null) { return false; }
                 var right = await EvalExprAsync(index, tenant, obj, e.Right, subject, context, ctx, children, ct);
                 var result = left && !right;
                 explain?.Add(new ExplainNode("exclude (-)", result, children!));
@@ -81,14 +73,6 @@ public sealed partial class EngineDrivenAuthorizer
         }
     }
 
-    /// <summary>
-    /// Arrow: gather the objects related to <paramref name="obj"/> through
-    /// <paramref name="arrow"/>.Relation and recurse into each one's
-    /// <paramref name="arrow"/>.Permission. A related object's subject in the
-    /// relation tuple is the target entity (e.g. <c>enclosure:KH1</c>). If the
-    /// target type defines a permission of that name we evaluate the full
-    /// permission; otherwise we fall back to a direct relation resolve.
-    /// </summary>
     private async Task<bool> EvalArrowAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, Arrow arrow,
         SubjectRef subject, RequestContext context, EvalContext ctx,
@@ -100,7 +84,6 @@ public sealed partial class EngineDrivenAuthorizer
             if (!await ConditionSatisfiedAsync(index, tenant, obj, edge, context, ctx, ct))
                 continue;
 
-            // The subject of a structural-reference tuple is the related entity.
             var related = new EntityRef(edge.Subject.Type, edge.Subject.Id);
 
             bool hit;
@@ -114,11 +97,6 @@ public sealed partial class EngineDrivenAuthorizer
         return false;
     }
 
-    /// <summary>
-    /// Branch-level condition gate (a <see cref="Conditioned"/> node). Evaluated with
-    /// empty parameters against request context + the object's synced attributes.
-    /// Latches <see cref="EvalContext.ConditionTouched"/>.
-    /// </summary>
     private async Task<bool> BranchConditionSatisfiedAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string conditionName,
         RequestContext context, EvalContext ctx, CancellationToken ct)
