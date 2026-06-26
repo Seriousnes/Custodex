@@ -73,5 +73,10 @@ public sealed class CustodexExceptionInterceptor : Interceptor
             };
             throw new RpcException(new Status(StatusCode.ResourceExhausted, ex.Message), trailers);
         }
+        catch (System.Text.Json.JsonException ex)
+        {
+            var trailers = new Metadata { { "custodex-error-kind", "malformed_json" } };
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message), trailers);
+        }
     }
 }

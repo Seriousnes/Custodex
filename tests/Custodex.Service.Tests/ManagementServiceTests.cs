@@ -197,4 +197,24 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
 
         ex.StatusCode.ShouldBe(StatusCode.InvalidArgument);
     }
+
+    [Fact]
+    public async Task SetActive_with_malformed_json_returns_InvalidArgument()
+    {
+        await using var factory = CreateFactory();
+        var channel = CreateChannel(factory);
+        var pClient = new Proto.Provisioning.ProvisioningClient(channel);
+        var sClient = new Proto.Schema.SchemaClient(channel);
+
+        await ProvisionStoreAndTenantAsync(pClient);
+
+        var ex = await Should.ThrowAsync<RpcException>(async () =>
+            await sClient.SetActiveAsync(new Proto.SetActiveSchemaRequest
+            {
+                Store = TestAuthHelper.AdminStore,
+                SchemaJson = "{ not valid schema json",
+            }));
+
+        ex.StatusCode.ShouldBe(StatusCode.InvalidArgument);
+    }
 }
