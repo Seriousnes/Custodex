@@ -1,3 +1,5 @@
+using System.Data.Common;
+
 namespace Custodex.Abstractions;
 
 /// <summary>
@@ -5,6 +7,13 @@ namespace Custodex.Abstractions;
 /// on the unit of work; nothing is durable until <see cref="CommitAsync"/> succeeds, and disposing
 /// without committing discards them.
 /// </summary>
+/// <remarks>
+/// That lifetime describes a unit of work the engine owns, opened by <see cref="IUnitOfWorkFactory.BeginAsync"/>.
+/// A unit of work that enlists in a host-owned connection and transaction, returned by
+/// <see cref="IUnitOfWorkFactory.Enlist"/>, instead borrows the host's lifetime: its
+/// <see cref="CommitAsync"/> and disposal are no-ops, and durability and rollback follow the host's
+/// own commit or rollback of the transaction it supplied.
+/// </remarks>
 public interface IUnitOfWork : IAsyncDisposable
 {
     /// <summary>Commits every write enlisted on this unit of work atomically.</summary>
@@ -19,6 +28,23 @@ public interface IUnitOfWorkFactory
     /// <param name="ct">A token to cancel starting the transaction.</param>
     /// <returns>An open unit of work to enlist writes on.</returns>
     Task<IUnitOfWork> BeginAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Enlists in a unit of work over a connection and transaction the consuming application already
+    /// owns, so engine writes commit atomically inside the host's transaction. The engine never
+    /// commits, rolls back, or closes either handle — the host keeps full control of their lifetime,
+    /// and the returned unit of work's <see cref="IUnitOfWork.CommitAsync"/> is a no-op.
+    /// </summary>
+    /// <param name="connection">The host-owned, open connection to borrow.</param>
+    /// <param name="transaction">The host-owned transaction the engine writes enlist on.</param>
+    /// <returns>A unit of work whose enlisted writes participate in the host's transaction.</returns>
+    /// <exception cref="NotSupportedException">
+    /// Thrown by factories that cannot fold engine writes into a host-owned transaction, such as an
+    /// in-memory provider with no real transaction or an out-of-process client.
+    /// </exception>
+    IUnitOfWork Enlist(DbConnection connection, DbTransaction transaction) =>
+        throw new NotSupportedException(
+            "This unit-of-work factory cannot enlist in a host-supplied connection and transaction.");
 }
 
 /// <summary>

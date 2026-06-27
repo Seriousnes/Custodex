@@ -23,7 +23,7 @@ public sealed class CustodexBuilder(IServiceCollection services)
 
     /// <summary>
     /// Captures <paramref name="schema"/> on <see cref="StartupSchema"/> so the consuming host can
-    /// validate and activate it via <see cref="ISchemaManager.SetActiveSchemaAsync"/>. The DI
+    /// validate and activate it via <see cref="ISchemaManager.SetActiveSchemaAsync(string, Schema, System.Threading.CancellationToken)"/>. The DI
     /// registration itself does not validate or activate the schema; the host reads
     /// <see cref="StartupSchema"/> and calls the manager at an appropriate point in the startup
     /// sequence.
@@ -39,7 +39,7 @@ public sealed class CustodexBuilder(IServiceCollection services)
     /// <summary>
     /// Builds the schema from <paramref name="builder"/> and captures it on
     /// <see cref="StartupSchema"/> so the consuming host can validate and activate it via
-    /// <see cref="ISchemaManager.SetActiveSchemaAsync"/>. The DI registration itself does not
+    /// <see cref="ISchemaManager.SetActiveSchemaAsync(string, Schema, System.Threading.CancellationToken)"/>. The DI registration itself does not
     /// validate or activate the schema.
     /// </summary>
     /// <param name="builder">The schema builder whose result is captured for host-driven activation.</param>

@@ -2,6 +2,8 @@ using Custodex.Abstractions;
 
 using Dapper;
 
+using Npgsql;
+
 using Shouldly;
 
 namespace Custodex.Storage.Postgres.Tests;
@@ -87,5 +89,63 @@ public class AuditedWritePathTests(PostgresFixture fx) : IAsyncLifetime
             .ShouldBeEmpty();
         (await _changeLog.ReadAsync(t, new ChangeLogFilter())).ShouldBeEmpty();
         (await cache.GetEpochAsync(t)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Supplied_commit_persists_tuple_change_log_and_epoch_only_when_the_host_commits()
+    {
+        var (t, cache) = await SeedTenantAsync("audit-supplied-commit");
+        var path = new AuditedWritePath(_relations,
+            new NpgsqlAttributeStore(fx.ConnectionString),
+            new NpgsqlSchemaStore(fx.ConnectionString),
+            _changeLog, cache);
+
+        await using var hostConn = new NpgsqlConnection(fx.RawConnectionString);
+        await hostConn.OpenAsync();
+        await using var hostTx = await hostConn.BeginTransactionAsync();
+
+        await using (var u = _factory.Enlist(hostConn, hostTx))
+        {
+            await path.WriteTuplesAsync(t, "dr-admin", [Tuple], [], u);
+            await u.CommitAsync();
+        }
+
+        (await _relations.GetByObjectAsync(t, new EntityRef("doc", "d1"), "writer")).ShouldBeEmpty();
+        (await cache.GetEpochAsync(t)).ShouldBe(0);
+
+        await hostTx.CommitAsync();
+
+        (await _relations.GetByObjectAsync(t, new EntityRef("doc", "d1"), "writer")).ShouldHaveSingleItem();
+        (await _changeLog.ReadAsync(t, new ChangeLogFilter())).ShouldHaveSingleItem()
+            .Operation.ShouldBe("write");
+        (await cache.GetEpochAsync(t)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Supplied_rollback_discards_tuple_change_log_and_epoch_together()
+    {
+        var (t, cache) = await SeedTenantAsync("audit-supplied-rollback");
+        var path = new AuditedWritePath(_relations,
+            new NpgsqlAttributeStore(fx.ConnectionString),
+            new NpgsqlSchemaStore(fx.ConnectionString),
+            _changeLog, cache);
+
+        await using var hostConn = new NpgsqlConnection(fx.RawConnectionString);
+        await hostConn.OpenAsync();
+        var hostTx = await hostConn.BeginTransactionAsync();
+
+        await using (var u = _factory.Enlist(hostConn, hostTx))
+        {
+            await path.WriteTuplesAsync(t, "dr-admin", [Tuple], [], u);
+            await u.CommitAsync();
+        }
+
+        await hostTx.RollbackAsync();
+        await hostTx.DisposeAsync();
+
+        (await _relations.GetByObjectAsync(t, new EntityRef("doc", "d1"), "writer")).ShouldBeEmpty();
+        (await _changeLog.ReadAsync(t, new ChangeLogFilter())).ShouldBeEmpty();
+        (await cache.GetEpochAsync(t)).ShouldBe(0);
+        hostConn.State.ShouldBe(System.Data.ConnectionState.Open);
     }
 }

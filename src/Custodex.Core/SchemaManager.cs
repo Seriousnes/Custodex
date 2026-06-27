@@ -15,13 +15,24 @@ public sealed class SchemaManager(ISchemaStore store, IUnitOfWorkFactory uowFact
     /// <inheritdoc/>
     public async Task SetActiveSchemaAsync(string store, Schema schema, CancellationToken ct = default)
     {
-        var result = SchemaValidator.Validate(schema);
-        if (!result.IsValid)
-            throw new SchemaValidationException(result.Errors);
-
+        Validate(schema);
         await using var uow = await _uowFactory.BeginAsync(ct);
         await _store.SetActiveAsync(store, schema, uow, ct);
         await uow.CommitAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task SetActiveSchemaAsync(string store, Schema schema, IUnitOfWork uow, CancellationToken ct = default)
+    {
+        Validate(schema);
+        await _store.SetActiveAsync(store, schema, uow, ct);
+    }
+
+    private static void Validate(Schema schema)
+    {
+        var result = SchemaValidator.Validate(schema);
+        if (!result.IsValid)
+            throw new SchemaValidationException(result.Errors);
     }
 
     /// <inheritdoc/>
