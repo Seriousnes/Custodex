@@ -27,7 +27,7 @@ public class RecursionTerminationTests
     }
 
     [Fact]
-    public void Permission_cycle_through_an_arrow_is_detected()
+    public void Recursion_through_an_arrow_is_allowed()
     {
         var world = TestWorld.New();
         var typeA = world.EntityType();
@@ -46,10 +46,25 @@ public class RecursionTerminationTests
             ],
             []);
 
-        var result = SchemaValidator.Validate(schema);
+        SchemaValidator.Validate(schema).IsValid.ShouldBeTrue();
+    }
 
-        result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.Contains("cycle"));
+    [Fact]
+    public void Self_type_recursive_arrow_is_allowed()
+    {
+        var world = TestWorld.New();
+        var folder = world.EntityType();
+        var owner = world.Relation();
+        var parent = world.Relation();
+        var view = world.Permission();
+        var schema = new SchemaBuilder(TestWorld.Version)
+            .Type(folder, t => t
+                .Relation(owner, s => s.Type(world.UserType))
+                .Relation(parent, s => s.Type(folder))
+                .Permission(view, p => p.Relation(owner).Union(x => x.Arrow(parent, view))))
+            .Build();
+
+        SchemaValidator.Validate(schema).IsValid.ShouldBeTrue();
     }
 
     [Fact]
