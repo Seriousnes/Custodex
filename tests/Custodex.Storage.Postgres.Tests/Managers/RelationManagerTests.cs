@@ -3,6 +3,8 @@ using Custodex.Storage.Postgres.Managers;
 
 using Dapper;
 
+using Npgsql;
+
 using Shouldly;
 
 namespace Custodex.Storage.Postgres.Tests.Managers;
@@ -48,6 +50,58 @@ public class RelationManagerTests(PostgresFixture fx) : IAsyncLifetime
 
     private static RelationTuple Tuple => new(
         new EntityRef("category", "cat1"), "writer", new SubjectRef("group", "team", "member"));
+
+    [Fact]
+    public async Task Supplied_uow_write_then_delete_commit_with_the_host_transaction()
+    {
+        var (t, manager, cache) = await BuildAsync("mgr-supplied");
+        await manager.WriteTuplesAsync(t, "dr-admin", [Tuple]);
+
+        await using var hostConn = new NpgsqlConnection(fx.RawConnectionString);
+        await hostConn.OpenAsync();
+        await using var hostTx = await hostConn.BeginTransactionAsync();
+
+        await using (var uow = _factory.Enlist(hostConn, hostTx))
+        {
+            await manager.DeleteTuplesAsync(t, "dr-admin", [Tuple], uow);
+        }
+
+        (await _relations.GetByObjectAsync(t, new EntityRef("category", "cat1"), "writer")).ShouldHaveSingleItem();
+
+        await hostTx.CommitAsync();
+
+        (await _relations.GetByObjectAsync(t, new EntityRef("category", "cat1"), "writer")).ShouldBeEmpty();
+        (await _changeLog.ReadAsync(t, new ChangeLogFilter())).ShouldContain(e => e.Operation == "delete");
+        (await cache.GetEpochAsync(t)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Supplied_uow_attribute_values_are_durable_only_after_the_host_commits()
+    {
+        var (t, manager, cache) = await BuildAsync("mgr-supplied-attrs");
+        var attrStore = new NpgsqlAttributeStore(fx.ConnectionString);
+        var obj = new EntityRef("asset", "r1");
+        Dictionary<string, object?> attrs = new() { ["is_flagged"] = true, ["weight"] = 12.5 };
+
+        await using var hostConn = new NpgsqlConnection(fx.RawConnectionString);
+        await hostConn.OpenAsync();
+        await using var hostTx = await hostConn.BeginTransactionAsync();
+
+        await using (var uow = _factory.Enlist(hostConn, hostTx))
+        {
+            await manager.WriteAttributesAsync(t, "admin-a", obj, attrs, uow);
+        }
+
+        (await attrStore.GetAsync(t, obj)).ShouldBeNull();
+
+        await hostTx.CommitAsync();
+
+        var stored = await attrStore.GetAsync(t, obj);
+        stored.ShouldNotBeNull();
+        stored!["is_flagged"]!.ToString().ShouldBe("True");
+        stored["weight"]!.ToString().ShouldBe("12.5");
+        (await cache.GetEpochAsync(t)).ShouldBe(1);
+    }
 
     [Fact]
     public async Task WriteTuples_persists_tuple_audits_actor_and_bumps_epoch_atomically()

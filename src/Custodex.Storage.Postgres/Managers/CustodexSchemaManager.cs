@@ -24,12 +24,29 @@ public sealed class CustodexSchemaManager(
     /// <inheritdoc />
     public async Task SetActiveSchemaAsync(string store, Schema schema, CancellationToken ct = default)
     {
+        Validate(schema);
+        await using var uow = await uowFactory.BeginAsync(ct);
+        await ActivateAsync(store, schema, uow, ct);
+        await uow.CommitAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task SetActiveSchemaAsync(string store, Schema schema, IUnitOfWork uow, CancellationToken ct = default)
+    {
+        Validate(schema);
+        await ActivateAsync(store, schema, uow, ct);
+    }
+
+    private static void Validate(Schema schema)
+    {
         var validation = SchemaValidator.Validate(schema);
         if (!validation.IsValid)
             throw new SchemaValidationException(validation.Errors);
+    }
 
+    private async Task ActivateAsync(string store, Schema schema, IUnitOfWork uow, CancellationToken ct)
+    {
         var tenant = new TenantContext(store, store);
-        await using var uow = await uowFactory.BeginAsync(ct);
         var w = NpgsqlUnitOfWork.From(uow);
         await w.Connection.ExecuteAsync(
             "INSERT INTO custodex.stores (id) VALUES (@s) ON CONFLICT DO NOTHING",
@@ -38,7 +55,6 @@ public sealed class CustodexSchemaManager(
             "INSERT INTO custodex.tenants (store_id, tenant_id) VALUES (@s, @s) ON CONFLICT DO NOTHING",
             new { s = store }, w.Transaction);
         await audited.SetSchemaAsync(store, tenant, actor: "schema-author", schema, uow, ct);
-        await uow.CommitAsync(ct);
     }
 
     /// <inheritdoc />

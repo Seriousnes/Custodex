@@ -90,4 +90,31 @@ public class SchemaManagerTests
 
         ex.Errors.ShouldContain(e => e.Contains(_missing));
     }
+
+    [Fact]
+    public async Task SetActiveSchemaAsync_on_a_supplied_uow_persists_without_committing_it()
+    {
+        var store = new FakeSchemaStore();
+        var mgr = new SchemaManager(store, new FakeUowFactory());
+        var uow = new FakeUow();
+
+        await mgr.SetActiveSchemaAsync(_world.Tenant.Store, ValidSchema(), uow);
+
+        uow.Committed.ShouldBeFalse();
+        (await mgr.GetActiveSchemaAsync(_world.Tenant.Store))!.Version.ShouldBe(TestWorld.Version);
+    }
+
+    [Fact]
+    public async Task SetActiveSchemaAsync_on_a_supplied_uow_throws_on_an_invalid_schema_without_writing()
+    {
+        var store = new FakeSchemaStore();
+        var mgr = new SchemaManager(store, new FakeUowFactory());
+        var uow = new FakeUow();
+
+        await Should.ThrowAsync<SchemaValidationException>(
+            () => mgr.SetActiveSchemaAsync(_world.Tenant.Store, InvalidSchema(), uow));
+
+        uow.Committed.ShouldBeFalse();
+        (await mgr.GetActiveSchemaAsync(_world.Tenant.Store)).ShouldBeNull();
+    }
 }

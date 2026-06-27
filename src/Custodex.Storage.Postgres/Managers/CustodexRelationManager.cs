@@ -20,28 +20,46 @@ public sealed class CustodexRelationManager(
         TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
     {
         await using var uow = await uowFactory.BeginAsync(ct);
-        await audited.WriteTuplesAsync(tenant, actor, tuples, [], uow, ct);
+        await WriteTuplesAsync(tenant, actor, tuples, uow, ct);
         await uow.CommitAsync(ct);
     }
+
+    /// <inheritdoc />
+    public Task WriteTuplesAsync(
+        TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, IUnitOfWork uow, CancellationToken ct = default)
+        => audited.WriteTuplesAsync(tenant, actor, tuples, [], uow, ct);
 
     /// <inheritdoc />
     public async Task DeleteTuplesAsync(
         TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
     {
         await using var uow = await uowFactory.BeginAsync(ct);
-        await audited.WriteTuplesAsync(tenant, actor, [], tuples, uow, ct);
+        await DeleteTuplesAsync(tenant, actor, tuples, uow, ct);
         await uow.CommitAsync(ct);
     }
+
+    /// <inheritdoc />
+    public Task DeleteTuplesAsync(
+        TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, IUnitOfWork uow, CancellationToken ct = default)
+        => audited.WriteTuplesAsync(tenant, actor, [], tuples, uow, ct);
 
     /// <inheritdoc />
     public async Task WriteAttributesAsync(
         TenantContext tenant, string actor, EntityRef obj,
         IReadOnlyDictionary<string, object?> attrs, CancellationToken ct = default)
     {
-        var before = await attributes.GetAsync(tenant, obj, ct) ?? new Dictionary<string, object?>();
         await using var uow = await uowFactory.BeginAsync(ct);
-        await audited.WriteAttributesAsync(tenant, actor, obj, before, attrs, uow, ct);
+        await WriteAttributesAsync(tenant, actor, obj, attrs, uow, ct);
         await uow.CommitAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public async Task WriteAttributesAsync(
+        TenantContext tenant, string actor, EntityRef obj,
+        IReadOnlyDictionary<string, object?> attrs, IUnitOfWork uow, CancellationToken ct = default)
+    {
+        var before = await attributes.GetAsync(tenant, obj, ct) ?? new Dictionary<string, object?>();
+        await audited.WriteAttributesAsync(tenant, actor, obj, before, attrs, uow, ct);
     }
 
     /// <inheritdoc />
