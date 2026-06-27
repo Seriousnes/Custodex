@@ -1,4 +1,6 @@
 using Custodex.Abstractions;
+using Custodex.Core;
+using Custodex.Core.Conditions;
 
 using Dapper;
 
@@ -126,5 +128,95 @@ public class EnlistmentTests(PostgresFixture fx)
         (await CountAsync(other, store, "obj-200")).ShouldBe(0);
 
         appConn.State.ShouldBe(System.Data.ConnectionState.Open);
+    }
+
+    private static Schema ViewerSchema() => new SchemaBuilder("v1")
+        .Type("doc", t => t.Relation("viewer", s => s.User()).Permission("view", p => p.Relation("viewer")))
+        .Build();
+
+    private async Task ActivateSchemaAsync(NpgsqlUnitOfWorkFactory factory, NpgsqlSchemaStore schemas, string store)
+    {
+        await using var u = await factory.BeginAsync();
+        await schemas.SetActiveAsync(store, ViewerSchema(), u);
+        await u.CommitAsync();
+    }
+
+    private static CheckRequest ViewCheck(TenantContext t) => new(
+        t, new EntityRef("doc", "d1"), "view", new SubjectRef("user", "alice"),
+        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", "alice"), new Dictionary<string, object?>()));
+
+    private static ListObjectsRequest ViewListObjects(TenantContext t) => new(
+        t, new SubjectRef("user", "alice"), "doc", "view",
+        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", "alice"), new Dictionary<string, object?>()));
+
+    private async Task<(NpgsqlUnitOfWorkFactory factory, NpgsqlRelationStore relations, NpgsqlCteAuthorizer auth, TenantContext t)>
+        SetupAuthorizerAsync(string store)
+    {
+        await using (var seed = await fx.OpenAsync())
+            await MigrationRunner.ApplyAsync(seed);
+        await SeedTenantAsync(store, "t1");
+
+        var factory = new NpgsqlUnitOfWorkFactory(fx.ConnectionString);
+        var relations = new NpgsqlRelationStore(fx.ConnectionString);
+        var schemas = new NpgsqlSchemaStore(fx.ConnectionString);
+        var attributes = new NpgsqlAttributeStore(fx.ConnectionString);
+        await ActivateSchemaAsync(factory, schemas, store);
+
+        var auth = new NpgsqlCteAuthorizer(fx.ConnectionString, schemas, attributes, new NullConditionEvaluator());
+        return (factory, relations, auth, new TenantContext(store, "t1"));
+    }
+
+    private static RelationTuple ViewerTuple => new(new EntityRef("doc", "d1"), "viewer", new SubjectRef("user", "alice"));
+
+    [Fact]
+    public async Task Check_inside_the_supplied_transaction_observes_a_tuple_written_earlier()
+    {
+        var (factory, relations, auth, t) = await SetupAuthorizerAsync("ryw-check");
+
+        await using var appConn = new NpgsqlConnection(fx.RawConnectionString);
+        await appConn.OpenAsync();
+        await using var appTx = await appConn.BeginTransactionAsync();
+
+        await using var uow = factory.Enlist(appConn, appTx);
+        await relations.WriteAsync(t, [ViewerTuple], [], uow);
+
+        (await auth.OnUnitOfWork(uow).CheckAsync(ViewCheck(t))).Allowed.ShouldBeTrue();
+        (await auth.CheckAsync(ViewCheck(t))).Allowed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ListObjects_inside_the_supplied_transaction_includes_the_written_object()
+    {
+        var (factory, relations, auth, t) = await SetupAuthorizerAsync("ryw-list");
+
+        await using var appConn = new NpgsqlConnection(fx.RawConnectionString);
+        await appConn.OpenAsync();
+        await using var appTx = await appConn.BeginTransactionAsync();
+
+        await using var uow = factory.Enlist(appConn, appTx);
+        await relations.WriteAsync(t, [ViewerTuple], [], uow);
+
+        (await auth.OnUnitOfWork(uow).ListObjectsAsync(ViewListObjects(t))).ObjectIds.ShouldContain("d1");
+        (await auth.ListObjectsAsync(ViewListObjects(t))).ObjectIds.ShouldNotContain("d1");
+    }
+
+    [Fact]
+    public async Task After_the_supplied_transaction_rolls_back_a_fresh_check_reflects_no_write()
+    {
+        var (factory, relations, auth, t) = await SetupAuthorizerAsync("ryw-rollback");
+
+        await using var appConn = new NpgsqlConnection(fx.RawConnectionString);
+        await appConn.OpenAsync();
+        var appTx = await appConn.BeginTransactionAsync();
+
+        var uow = factory.Enlist(appConn, appTx);
+        await relations.WriteAsync(t, [ViewerTuple], [], uow);
+        (await auth.OnUnitOfWork(uow).CheckAsync(ViewCheck(t))).Allowed.ShouldBeTrue();
+        await uow.DisposeAsync();
+
+        await appTx.RollbackAsync();
+        await appTx.DisposeAsync();
+
+        (await auth.CheckAsync(ViewCheck(t))).Allowed.ShouldBeFalse();
     }
 }

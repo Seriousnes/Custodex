@@ -61,11 +61,11 @@ public static class CteCandidates
     /// confirmed by a pointwise Check.
     /// </summary>
     public static async Task<IReadOnlyList<string>> ReachableObjectIdsAsync(
-        NpgsqlConnection conn, TenantContext t, SubjectRef subject, string objectType, CancellationToken ct = default)
+        NpgsqlConnection conn, NpgsqlTransaction? tx, TenantContext t, SubjectRef subject, string objectType, CancellationToken ct = default)
     {
         var ids = await conn.QueryAsync<string>(new CommandDefinition(ReachableSql,
             new { store = t.Store, tenant = t.Tenant, stype = subject.Type, sid = subject.Id, srel = subject.Relation, objtype = objectType },
-            cancellationToken: ct));
+            transaction: tx, cancellationToken: ct));
         return [.. ids];
     }
 
@@ -75,10 +75,10 @@ public static class CteCandidates
     /// (<c>type:*</c>) that reverse traversal does not reach from a concrete subject.
     /// </summary>
     public static async Task<IReadOnlyList<string>> TypeUniverseAsync(
-        NpgsqlConnection conn, TenantContext t, string objectType, CancellationToken ct = default)
+        NpgsqlConnection conn, NpgsqlTransaction? tx, TenantContext t, string objectType, CancellationToken ct = default)
     {
         var ids = await conn.QueryAsync<string>(new CommandDefinition(UniverseSql,
-            new { store = t.Store, tenant = t.Tenant, objtype = objectType }, cancellationToken: ct));
+            new { store = t.Store, tenant = t.Tenant, objtype = objectType }, transaction: tx, cancellationToken: ct));
         return [.. ids];
     }
 }
