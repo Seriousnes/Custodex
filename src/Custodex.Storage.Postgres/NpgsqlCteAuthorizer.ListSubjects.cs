@@ -20,40 +20,40 @@ public sealed partial class NpgsqlCteAuthorizer
         var index = await LoadSchemaAsync(request.Tenant.Store, ct);
         index.Permission(request.Object.Type, request.Permission);
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        var candidates = new SortedSet<SubjectRef>(SubjectOrder);
-        var visited = new HashSet<EvalFrame>();
-        await CollectLeafSubjectsAsync(conn, index, request.Tenant, request.Object, request.Permission,
-            candidates, visited, ct);
-
-        var after = ContinuationCursor.DecodeAfter(request.ContinuationToken);
-        var confirmed = new List<SubjectRef>(request.PageSize);
-        string? lastKey = null;
-        var exhausted = true;
-
-        foreach (var subject in candidates)
+        return await RunAsync(async conn =>
         {
-            var key = SubjectKey(subject);
-            if (after is not null && string.CompareOrdinal(key, after) <= 0) continue;
+            var candidates = new SortedSet<SubjectRef>(SubjectOrder);
+            var visited = new HashSet<EvalFrame>();
+            await CollectLeafSubjectsAsync(conn, index, request.Tenant, request.Object, request.Permission,
+                candidates, visited, ct);
 
-            var ctx = new EvalContext(_options);
-            var ok = await CheckPermissionAsync(
-                conn, index, request.Tenant, request.Object, request.Permission, subject, request.Context, ctx, explain: null, ct);
-            if (!ok) continue;
+            var after = ContinuationCursor.DecodeAfter(request.ContinuationToken);
+            var confirmed = new List<SubjectRef>(request.PageSize);
+            string? lastKey = null;
+            var exhausted = true;
 
-            confirmed.Add(subject);
-            lastKey = key;
-            if (confirmed.Count == request.PageSize)
+            foreach (var subject in candidates)
             {
-                exhausted = !await AnySubjectConfirmedAfterAsync(conn, index, request, candidates, key, ct);
-                break;
-            }
-        }
+                var key = SubjectKey(subject);
+                if (after is not null && string.CompareOrdinal(key, after) <= 0) continue;
 
-        var token = exhausted ? null : ContinuationCursor.Encode(lastKey!);
-        return new ListSubjectsResult(confirmed, token);
+                var ctx = new EvalContext(_options);
+                var ok = await CheckPermissionAsync(
+                    conn, index, request.Tenant, request.Object, request.Permission, subject, request.Context, ctx, explain: null, ct);
+                if (!ok) continue;
+
+                confirmed.Add(subject);
+                lastKey = key;
+                if (confirmed.Count == request.PageSize)
+                {
+                    exhausted = !await AnySubjectConfirmedAfterAsync(conn, index, request, candidates, key, ct);
+                    break;
+                }
+            }
+
+            var token = exhausted ? null : ContinuationCursor.Encode(lastKey!);
+            return new ListSubjectsResult(confirmed, token);
+        }, ct);
     }
 
     private async Task<bool> AnySubjectConfirmedAfterAsync(
@@ -109,7 +109,7 @@ public sealed partial class NpgsqlCteAuthorizer
                 break;
             case Arrow a:
             {
-                var edges = await CteReachability.EdgesThroughRelationAsync(conn, null, tenant, obj, a.Relation, ct);
+                var edges = await CteReachability.EdgesThroughRelationAsync(conn, BoundTx, tenant, obj, a.Relation, ct);
                 foreach (var edge in edges)
                 {
                     var related = new EntityRef(edge.Subject.Type, edge.Subject.Id);
@@ -123,14 +123,14 @@ public sealed partial class NpgsqlCteAuthorizer
         }
     }
 
-    private static async Task CollectFromRelationAsync(
+    private async Task CollectFromRelationAsync(
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
         SortedSet<SubjectRef> subjects, HashSet<EvalFrame> visited, CancellationToken ct)
     {
         if (!visited.Add(new EvalFrame(obj, relation, new SubjectRef(Nul, "<collect-rel>"))))
             return;
 
-        var tuples = await CteReachability.EdgesThroughRelationAsync(conn, null, tenant, obj, relation, ct);
+        var tuples = await CteReachability.EdgesThroughRelationAsync(conn, BoundTx, tenant, obj, relation, ct);
         foreach (var tuple in tuples)
         {
             var s = tuple.Subject;

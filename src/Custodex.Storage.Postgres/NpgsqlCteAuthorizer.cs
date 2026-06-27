@@ -26,6 +26,34 @@ public sealed partial class NpgsqlCteAuthorizer(
     private readonly IAttributeStore _attributes = attributes;
     private readonly IConditionEvaluator _conditions = conditions;
     private readonly EvaluationOptions _options = options ?? new EvaluationOptions();
+    private readonly NpgsqlUnitOfWork? _bound;
+
+    private NpgsqlCteAuthorizer(
+        string connectionString, ISchemaStore schemaStore, IAttributeStore attributes,
+        IConditionEvaluator conditions, EvaluationOptions options, NpgsqlUnitOfWork bound)
+        : this(connectionString, schemaStore, attributes, conditions, options) => _bound = bound;
+
+    /// <summary>
+    /// Returns an authorizer whose reads run on the connection and transaction carried by
+    /// <paramref name="uow"/>, so a check or enumeration observes tuples written earlier on that same
+    /// uncommitted unit of work. The returned authorizer borrows the connection and never disposes it;
+    /// the original authorizer is unchanged and keeps opening its own short-lived connection per call.
+    /// </summary>
+    /// <param name="uow">The unit of work whose connection and transaction the reads run on.</param>
+    /// <returns>An authorizer bound to the supplied unit of work.</returns>
+    public NpgsqlCteAuthorizer OnUnitOfWork(IUnitOfWork uow) =>
+        new(_connectionString, _schemaStore, _attributes, _conditions, _options, NpgsqlUnitOfWork.From(uow));
+
+    private NpgsqlTransaction? BoundTx => _bound?.Transaction;
+
+    private async Task<T> RunAsync<T>(Func<NpgsqlConnection, Task<T>> body, CancellationToken ct)
+    {
+        if (_bound is { } b)
+            return await body(b.Connection);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        return await body(conn);
+    }
 
     private async Task<SchemaIndex> LoadSchemaAsync(string store, CancellationToken ct)
     {
@@ -38,14 +66,15 @@ public sealed partial class NpgsqlCteAuthorizer(
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
         var index = await LoadSchemaAsync(request.Tenant.Store, ct);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        var ctx = new EvalContext(_options);
-        var explainSink = request.Explain ? new List<ExplainNode>() : null;
-        var allowed = await CheckPermissionAsync(
-            conn, index, request.Tenant, request.Object, request.Permission, request.Subject,
-            request.Context, ctx, explainSink, ct);
-        return new CheckResult(allowed, explainSink?.Count > 0 ? explainSink[0] : null);
+        return await RunAsync(async conn =>
+        {
+            var ctx = new EvalContext(_options);
+            var explainSink = request.Explain ? new List<ExplainNode>() : null;
+            var allowed = await CheckPermissionAsync(
+                conn, index, request.Tenant, request.Object, request.Permission, request.Subject,
+                request.Context, ctx, explainSink, ct);
+            return new CheckResult(allowed, explainSink?.Count > 0 ? explainSink[0] : null);
+        }, ct);
     }
 
     private async Task<bool> CheckPermissionAsync(
@@ -77,12 +106,12 @@ public sealed partial class NpgsqlCteAuthorizer(
             return false;
         using (scope)
         {
-            var edges = await CteReachability.EdgesThroughRelationAsync(conn, null, tenant, obj, relation, ct);
+            var edges = await CteReachability.EdgesThroughRelationAsync(conn, BoundTx, tenant, obj, relation, ct);
             var anyConditioned = edges.Any(e => e.Condition is not null);
 
             if (!anyConditioned)
             {
-                var leaves = await CteReachability.SubjectsThroughRelationAsync(conn, null, tenant, obj, relation, ct);
+                var leaves = await CteReachability.SubjectsThroughRelationAsync(conn, BoundTx, tenant, obj, relation, ct);
                 foreach (var leaf in leaves)
                 {
                     if (leaf.IsWildcard && string.Equals(leaf.Type, subject.Type, StringComparison.Ordinal)) return true;

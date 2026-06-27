@@ -79,7 +79,7 @@ public sealed partial class NpgsqlCteAuthorizer
         NpgsqlConnection conn, SchemaIndex index, TenantContext tenant, EntityRef obj, Arrow arrow,
         SubjectRef subject, RequestContext context, EvalContext ctx, List<ExplainNode>? explain, CancellationToken ct)
     {
-        var edges = await CteReachability.EdgesThroughRelationAsync(conn, null, tenant, obj, arrow.Relation, ct);
+        var edges = await CteReachability.EdgesThroughRelationAsync(conn, BoundTx, tenant, obj, arrow.Relation, ct);
         foreach (var edge in edges)
         {
             if (!await ConditionSatisfiedAsync(index, tenant, obj, edge, context, ctx, ct)) continue;

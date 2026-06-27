@@ -42,7 +42,7 @@ public class CteCandidatesTests(PostgresFixture fx) : IAsyncLifetime
     public async Task Reachable_gathers_objects_via_direct_and_nested_group_grants_sorted()
     {
         await using var conn = await fx.OpenAsync();
-        var ids = await CteCandidates.ReachableObjectIdsAsync(conn, T, new SubjectRef("user", "alice"), "asset");
+        var ids = await CteCandidates.ReachableObjectIdsAsync(conn, null, T, new SubjectRef("user", "alice"), "asset");
         ids.ShouldBe(["ka", "wa"]);
     }
 
@@ -50,7 +50,7 @@ public class CteCandidatesTests(PostgresFixture fx) : IAsyncLifetime
     public async Task Type_universe_returns_every_object_of_the_type()
     {
         await using var conn = await fx.OpenAsync();
-        var ids = await CteCandidates.TypeUniverseAsync(conn, T, "asset");
+        var ids = await CteCandidates.TypeUniverseAsync(conn, null, T, "asset");
         ids.ShouldBe(["em", "ka", "wa"]);
     }
 }
