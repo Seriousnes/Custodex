@@ -1,0 +1,125 @@
+@page "/studio/metrics"
+@using MudBlazor
+@using Custodex.Studio.Metrics
+@implements IAsyncDisposable
+@inject IMetricsSnapshotProvider Snapshots
+@inject StudioConnectionState State
+
+<PageTitle>Metrics — Custodex Studio</PageTitle>
+
+<h1>Metrics</h1>
+
+<MudGrid>
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudText Typo="Typo.h6">Check latency percentiles (ms)</MudText>
+            <MudChart T="double" ChartType="ChartType.Line" ChartSeries="@_series" ChartLabels="@_labels" Width="100%" Height="320px" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudText Typo="Typo.h6">Decision cache (cumulative)</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-3" Elevation="0">
+                        <MudText Typo="Typo.subtitle2">Hits</MudText>
+                        <MudText id="cache-hits" Typo="Typo.h5">@_latest.CacheHits</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-3" Elevation="0">
+                        <MudText Typo="Typo.subtitle2">Misses</MudText>
+                        <MudText id="cache-misses" Typo="Typo.h5">@_latest.CacheMisses</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-3" Elevation="0">
+                        <MudText Typo="Typo.subtitle2">Swept</MudText>
+                        <MudText id="cache-swept" Typo="Typo.h5">@_latest.CacheSwept</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+            <MudText id="check-count" Typo="Typo.body2">Latency samples in window: @_latest.CheckCount</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private const int MaxPoints = 60;
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
+
+    private MetricsSnapshot _latest = new(DateTimeOffset.MinValue, 0, 0, 0, 0, 0, 0, 0);
+    private readonly List<MetricsSnapshot> _history = [];
+    private List<ChartSeries<double>> _series = [];
+    private string[] _labels = [];
+
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+    private Task? _loop;
+
+    protected override void OnInitialized()
+    {
+        _latest = Snapshots.Capture();
+        Append(_latest);
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _cts = new CancellationTokenSource();
+        _timer = new PeriodicTimer(PollInterval);
+        _loop = PollAsync(_cts.Token);
+    }
+
+    private async Task PollAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (_timer is not null && await _timer.WaitForNextTickAsync(ct))
+            {
+                _latest = Snapshots.Capture();
+                Append(_latest);
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void Append(MetricsSnapshot snapshot)
+    {
+        _history.Add(snapshot);
+        if (_history.Count > MaxPoints)
+            _history.RemoveAt(0);
+
+        _series =
+        [
+            new ChartSeries<double> { Name = "p50", Data = _history.Select(s => s.CheckP50Ms).ToArray() },
+            new ChartSeries<double> { Name = "p95", Data = _history.Select(s => s.CheckP95Ms).ToArray() },
+            new ChartSeries<double> { Name = "p99", Data = _history.Select(s => s.CheckP99Ms).ToArray() },
+        ];
+        _labels = _history.Select(s => s.CapturedAt.ToString("HH:mm:ss")).ToArray();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _timer?.Dispose();
+
+        if (_loop is not null)
+        {
+            try
+            {
+                await _loop;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _cts?.Dispose();
+    }
+}
