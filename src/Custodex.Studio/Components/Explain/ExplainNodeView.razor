@@ -1,0 +1,24 @@
+<div class="explain-node">
+    @if (Node.Children.Count > 0)
+    {
+        <details open>
+            <summary class="@(Node.Allowed ? "explain-allow" : "explain-deny")">@Node.Description</summary>
+            <div class="explain-children">
+                @foreach (var child in Node.Children)
+                {
+                    <ExplainNodeView Node="child" />
+                }
+            </div>
+        </details>
+    }
+    else
+    {
+        <div class="@(Node.Allowed ? "explain-allow" : "explain-deny") explain-leaf">@Node.Description</div>
+    }
+</div>
+
+@code {
+    /// <summary>The decision node to render, including its description, outcome, and nested sub-decisions.</summary>
+    [Parameter, EditorRequired]
+    public ExplainNode Node { get; set; } = default!;
+}
