@@ -90,4 +90,61 @@ public sealed class ChangeLogViewerTests
             cut.Markup.ShouldContain(entries[1].Target);
         });
     }
+
+    [Fact]
+    public void Before_after_diff_highlights_changed_key()
+    {
+        var world = TestWorld.New();
+        var ts = new DateTimeOffset(2025, 3, 15, 10, 0, 0, TimeSpan.Zero);
+
+        var changedKey = world.EntityType();
+        var sameKey = world.Relation();
+
+        var before = new Dictionary<string, object?> { [changedKey] = "old", [sameKey] = "same" };
+        var after = new Dictionary<string, object?> { [changedKey] = "new", [sameKey] = "same" };
+
+        var entry = new ChangeLogEntry(1L, world.SubjectId(), world.Relation(), world.ObjectId(), before, after, ts);
+        var fake = new FakeRelationManager([entry]);
+        var state = new StudioConnectionState();
+        state.Connect(world.Tenant.Store, world.Tenant.Tenant);
+
+        using var ctx = CreateContext(state, fake);
+        var cut = ctx.Render<ChangeLogViewer>();
+
+        cut.Find("#load").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindAll(".changed").ShouldContain(el => el.TextContent.Contains(changedKey));
+        });
+    }
+
+    [Fact]
+    public void Insert_shows_none_on_before_and_delete_shows_none_on_after()
+    {
+        var world = TestWorld.New();
+        var ts = new DateTimeOffset(2025, 3, 15, 10, 0, 0, TimeSpan.Zero);
+        var propKey = world.EntityType();
+
+        var insertEntry = new ChangeLogEntry(
+            1L, world.SubjectId(), world.Relation(), world.ObjectId(),
+            null, new Dictionary<string, object?> { [propKey] = "v" }, ts);
+        var deleteEntry = new ChangeLogEntry(
+            2L, world.SubjectId(), world.Relation(), world.ObjectId(),
+            new Dictionary<string, object?> { [propKey] = "v" }, null, ts.AddMinutes(1));
+
+        var fake = new FakeRelationManager([insertEntry, deleteEntry]);
+        var state = new StudioConnectionState();
+        state.Connect(world.Tenant.Store, world.Tenant.Tenant);
+
+        using var ctx = CreateContext(state, fake);
+        var cut = ctx.Render<ChangeLogViewer>();
+
+        cut.Find("#load").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindAll(".diff-none").Count.ShouldBe(2);
+        });
+    }
 }
