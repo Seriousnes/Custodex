@@ -7,6 +7,7 @@ using Custodex.Service.Rest;
 using Custodex.Service.Services;
 using Custodex.Service.Tenancy;
 using Custodex.Storage.Postgres;
+using Custodex.Studio;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -91,6 +92,7 @@ var connectionString = builder.Configuration.GetConnectionString("Custodex")
     ?? throw new InvalidOperationException("Custodex:ConnectionString is required.");
 
 builder.Services.AddCustodex().UsePostgres(connectionString);
+builder.Services.AddCustodexStudio();
 builder.Services.AddHealthChecks()
     .AddCheck<PostgresReadyHealthCheck>("postgres", tags: ["ready"]);
 
@@ -114,13 +116,16 @@ app.UseCustodexProblemDetails();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAntiforgery();
 app.UseMiddleware<TenantResolutionMiddleware>();
 
+app.MapStaticAssets();
 app.MapDefaultEndpoints();
 app.MapGrpcService<DecisionGrpcService>().RequireAuthorization("Custodex:decide");
 app.MapGrpcService<RelationsGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapGrpcService<SchemaGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapCustodexRest();
+app.MapCustodexStudio();
 
 app.Run();
