@@ -1,0 +1,110 @@
+@using System.Text.Json
+
+<div class="diff-panel">
+    <div class="diff-col">
+        <div class="diff-col-label">Before</div>
+        @if (_beforeNull)
+        {
+            <span class="diff-none">(none)</span>
+        }
+        else if (_beforeRows is not null)
+        {
+            @foreach (var row in _beforeRows)
+            {
+                <div class="@row.CssClass">@row.Key</div>
+            }
+        }
+        else
+        {
+            <pre class="diff-raw">@_beforeJson</pre>
+        }
+    </div>
+    <div class="diff-col">
+        <div class="diff-col-label">After</div>
+        @if (_afterNull)
+        {
+            <span class="diff-none">(none)</span>
+        }
+        else if (_afterRows is not null)
+        {
+            @foreach (var row in _afterRows)
+            {
+                <div class="@row.CssClass">@row.Key</div>
+            }
+        }
+        else
+        {
+            <pre class="diff-raw">@_afterJson</pre>
+        }
+    </div>
+</div>
+
+@code {
+    private sealed record DiffRow(string Key, string Value, string CssClass);
+
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+
+    /// <summary>The state of the data before the change, or <see langword="null"/> for inserts.</summary>
+    [Parameter, EditorRequired]
+    public object? Before { get; set; }
+
+    /// <summary>The state of the data after the change, or <see langword="null"/> for deletes.</summary>
+    [Parameter, EditorRequired]
+    public object? After { get; set; }
+
+    private bool _beforeNull;
+    private bool _afterNull;
+    private string? _beforeJson;
+    private string? _afterJson;
+    private IReadOnlyList<DiffRow>? _beforeRows;
+    private IReadOnlyList<DiffRow>? _afterRows;
+
+    protected override void OnParametersSet()
+    {
+        _beforeNull = Before is null;
+        _afterNull = After is null;
+        _beforeJson = Before is null ? null : JsonSerializer.Serialize(Before, SerializerOptions);
+        _afterJson = After is null ? null : JsonSerializer.Serialize(After, SerializerOptions);
+        _beforeRows = null;
+        _afterRows = null;
+
+        if (Before is not null && After is not null)
+        {
+            using var beforeDoc = JsonDocument.Parse(_beforeJson!);
+            using var afterDoc = JsonDocument.Parse(_afterJson!);
+
+            if (beforeDoc.RootElement.ValueKind == JsonValueKind.Object &&
+                afterDoc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                var beforeMap = beforeDoc.RootElement.EnumerateObject()
+                    .ToDictionary(p => p.Name, p => p.Value.GetRawText(), StringComparer.Ordinal);
+                var afterMap = afterDoc.RootElement.EnumerateObject()
+                    .ToDictionary(p => p.Name, p => p.Value.GetRawText(), StringComparer.Ordinal);
+
+                var br = new List<DiffRow>();
+                foreach (var kvp in beforeMap)
+                {
+                    if (!afterMap.TryGetValue(kvp.Key, out var afterVal))
+                        br.Add(new DiffRow(kvp.Key, kvp.Value, "diff-prop removed"));
+                    else if (kvp.Value != afterVal)
+                        br.Add(new DiffRow(kvp.Key, kvp.Value, "diff-prop changed"));
+                    else
+                        br.Add(new DiffRow(kvp.Key, kvp.Value, "diff-prop"));
+                }
+                _beforeRows = br;
+
+                var ar = new List<DiffRow>();
+                foreach (var kvp in afterMap)
+                {
+                    if (!beforeMap.TryGetValue(kvp.Key, out var beforeVal))
+                        ar.Add(new DiffRow(kvp.Key, kvp.Value, "diff-prop added"));
+                    else if (kvp.Value != beforeVal)
+                        ar.Add(new DiffRow(kvp.Key, kvp.Value, "diff-prop changed"));
+                    else
+                        ar.Add(new DiffRow(kvp.Key, kvp.Value, "diff-prop"));
+                }
+                _afterRows = ar;
+            }
+        }
+    }
+}

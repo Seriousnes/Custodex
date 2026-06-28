@@ -1,0 +1,90 @@
+@page "/studio/changelog"
+@implements IDisposable
+@inject IRelationManager Manager
+@inject StudioConnectionState State
+
+<PageTitle>Change log — Custodex Studio</PageTitle>
+
+<h1>Change log</h1>
+
+@if (!State.IsConnected)
+{
+    <p>Select a store and tenant on the <a href="studio">Overview</a> page first.</p>
+}
+else
+{
+    <section class="studio-panel changelog-filters" aria-label="Filters">
+        <label class="studio-field">
+            <span>Since</span>
+            <input id="filter-since" class="studio-input" @bind="_sinceText" />
+        </label>
+        <label class="studio-field">
+            <span>Actor</span>
+            <input id="filter-actor" class="studio-input" @bind="_actor" />
+        </label>
+        <label class="studio-field">
+            <span>Limit</span>
+            <input id="filter-limit" class="studio-input" type="number" @bind="_limit" />
+        </label>
+        <button id="load" class="studio-button" @onclick="LoadAsync">Load</button>
+    </section>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="changelog-error" role="alert">@_errorMessage</div>
+    }
+
+    @if (_entries is not null)
+    {
+        <div class="changelog-timeline">
+            @foreach (var entry in _entries)
+            {
+                <details class="changelog-entry">
+                    <summary class="changelog-entry-summary">
+                        <span class="changelog-time">@(entry.OccurredAt.ToString("u"))</span>
+                        <span class="changelog-actor">@entry.Actor</span>
+                        <span class="changelog-op">@entry.Operation</span>
+                        <span class="changelog-target">@entry.Target</span>
+                        <span class="changelog-id">@entry.Id</span>
+                    </summary>
+                    <div class="changelog-diff">
+                        <DiffPanel Before="entry.Before" After="entry.After" />
+                    </div>
+                </details>
+            }
+        </div>
+    }
+}
+
+@code {
+    private string _sinceText = string.Empty;
+    private string _actor = string.Empty;
+    private int _limit = 100;
+    private IReadOnlyList<ChangeLogEntry>? _entries;
+    private string? _errorMessage;
+
+    protected override void OnInitialized() => State.Changed += OnConnectionChanged;
+
+    private void OnConnectionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= OnConnectionChanged;
+
+    private async Task LoadAsync()
+    {
+        _entries = null;
+        _errorMessage = null;
+
+        var since = DateTimeOffset.TryParse(_sinceText, out var parsed) ? parsed : (DateTimeOffset?)null;
+        var actor = string.IsNullOrWhiteSpace(_actor) ? null : _actor;
+        var filter = new ChangeLogFilter(since, actor, _limit);
+
+        try
+        {
+            _entries = await Manager.ReadChangeLogAsync(State.Current, filter, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}
