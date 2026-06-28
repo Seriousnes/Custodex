@@ -58,4 +58,36 @@ public sealed class ChangeLogViewerTests
         cut.Markup.ShouldContain("Overview");
         cut.FindAll("#load").ShouldBeEmpty();
     }
+
+    [Fact]
+    public void Entries_render_actor_operation_target_and_id()
+    {
+        var world = TestWorld.New();
+        var ts = new DateTimeOffset(2025, 3, 15, 10, 0, 0, TimeSpan.Zero);
+
+        var entries = new List<ChangeLogEntry>
+        {
+            new(1L, world.SubjectId(), world.Relation(), world.ObjectId(), null, null, ts),
+            new(2L, world.SubjectId(), world.Relation(), world.ObjectId(), null, null, ts.AddMinutes(1))
+        };
+
+        var fake = new FakeRelationManager(entries);
+        var state = new StudioConnectionState();
+        state.Connect(world.Tenant.Store, world.Tenant.Tenant);
+
+        using var ctx = CreateContext(state, fake);
+        var cut = ctx.Render<ChangeLogViewer>();
+
+        cut.Find("#load").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.ShouldContain(entries[0].Actor);
+            cut.Markup.ShouldContain(entries[0].Operation);
+            cut.Markup.ShouldContain(entries[0].Target);
+            cut.Markup.ShouldContain(entries[1].Actor);
+            cut.Markup.ShouldContain(entries[1].Operation);
+            cut.Markup.ShouldContain(entries[1].Target);
+        });
+    }
 }
