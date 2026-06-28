@@ -3,13 +3,16 @@ using System.Security.Claims;
 using Custodex.Core;
 using Custodex.Service.Auth;
 using Custodex.Service.Health;
+using Custodex.Service.Metrics;
 using Custodex.Service.Rest;
 using Custodex.Service.Services;
 using Custodex.Service.Tenancy;
 using Custodex.Storage.Postgres;
 using Custodex.Studio;
+using Custodex.Studio.Metrics;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
@@ -93,6 +96,11 @@ var connectionString = builder.Configuration.GetConnectionString("Custodex")
 
 builder.Services.AddCustodex().UsePostgres(connectionString);
 builder.Services.AddCustodexStudio();
+
+builder.Services.TryAddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<CustodexMeterAggregator>();
+builder.Services.AddSingleton<IMetricsSnapshotProvider>(sp => sp.GetRequiredService<CustodexMeterAggregator>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CustodexMeterAggregator>());
 builder.Services.AddHealthChecks()
     .AddCheck<PostgresReadyHealthCheck>("postgres", tags: ["ready"]);
 

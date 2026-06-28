@@ -5,6 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="MudBlazor" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Custodex.Abstractions\Custodex.Abstractions.csproj" />
   </ItemGroup>
 

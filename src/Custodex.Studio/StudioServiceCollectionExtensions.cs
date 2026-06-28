@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
+using MudBlazor.Services;
+
 namespace Custodex.Studio;
 
 /// <summary>Registers the services the Custodex Studio console needs in a host's container.</summary>
@@ -15,6 +17,7 @@ public static class StudioServiceCollectionExtensions
     public static IServiceCollection AddCustodexStudio(this IServiceCollection services)
     {
         services.AddRazorComponents().AddInteractiveServerComponents();
+        services.AddMudServices();
         services.TryAddScoped<StudioConnectionState>();
         return services;
     }
