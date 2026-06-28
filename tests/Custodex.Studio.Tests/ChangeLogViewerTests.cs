@@ -85,9 +85,11 @@ public sealed class ChangeLogViewerTests
             cut.Markup.ShouldContain(entries[0].Actor);
             cut.Markup.ShouldContain(entries[0].Operation);
             cut.Markup.ShouldContain(entries[0].Target);
+            cut.Markup.ShouldContain(entries[0].Id.ToString());
             cut.Markup.ShouldContain(entries[1].Actor);
             cut.Markup.ShouldContain(entries[1].Operation);
             cut.Markup.ShouldContain(entries[1].Target);
+            cut.Markup.ShouldContain(entries[1].Id.ToString());
         });
     }
 
@@ -147,6 +149,16 @@ public sealed class ChangeLogViewerTests
         cut.WaitForAssertion(() =>
         {
             cut.FindAll(".diff-none").Count.ShouldBe(2);
+
+            var entryEls = cut.FindAll(".changelog-entry");
+
+            var insertCols = entryEls[0].QuerySelectorAll(".diff-col");
+            insertCols[0].QuerySelector(".diff-none").ShouldNotBeNull();
+            insertCols[1].QuerySelector(".diff-none").ShouldBeNull();
+
+            var deleteCols = entryEls[1].QuerySelectorAll(".diff-col");
+            deleteCols[0].QuerySelector(".diff-none").ShouldBeNull();
+            deleteCols[1].QuerySelector(".diff-none").ShouldNotBeNull();
         });
     }
 
