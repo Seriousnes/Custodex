@@ -1,0 +1,279 @@
+@page "/studio/tuples"
+@implements IDisposable
+@inject IRelationManager Manager
+@inject StudioConnectionState State
+
+<PageTitle>Tuple explorer — Custodex Studio</PageTitle>
+
+<h1>Tuple explorer</h1>
+
+@if (!State.IsConnected)
+{
+    <p>Select a store and tenant on the <a href="studio">Overview</a> page first.</p>
+}
+else
+{
+    <section class="studio-panel tuples-actor-panel" aria-label="Actor">
+        <label class="studio-field">
+            <span>Actor</span>
+            <input id="actor" class="studio-input" @bind="_actor" />
+        </label>
+    </section>
+
+    <section class="studio-panel tuples-query-panel" aria-label="Query tuples">
+        <h2>Query</h2>
+        <label class="studio-field">
+            <span>Object Type</span>
+            <input id="query-obj-type" class="studio-input" @bind="_queryObjType" />
+        </label>
+        <label class="studio-field">
+            <span>Object Id</span>
+            <input id="query-obj-id" class="studio-input" @bind="_queryObjId" />
+        </label>
+        <label class="studio-field">
+            <span>Relation</span>
+            <input id="query-relation" class="studio-input" @bind="_queryRelation" />
+        </label>
+        <label class="studio-field">
+            <span>Subject Type</span>
+            <input id="query-subj-type" class="studio-input" @bind="_querySubjType" />
+        </label>
+        <label class="studio-field">
+            <span>Subject Id</span>
+            <input id="query-subj-id" class="studio-input" @bind="_querySubjId" />
+        </label>
+        <div class="tuples-actions">
+            <button id="query" class="studio-button" @onclick="QueryAsync">Query</button>
+        </div>
+    </section>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="tuples-error" role="alert">@_errorMessage</div>
+    }
+
+    @if (_tuples is not null)
+    {
+        <table class="tuples-grid">
+            <thead>
+                <tr>
+                    <th>Object</th>
+                    <th>Relation</th>
+                    <th>Subject</th>
+                    <th>Condition</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var tuple in _tuples)
+                {
+                    var t = tuple;
+                    <tr>
+                        <td>@t.Object</td>
+                        <td>@t.Relation</td>
+                        <td>@t.Subject</td>
+                        <td>@t.Condition?.Name</td>
+                        <td><button class="studio-button tuples-delete" @onclick="() => DeleteAsync(t)">Delete</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <section class="studio-panel tuples-create-panel" aria-label="Create tuple">
+        <h2>Create tuple</h2>
+        <label class="studio-field">
+            <span>Object Type</span>
+            <input id="create-obj-type" class="studio-input" @bind="_createObjType" />
+        </label>
+        <label class="studio-field">
+            <span>Object Id</span>
+            <input id="create-obj-id" class="studio-input" @bind="_createObjId" />
+        </label>
+        <label class="studio-field">
+            <span>Relation</span>
+            <input id="create-relation" class="studio-input" @bind="_createRelation" />
+        </label>
+        <label class="studio-field">
+            <span>Subject Type</span>
+            <input id="create-subj-type" class="studio-input" @bind="_createSubjType" />
+        </label>
+        <label class="studio-field">
+            <span>Subject Id</span>
+            <input id="create-subj-id" class="studio-input" @bind="_createSubjId" />
+        </label>
+        <label class="studio-field">
+            <span>Subject Relation (optional)</span>
+            <input id="create-subj-relation" class="studio-input" @bind="_createSubjRelation" />
+        </label>
+        <label class="studio-field">
+            <span>Condition Name (optional)</span>
+            <input id="create-cond-name" class="studio-input" @bind="_createCondName" />
+        </label>
+        <div class="tuples-actions">
+            <button id="create" class="studio-button" @onclick="CreateAsync">Create</button>
+        </div>
+    </section>
+
+    <section class="studio-panel tuples-attrs-panel" aria-label="Replace attributes">
+        <h2>Replace attributes</h2>
+        <p class="tuples-attrs-note">Replaces all attributes for the object with the values entered below.</p>
+        <label class="studio-field">
+            <span>Object Type</span>
+            <input id="attr-obj-type" class="studio-input" @bind="_attrObjType" />
+        </label>
+        <label class="studio-field">
+            <span>Object Id</span>
+            <input id="attr-obj-id" class="studio-input" @bind="_attrObjId" />
+        </label>
+        @for (var i = 0; i < _attrKeys.Count; i++)
+        {
+            var idx = i;
+            <div class="tuples-attr-row">
+                <input class="studio-input" @bind="_attrKeys[idx]" placeholder="Key" />
+                <input class="studio-input" @bind="_attrValues[idx]" placeholder="Value" />
+                <button class="studio-button" @onclick="() => RemoveAttrRow(idx)">Remove</button>
+            </div>
+        }
+        <button id="add-attr-row" class="studio-button" @onclick="AddAttrRow">Add attribute</button>
+        <div class="tuples-actions">
+            <button id="set-attrs" class="studio-button" @onclick="SetAttrsAsync">Replace attributes</button>
+        </div>
+    </section>
+}
+
+@code {
+    private string _actor = "studio";
+
+    private string _queryObjType = string.Empty;
+    private string _queryObjId = string.Empty;
+    private string _queryRelation = string.Empty;
+    private string _querySubjType = string.Empty;
+    private string _querySubjId = string.Empty;
+    private IReadOnlyList<RelationTuple>? _tuples;
+    private TupleFilter? _lastFilter;
+    private string? _errorMessage;
+
+    private string _createObjType = string.Empty;
+    private string _createObjId = string.Empty;
+    private string _createRelation = string.Empty;
+    private string _createSubjType = string.Empty;
+    private string _createSubjId = string.Empty;
+    private string _createSubjRelation = string.Empty;
+    private string _createCondName = string.Empty;
+
+    private string _attrObjType = string.Empty;
+    private string _attrObjId = string.Empty;
+    private List<string> _attrKeys = [];
+    private List<string> _attrValues = [];
+
+    protected override void OnInitialized() => State.Changed += OnConnectionChanged;
+
+    private void OnConnectionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= OnConnectionChanged;
+
+    private void AddAttrRow()
+    {
+        _attrKeys.Add(string.Empty);
+        _attrValues.Add(string.Empty);
+    }
+
+    private void RemoveAttrRow(int index)
+    {
+        _attrKeys.RemoveAt(index);
+        _attrValues.RemoveAt(index);
+    }
+
+    private async Task QueryAsync()
+    {
+        _errorMessage = null;
+        _tuples = null;
+
+        var filter = new TupleFilter(
+            string.IsNullOrWhiteSpace(_queryObjType) ? null : _queryObjType,
+            string.IsNullOrWhiteSpace(_queryObjId) ? null : _queryObjId,
+            string.IsNullOrWhiteSpace(_queryRelation) ? null : _queryRelation,
+            string.IsNullOrWhiteSpace(_querySubjType) ? null : _querySubjType,
+            string.IsNullOrWhiteSpace(_querySubjId) ? null : _querySubjId);
+
+        _lastFilter = filter;
+
+        try
+        {
+            _tuples = await Manager.ReadTuplesAsync(State.Current, filter, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(RelationTuple tuple)
+    {
+        _errorMessage = null;
+
+        try
+        {
+            await Manager.DeleteTuplesAsync(State.Current, _actor, [tuple], CancellationToken.None);
+            await RefreshAsync();
+        }
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _errorMessage = null;
+
+        var subject = new SubjectRef(_createSubjType, _createSubjId,
+            string.IsNullOrWhiteSpace(_createSubjRelation) ? null : _createSubjRelation);
+        ConditionRef? condition = string.IsNullOrWhiteSpace(_createCondName)
+            ? null
+            : new ConditionRef(_createCondName, new Dictionary<string, object?>());
+        var tuple = new RelationTuple(new EntityRef(_createObjType, _createObjId), _createRelation, subject, condition);
+
+        try
+        {
+            await Manager.WriteTuplesAsync(State.Current, _actor, [tuple], CancellationToken.None);
+            await RefreshAsync();
+        }
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task SetAttrsAsync()
+    {
+        _errorMessage = null;
+
+        var attrs = new Dictionary<string, object?>(StringComparer.Ordinal);
+        for (var i = 0; i < _attrKeys.Count; i++)
+        {
+            var key = _attrKeys[i];
+            if (!string.IsNullOrWhiteSpace(key))
+                attrs[key] = _attrValues[i];
+        }
+
+        try
+        {
+            await Manager.WriteAttributesAsync(State.Current, _actor,
+                new EntityRef(_attrObjType, _attrObjId), attrs, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_lastFilter is null)
+            return;
+
+        _tuples = await Manager.ReadTuplesAsync(State.Current, _lastFilter, CancellationToken.None);
+    }
+}
