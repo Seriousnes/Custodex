@@ -27,10 +27,10 @@ public sealed class SchemaGraphProjectionTests
 
         var graph = SchemaGraphProjection.Project(schema);
 
-        graph.Nodes.ShouldContain(n => n.Id == userType && n.Kind == SchemaNodeKind.Type);
-        graph.Nodes.ShouldContain(n => n.Id == resourceType && n.Kind == SchemaNodeKind.Type);
-        graph.Nodes.ShouldContain(n => n.Id == $"{resourceType}.{viewRel}" && n.Label == viewRel && n.Kind == SchemaNodeKind.Relation);
-        graph.Nodes.ShouldContain(n => n.Id == $"{resourceType}.{readPerm}" && n.Label == readPerm && n.Kind == SchemaNodeKind.Permission);
+        graph.Nodes.ShouldContain(n => n.Id == $"type:{userType}" && n.Kind == SchemaNodeKind.Type);
+        graph.Nodes.ShouldContain(n => n.Id == $"type:{resourceType}" && n.Kind == SchemaNodeKind.Type);
+        graph.Nodes.ShouldContain(n => n.Id == $"relation:{resourceType}.{viewRel}" && n.Label == viewRel && n.Kind == SchemaNodeKind.Relation);
+        graph.Nodes.ShouldContain(n => n.Id == $"permission:{resourceType}.{readPerm}" && n.Label == readPerm && n.Kind == SchemaNodeKind.Permission);
     }
 
     [Fact]
@@ -52,8 +52,8 @@ public sealed class SchemaGraphProjectionTests
 
         var graph = SchemaGraphProjection.Project(schema);
 
-        graph.Edges.ShouldContain(e => e.FromId == resourceType && e.ToId == $"{resourceType}.{viewRel}" && e.Kind == SchemaEdgeKind.DeclaresRelation);
-        graph.Edges.ShouldContain(e => e.FromId == resourceType && e.ToId == $"{resourceType}.{readPerm}" && e.Kind == SchemaEdgeKind.DeclaresPermission);
+        graph.Edges.ShouldContain(e => e.FromId == $"type:{resourceType}" && e.ToId == $"relation:{resourceType}.{viewRel}" && e.Kind == SchemaEdgeKind.DeclaresRelation);
+        graph.Edges.ShouldContain(e => e.FromId == $"type:{resourceType}" && e.ToId == $"permission:{resourceType}.{readPerm}" && e.Kind == SchemaEdgeKind.DeclaresPermission);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class SchemaGraphProjectionTests
 
         var graph = SchemaGraphProjection.Project(schema);
 
-        graph.Edges.ShouldContain(e => e.FromId == $"{resourceType}.{viewRel}" && e.ToId == userType && e.Kind == SchemaEdgeKind.AllowsSubject);
+        graph.Edges.ShouldContain(e => e.FromId == $"relation:{resourceType}.{viewRel}" && e.ToId == $"type:{userType}" && e.Kind == SchemaEdgeKind.AllowsSubject);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class SchemaGraphProjectionTests
 
         var graph = SchemaGraphProjection.Project(schema);
 
-        graph.Edges.ShouldContain(e => e.FromId == $"{resourceType}.{editRel}" && e.ToId == $"{groupType}.{memberRel}" && e.Kind == SchemaEdgeKind.AllowsSubject);
+        graph.Edges.ShouldContain(e => e.FromId == $"relation:{resourceType}.{editRel}" && e.ToId == $"relation:{groupType}.{memberRel}" && e.Kind == SchemaEdgeKind.AllowsSubject);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class SchemaGraphProjectionTests
 
         var graph = SchemaGraphProjection.Project(schema);
 
-        graph.Edges.ShouldContain(e => e.FromId == $"{resourceType}.{readPerm}" && e.ToId == $"{resourceType}.{viewRel}" && e.Kind == SchemaEdgeKind.References);
+        graph.Edges.ShouldContain(e => e.FromId == $"permission:{resourceType}.{readPerm}" && e.ToId == $"relation:{resourceType}.{viewRel}" && e.Kind == SchemaEdgeKind.References);
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public sealed class SchemaGraphProjectionTests
 
         var graph = SchemaGraphProjection.Project(schema);
 
-        graph.Edges.ShouldContain(e => e.FromId == $"{resourceType}.{readPerm}" && e.ToId == $"{resourceType}.{parentRel}" && e.Kind == SchemaEdgeKind.References);
+        graph.Edges.ShouldContain(e => e.FromId == $"permission:{resourceType}.{readPerm}" && e.ToId == $"relation:{resourceType}.{parentRel}" && e.Kind == SchemaEdgeKind.References);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class SchemaGraphProjectionTests
 
         var graph = SchemaGraphProjection.Project(schema);
 
-        graph.Edges.Count(e => e.FromId == $"{resourceType}.{readPerm}" && e.ToId == $"{resourceType}.{viewRel}" && e.Kind == SchemaEdgeKind.References)
+        graph.Edges.Count(e => e.FromId == $"permission:{resourceType}.{readPerm}" && e.ToId == $"relation:{resourceType}.{viewRel}" && e.Kind == SchemaEdgeKind.References)
             .ShouldBe(1);
     }
 
@@ -182,6 +182,34 @@ public sealed class SchemaGraphProjectionTests
 
         var graph = Should.NotThrow(() => SchemaGraphProjection.Project(schema));
 
-        graph.Edges.ShouldContain(e => e.FromId == $"{resourceType}.{readPerm}" && e.ToId == $"{resourceType}.{missingRel}" && e.Kind == SchemaEdgeKind.References);
+        graph.Edges.ShouldContain(e => e.FromId == $"permission:{resourceType}.{readPerm}" && e.ToId == $"relation:{resourceType}.{missingRel}" && e.Kind == SchemaEdgeKind.References);
+    }
+
+    [Fact]
+    public void Relation_and_permission_with_same_name_yield_two_distinct_nodes()
+    {
+        var world = TestWorld.New();
+        var resourceType = world.EntityType();
+        var userType = world.EntityType();
+        var sharedName = world.Relation();
+
+        var schema = new Schema(TestWorld.Version,
+        [
+            new EntityTypeDef(userType, [], []),
+            new EntityTypeDef(resourceType,
+                [new RelationDef(sharedName, [new SubjectTypeRef(userType)])],
+                [new PermissionDef(sharedName, new RelationRef(sharedName))])
+        ], []);
+
+        var graph = SchemaGraphProjection.Project(schema);
+
+        graph.Nodes.ShouldContain(n => n.Id == $"relation:{resourceType}.{sharedName}" && n.Kind == SchemaNodeKind.Relation);
+        graph.Nodes.ShouldContain(n => n.Id == $"permission:{resourceType}.{sharedName}" && n.Kind == SchemaNodeKind.Permission);
+        graph.Nodes.Count(n => n.Label == sharedName && n.Id.StartsWith("relation:")).ShouldBe(1);
+        graph.Nodes.Count(n => n.Label == sharedName && n.Id.StartsWith("permission:")).ShouldBe(1);
+
+        graph.Edges.ShouldContain(e => e.FromId == $"type:{resourceType}" && e.ToId == $"relation:{resourceType}.{sharedName}" && e.Kind == SchemaEdgeKind.DeclaresRelation);
+        graph.Edges.ShouldContain(e => e.FromId == $"type:{resourceType}" && e.ToId == $"permission:{resourceType}.{sharedName}" && e.Kind == SchemaEdgeKind.DeclaresPermission);
+        graph.Edges.ShouldContain(e => e.FromId == $"permission:{resourceType}.{sharedName}" && e.ToId == $"relation:{resourceType}.{sharedName}" && e.Kind == SchemaEdgeKind.References);
     }
 }

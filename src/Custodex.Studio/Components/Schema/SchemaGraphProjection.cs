@@ -32,7 +32,7 @@ public enum SchemaEdgeKind
 }
 
 /// <summary>A node in the projected schema graph: an entity type, a relation, or a permission.</summary>
-/// <param name="Id">The stable, deterministic node identifier; relations and permissions are qualified by their type.</param>
+/// <param name="Id">The stable, deterministic node identifier; each node is prefixed by its kind (<c>type:</c>, <c>relation:</c>, or <c>permission:</c>) so identifiers are unique across all three kinds.</param>
 /// <param name="Label">The display label — the bare type, relation, or permission name.</param>
 /// <param name="Kind">The role this node plays in the model.</param>
 public sealed record SchemaGraphNode(string Id, string Label, SchemaNodeKind Kind);
@@ -74,7 +74,7 @@ public static class SchemaGraphProjection
 
         foreach (var type in schema.Types)
         {
-            AddNode(type.Name, type.Name, SchemaNodeKind.Type);
+            AddNode(TypeId(type.Name), type.Name, SchemaNodeKind.Type);
 
             foreach (var relation in type.Relations)
                 AddNode(RelationId(type.Name, relation.Name), relation.Name, SchemaNodeKind.Relation);
@@ -95,16 +95,18 @@ public static class SchemaGraphProjection
 
         foreach (var type in schema.Types)
         {
+            var typeId = TypeId(type.Name);
+
             foreach (var relation in type.Relations)
             {
                 var relationId = RelationId(type.Name, relation.Name);
-                AddEdge(type.Name, relationId, SchemaEdgeKind.DeclaresRelation);
+                AddEdge(typeId, relationId, SchemaEdgeKind.DeclaresRelation);
 
                 foreach (var subject in relation.AllowedSubjects)
                 {
                     var target = subject.Relation is { } subjectRelation && nodeIds.Contains(RelationId(subject.Type, subjectRelation))
                         ? RelationId(subject.Type, subjectRelation)
-                        : subject.Type;
+                        : TypeId(subject.Type);
                     AddEdge(relationId, target, SchemaEdgeKind.AllowsSubject);
                 }
             }
@@ -112,7 +114,7 @@ public static class SchemaGraphProjection
             foreach (var permission in type.Permissions)
             {
                 var permissionId = PermissionId(type.Name, permission.Name);
-                AddEdge(type.Name, permissionId, SchemaEdgeKind.DeclaresPermission);
+                AddEdge(typeId, permissionId, SchemaEdgeKind.DeclaresPermission);
 
                 foreach (var relationName in ReferencedRelations(permission.Expression))
                     AddEdge(permissionId, RelationId(type.Name, relationName), SchemaEdgeKind.References);
@@ -133,7 +135,9 @@ public static class SchemaGraphProjection
         _ => throw new ArgumentOutOfRangeException(nameof(expr), expr, "Unrecognised permission expression node.")
     };
 
-    private static string RelationId(string type, string relation) => $"{type}.{relation}";
+    private static string TypeId(string type) => $"type:{type}";
 
-    private static string PermissionId(string type, string permission) => $"{type}.{permission}";
+    private static string RelationId(string type, string relation) => $"relation:{type}.{relation}";
+
+    private static string PermissionId(string type, string permission) => $"permission:{type}.{permission}";
 }
