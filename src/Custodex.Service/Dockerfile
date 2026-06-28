@@ -6,6 +6,7 @@ COPY src/Custodex.Protos/ src/Custodex.Protos/
 COPY src/Custodex.Core/ src/Custodex.Core/
 COPY src/Custodex.Storage.Postgres/ src/Custodex.Storage.Postgres/
 COPY src/Custodex.ServiceDefaults/ src/Custodex.ServiceDefaults/
+COPY src/Custodex.Studio/ src/Custodex.Studio/
 COPY src/Custodex.Service/ src/Custodex.Service/
 RUN dotnet publish src/Custodex.Service/Custodex.Service.csproj -c Release -o /app/publish /p:UseAppHost=false /p:MinVerSkip=true
 RUN mkdir -p /https && dotnet dev-certs https -ep /https/custodex.pfx -p custodex-dev
