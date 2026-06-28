@@ -147,4 +147,33 @@ public sealed class ChangeLogViewerTests
             cut.FindAll(".diff-none").Count.ShouldBe(2);
         });
     }
+
+    [Fact]
+    public void Filter_passthrough_captures_correct_filter()
+    {
+        var world = TestWorld.New();
+        var fake = new FakeRelationManager([]);
+        var state = new StudioConnectionState();
+        state.Connect(world.Tenant.Store, world.Tenant.Tenant);
+
+        using var ctx = CreateContext(state, fake);
+        var cut = ctx.Render<ChangeLogViewer>();
+
+        var sinceText = "2025-01-01T00:00:00+00:00";
+        var actorId = world.SubjectId();
+
+        cut.Find("#filter-since").Change(sinceText);
+        cut.Find("#filter-actor").Change(actorId);
+        cut.Find("#filter-limit").Change("50");
+        cut.Find("#load").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            fake.CapturedFilter.ShouldNotBeNull();
+            fake.CapturedFilter!.Since.ShouldNotBeNull();
+            fake.CapturedFilter!.Since!.Value.ShouldBe(DateTimeOffset.Parse(sinceText));
+            fake.CapturedFilter!.Actor.ShouldBe(actorId);
+            fake.CapturedFilter!.Limit.ShouldBe(50);
+        });
+    }
 }
