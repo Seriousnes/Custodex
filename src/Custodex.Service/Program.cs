@@ -7,9 +7,11 @@ using Custodex.Service.Metrics;
 using Custodex.Service.Rest;
 using Custodex.Service.Services;
 using Custodex.Service.Tenancy;
+using Custodex.Service.Views;
 using Custodex.Storage.Postgres;
 using Custodex.Studio;
 using Custodex.Studio.Metrics;
+using Custodex.Studio.Views;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -96,6 +98,7 @@ var connectionString = builder.Configuration.GetConnectionString("Custodex")
 
 builder.Services.AddCustodex().UsePostgres(connectionString);
 builder.Services.AddCustodexStudio();
+builder.Services.AddSingleton<IStudioViewStore>(_ => new PostgresStudioViewStore(connectionString));
 
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CustodexMeterAggregator>();

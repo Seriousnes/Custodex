@@ -1,0 +1,32 @@
+@page "/studio/views"
+@implements IDisposable
+@inject StudioConnectionState State
+
+<PageTitle>Saved views — Custodex Studio</PageTitle>
+
+<h1>Saved views</h1>
+
+@if (!State.IsConnected)
+{
+    <p>Select a store and tenant on the <a href="studio">Overview</a> page first.</p>
+}
+else
+{
+    <LayoutEditor Layout="_layout" LayoutChanged="OnLayoutChanged" />
+}
+
+@code {
+    private DashboardLayout _layout = DashboardLayout.Default;
+
+    protected override void OnInitialized() => State.Changed += OnConnectionChanged;
+
+    private void OnConnectionChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnLayoutChanged(DashboardLayout layout)
+    {
+        _layout = layout;
+        StateHasChanged();
+    }
+
+    public void Dispose() => State.Changed -= OnConnectionChanged;
+}

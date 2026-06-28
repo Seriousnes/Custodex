@@ -35,6 +35,7 @@
     <ProjectReference Include="..\..\src\Custodex.Abstractions\Custodex.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Core\Custodex.Core.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Storage.Postgres\Custodex.Storage.Postgres.csproj" />
+    <ProjectReference Include="..\Custodex.TestKit\Custodex.TestKit.csproj" />
   </ItemGroup>
 
 </Project>
