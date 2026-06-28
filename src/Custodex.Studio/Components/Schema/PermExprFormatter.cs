@@ -22,7 +22,7 @@ public static class PermExprFormatter
         Intersect i => $"{Operand(i.Left)} & {Operand(i.Right)}",
         Exclude e => $"{Operand(e.Left)} - {Operand(e.Right)}",
         Arrow a => $"{a.Relation}->{a.Permission}",
-        Conditioned c => $"{Format(c.Inner)} with {c.ConditionName}",
+        Conditioned c => $"{Operand(c.Inner)} with {c.ConditionName}",
         _ => throw new ArgumentOutOfRangeException(nameof(expr), expr, "Unrecognised permission expression node.")
     };
 

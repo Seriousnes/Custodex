@@ -106,4 +106,16 @@ public sealed class PermExprFormatterTests
         PermExprFormatter.Format(new Union(new Union(new RelationRef(a), new RelationRef(b)), new RelationRef(c)))
             .ShouldBe($"({a} + {b}) + {c}");
     }
+
+    [Fact]
+    public void Conditioned_with_binary_inner_parenthesizes_the_inner()
+    {
+        var world = TestWorld.New();
+        var a = world.Relation();
+        var b = world.Relation();
+        var cond = world.ConditionName();
+
+        PermExprFormatter.Format(new Conditioned(new Union(new RelationRef(a), new RelationRef(b)), cond))
+            .ShouldBe($"({a} + {b}) with {cond}");
+    }
 }

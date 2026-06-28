@@ -9,10 +9,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<InternalsVisibleTo Include="Custodex.Service" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<EmbeddedResource Include="Migrations/*.sql" />
 	</ItemGroup>
 

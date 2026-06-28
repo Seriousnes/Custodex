@@ -6,7 +6,6 @@ using Shouldly;
 
 namespace Custodex.Service.Tests.Metrics;
 
-[Collection("service")]
 public sealed class CustodexMeterAggregatorTests
 {
     private sealed class FakeTimeProvider : TimeProvider
@@ -22,14 +21,15 @@ public sealed class CustodexMeterAggregatorTests
 
     private sealed class MeterRig : IDisposable
     {
-        public Meter Meter { get; } = new("Custodex");
+        public Meter Meter { get; }
         public Histogram<double> CheckDuration { get; }
         public Counter<long> CacheHits { get; }
         public Counter<long> CacheMisses { get; }
         public Counter<long> CacheSwept { get; }
 
-        public MeterRig()
+        public MeterRig(string meterName)
         {
+            Meter = new Meter(meterName);
             CheckDuration = Meter.CreateHistogram<double>("Custodex.check.duration", unit: "ms");
             CacheHits = Meter.CreateCounter<long>("Custodex.cache.hits");
             CacheMisses = Meter.CreateCounter<long>("Custodex.cache.misses");
@@ -39,12 +39,15 @@ public sealed class CustodexMeterAggregatorTests
         public void Dispose() => Meter.Dispose();
     }
 
+    private static string UniqueMeterName() => $"test-meter-{Guid.NewGuid():N}";
+
     [Fact]
     public async Task Capture_reports_count_and_nearest_rank_percentiles_over_recorded_latencies()
     {
+        var meterName = UniqueMeterName();
         var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch);
-        using var rig = new MeterRig();
-        using var aggregator = new CustodexMeterAggregator(time);
+        using var rig = new MeterRig(meterName);
+        using var aggregator = new CustodexMeterAggregator(time, meterName);
         await aggregator.StartAsync(CancellationToken.None);
 
         for (var value = 1; value <= 100; value++)
@@ -63,9 +66,10 @@ public sealed class CustodexMeterAggregatorTests
     [Fact]
     public async Task Capture_accumulates_cache_counter_totals()
     {
+        var meterName = UniqueMeterName();
         var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch);
-        using var rig = new MeterRig();
-        using var aggregator = new CustodexMeterAggregator(time);
+        using var rig = new MeterRig(meterName);
+        using var aggregator = new CustodexMeterAggregator(time, meterName);
         await aggregator.StartAsync(CancellationToken.None);
 
         rig.CacheHits.Add(3);
@@ -84,9 +88,10 @@ public sealed class CustodexMeterAggregatorTests
     [Fact]
     public async Task Capture_prunes_latencies_older_than_the_rolling_window()
     {
+        var meterName = UniqueMeterName();
         var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch);
-        using var rig = new MeterRig();
-        using var aggregator = new CustodexMeterAggregator(time);
+        using var rig = new MeterRig(meterName);
+        using var aggregator = new CustodexMeterAggregator(time, meterName);
         await aggregator.StartAsync(CancellationToken.None);
 
         for (var i = 0; i < 10; i++)
@@ -109,9 +114,10 @@ public sealed class CustodexMeterAggregatorTests
     [Fact]
     public async Task Capture_on_empty_window_yields_zero_count_and_zero_percentiles()
     {
+        var meterName = UniqueMeterName();
         var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch);
-        using var rig = new MeterRig();
-        using var aggregator = new CustodexMeterAggregator(time);
+        using var rig = new MeterRig(meterName);
+        using var aggregator = new CustodexMeterAggregator(time, meterName);
         await aggregator.StartAsync(CancellationToken.None);
 
         var snapshot = aggregator.Capture();

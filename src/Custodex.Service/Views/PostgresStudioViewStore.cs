@@ -1,4 +1,3 @@
-using Custodex.Storage.Postgres;
 using Custodex.Studio.Views;
 
 using Npgsql;
@@ -25,7 +24,7 @@ public sealed class PostgresStudioViewStore : IStudioViewStore
     /// <summary>Creates a store that reads and writes through the given Custodex connection string.</summary>
     /// <param name="connectionString">The Postgres connection string for the Custodex database.</param>
     public PostgresStudioViewStore(string connectionString) =>
-        _cs = CustodexSchema.Apply(connectionString);
+        _cs = new NpgsqlConnectionStringBuilder(connectionString) { SearchPath = "custodex" }.ToString();
 
     /// <inheritdoc />
     public async Task SaveAsync(StudioView view, CancellationToken ct = default)

@@ -19,6 +19,7 @@ public sealed class CustodexMeterAggregator : IMetricsSnapshotProvider, IHostedS
     private const int MaxSamples = 50_000;
 
     private readonly TimeProvider _time;
+    private readonly string _meterName;
     private readonly object _gate = new();
     private readonly Queue<Sample> _window = new();
 
@@ -31,7 +32,12 @@ public sealed class CustodexMeterAggregator : IMetricsSnapshotProvider, IHostedS
 
     /// <summary>Creates the aggregator. Recording does not begin until <see cref="StartAsync"/> runs.</summary>
     /// <param name="time">The time source the rolling window is measured against.</param>
-    public CustodexMeterAggregator(TimeProvider time) => _time = time;
+    /// <param name="meterName">The meter name to listen to; defaults to <see cref="CustodexDiagnostics.Name"/>.</param>
+    public CustodexMeterAggregator(TimeProvider time, string meterName = CustodexDiagnostics.Name)
+    {
+        _time = time;
+        _meterName = meterName;
+    }
 
     private readonly record struct Sample(DateTimeOffset At, double ValueMs);
 
@@ -43,11 +49,12 @@ public sealed class CustodexMeterAggregator : IMetricsSnapshotProvider, IHostedS
             if (_disposed || _listener is not null)
                 return Task.CompletedTask;
 
+            var meterName = _meterName;
             var listener = new MeterListener
             {
-                InstrumentPublished = static (instrument, l) =>
+                InstrumentPublished = (instrument, l) =>
                 {
-                    if (instrument.Meter.Name == CustodexDiagnostics.Name)
+                    if (instrument.Meter.Name == meterName)
                         l.EnableMeasurementEvents(instrument);
                 },
             };
