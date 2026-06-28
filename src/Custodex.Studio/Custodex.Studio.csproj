@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="MudBlazor" />
+    <PackageReference Include="Z.Blazor.Diagrams" />
   </ItemGroup>
 
   <ItemGroup>
