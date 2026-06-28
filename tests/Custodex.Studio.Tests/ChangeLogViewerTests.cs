@@ -116,6 +116,8 @@ public sealed class ChangeLogViewerTests
         cut.WaitForAssertion(() =>
         {
             cut.FindAll(".changed").ShouldContain(el => el.TextContent.Contains(changedKey));
+            cut.FindAll(".changed").ShouldContain(el => el.TextContent.Contains("old"));
+            cut.FindAll(".changed").ShouldContain(el => el.TextContent.Contains("new"));
         });
     }
 
