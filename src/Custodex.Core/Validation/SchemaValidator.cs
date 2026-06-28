@@ -226,15 +226,7 @@ public static class SchemaValidator
             case Conditioned c:
                 foreach (var e in ExprEdges(type, c.Inner, types)) yield return e;
                 break;
-            case Arrow a:
-                var relation = type.Relations.First(r =>
-                    string.Equals(r.Name, a.Relation, StringComparison.Ordinal));
-                foreach (var filler in relation.AllowedSubjects)
-                {
-                    if (filler.Relation is not null) continue;
-                    if (types.TryGetValue(filler.Type, out var target) && HasPermission(target, a.Permission))
-                        yield return (filler.Type, a.Permission);
-                }
+            case Arrow:
                 break;
         }
     }

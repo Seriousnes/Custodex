@@ -180,8 +180,37 @@ public static class ModelGenerator
                     [.. Users.Select(u => new SubjectRef("user", u))]);
             });
 
-    /// <summary>A <see cref="CsCheck.Gen{T}"/> that randomly selects one of the four curated
+    /// <summary>S5: self-referential folder hierarchy. <c>folder.view = owner + parent-&gt;view</c>, where
+    /// <c>parent</c> is a relation back to <c>folder</c>. A shallow three-level ancestry chain
+    /// (f3→f2→f1) drives recursion through the arrow while staying within the engine's depth budget,
+    /// with a mid-chain owner so inheritance and a direct grant are both exercised at the same level.</summary>
+    private static Schema S5Schema() => new SchemaBuilder("s5")
+        .Type("folder", t => t
+            .Relation("owner", s => s.User())
+            .Relation("parent", s => s.Type("folder"))
+            .Permission("view", p => p.Relation("owner").Union(x => x.Arrow("parent", "view"))))
+        .Build();
+
+    private static readonly CsCheck.Gen<GeneratedModel> S5 =
+        CsCheck.Gen.Select(
+            UserGen,
+            UserGen,
+            (rootOwner, midOwner) =>
+            {
+                List<RelationTuple> tuples =
+                [
+                    T("folder", "f3", "parent", new SubjectRef("folder", "f2")),
+                    T("folder", "f2", "parent", new SubjectRef("folder", "f1")),
+                    T("folder", "f1", "owner", new SubjectRef("user", rootOwner)),
+                    T("folder", "f2", "owner", new SubjectRef("user", midOwner)),
+                ];
+                return new GeneratedModel(S5Schema(), tuples, [],
+                    [new EntityRef("folder", "f1"), new EntityRef("folder", "f2"), new EntityRef("folder", "f3")],
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
+            });
+
+    /// <summary>A <see cref="CsCheck.Gen{T}"/> that randomly selects one of the curated
     /// skeleton schemas and randomizes its relation-tuple data.</summary>
     public static readonly CsCheck.Gen<GeneratedModel> Gen =
-        CsCheck.Gen.OneOf(S1, S2, S3, S4);
+        CsCheck.Gen.OneOf(S1, S2, S3, S4, S5);
 }
