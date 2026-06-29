@@ -32,6 +32,7 @@
     <ProjectReference Include="..\..\src\Custodex.Storage.Sqlite\Custodex.Storage.Sqlite.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Abstractions\Custodex.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Core\Custodex.Core.csproj" />
+    <ProjectReference Include="..\Custodex.TestKit\Custodex.TestKit.csproj" />
   </ItemGroup>
 
 </Project>
