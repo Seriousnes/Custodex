@@ -52,7 +52,8 @@ public static class CustodexPostgresBuilderExtensions
 
         s.TryAddSingleton<IConditionEvaluator, CelConditionEvaluator>();
 
-        s.TryAddSingleton<ICacheStore>(_ => new PostgresCacheStore(connectionString, default));
+        s.TryAddSingleton(new PostgresCacheStoreFactory(connectionString));
+        s.TryAddSingleton<ICacheStore>(sp => sp.GetRequiredService<PostgresCacheStoreFactory>().For(default));
 
         s.TryAddSingleton(sp => new AuditedWritePath(
             sp.GetRequiredService<NpgsqlRelationStore>(),
