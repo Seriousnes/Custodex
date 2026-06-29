@@ -331,9 +331,53 @@ public static class ModelGenerator
                     [.. Users.Select(u => new SubjectRef("user", u))]);
             });
 
+    /// <summary>SC4: a deep membership edge gated by a timestamp condition that reads a timestamp object
+    /// attribute and compares it both against the request time and against a declared-timestamp parameter.
+    /// The attribute and the parameter round-trip through the persistent store as strings, so both the
+    /// attribute-vs-timestamp and the declared-timestamp-parameter coercion sites are exercised.</summary>
+    private static Schema SC4Schema() => new SchemaBuilder("sc4")
+        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
+        .Type("doc", t => t
+            .Relation("viewer", s => s.User().SubjectSet("group", "member"))
+            .Relation("reader", s => s.User())
+            .Permission("view", p => p.Relation("viewer").Union(x => x.Relation("reader"))))
+        .Condition("fresh", p => p.Timestamp("floor"),
+            b => b.And(
+                b.Ge(b.Attribute("expires"), b.Now()),
+                b.Le(b.Param("floor"), b.Attribute("expires"))))
+        .Build();
+
+    private static readonly CsCheck.Gen<GeneratedModel> SC4 =
+        CsCheck.Gen.Select(
+            UserGen, UserGen, CsCheck.Gen.Bool, CsCheck.Gen.Bool,
+            (leafU, directU, gateDeep, expiresAfter) =>
+            {
+                var floor = DateTimeOffset.UnixEpoch;
+                var expires = expiresAfter
+                    ? DateTimeOffset.UnixEpoch.AddDays(1)
+                    : DateTimeOffset.UnixEpoch.AddDays(-1);
+                var gate = new ConditionRef("fresh", new Dictionary<string, object?> { ["floor"] = floor });
+                List<RelationTuple> tuples =
+                [
+                    T("doc", "d1", "reader", new SubjectRef("user", directU)),
+                    T("doc", "d1", "viewer", new SubjectRef("group", "g1", "member")),
+                    gateDeep
+                        ? new RelationTuple(
+                            new EntityRef("group", "g1"), "member", new SubjectRef("user", leafU), gate)
+                        : T("group", "g1", "member", new SubjectRef("user", leafU)),
+                ];
+                var attributes = new (EntityRef, IReadOnlyDictionary<string, object?>)[]
+                {
+                    (new EntityRef("group", "g1"), new Dictionary<string, object?> { ["expires"] = expires }),
+                };
+                return new GeneratedModel(SC4Schema(), tuples, attributes,
+                    [new EntityRef("doc", "d1")],
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
+            });
+
     /// <summary>A <see cref="CsCheck.Gen{T}"/> over conditioned skeletons: each emits relation tuples whose
     /// direct, intermediate, and deep edges may carry conditions, plus the object attributes those
     /// conditions read, so both authorizers are differentially checked under real condition evaluation.</summary>
     public static readonly CsCheck.Gen<GeneratedModel> ConditionedGen =
-        CsCheck.Gen.OneOf(SC1, SC2, SC3);
+        CsCheck.Gen.OneOf(SC1, SC2, SC3, SC4);
 }

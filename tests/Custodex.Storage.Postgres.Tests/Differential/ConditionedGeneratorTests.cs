@@ -1,5 +1,6 @@
 using CsCheck;
 
+using Custodex.Abstractions;
 using Custodex.Core.Validation;
 
 using Shouldly;
@@ -53,5 +54,21 @@ public class ConditionedGeneratorTests
             return true;
         }, iter: 50);
         sawAttributes.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Generator_emits_timestamp_conditions_and_attributes()
+    {
+        var sawTimestamp = false;
+        Check.Sample(ModelGenerator.ConditionedGen, model =>
+        {
+            var hasTimestampParam = model.Schema.Conditions
+                .Any(c => c.Parameters.Any(p => p.Type == ConditionType.Timestamp));
+            var hasTimestampAttribute = model.Attributes
+                .Any(a => a.Attrs.Values.Any(v => v is DateTimeOffset));
+            if (hasTimestampParam && hasTimestampAttribute) sawTimestamp = true;
+            return true;
+        }, iter: 200);
+        sawTimestamp.ShouldBeTrue();
     }
 }
