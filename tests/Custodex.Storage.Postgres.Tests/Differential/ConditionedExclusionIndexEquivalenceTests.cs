@@ -69,7 +69,7 @@ public class ConditionedExclusionIndexEquivalenceTests(PostgresFixture fx) : IAs
         var c = Case(name);
         var store = $"cex-incr-{name}";
         var ops = ConditionedExclusionModels.AddOps(c.Model);
-        var (oracle, indexed) = await DifferentialHarness.BuildIncrementalIndexedAsync(fx, c.Model, ops, store);
+        var (oracle, indexed) = await DifferentialHarness.BuildConditionedIncrementalIndexedAsync(fx, c.Model, ops, store);
         var tenant = new TenantContext(store, "t");
 
         foreach (var (subject, expected) in c.Expectations)

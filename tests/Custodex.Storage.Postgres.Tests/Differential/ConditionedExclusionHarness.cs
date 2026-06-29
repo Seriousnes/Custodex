@@ -15,7 +15,7 @@ public static partial class DifferentialHarness
     /// <paramref name="ops"/> one transaction at a time through the maintainer, returning the oracle and
     /// the index-backed authorizer for comparison. Both sides evaluate conditions with the same real
     /// evaluator, so conditioned grants are exercised under genuine condition evaluation.</summary>
-    public static async Task<(EngineDrivenAuthorizer Oracle, IndexedAuthorizer Indexed)> BuildIncrementalIndexedAsync(
+    public static async Task<(EngineDrivenAuthorizer Oracle, IndexedAuthorizer Indexed)> BuildConditionedIncrementalIndexedAsync(
         PostgresFixture fx, GeneratedModel model, IReadOnlyList<WriteOp> ops, string store, CancellationToken ct = default)
     {
         var tenant = new TenantContext(store, "t");
