@@ -31,7 +31,7 @@ public sealed class NpgsqlAttributeStore(string connectionString) : IAttributeSt
             new { store = t.Store, tenant = t.Tenant, ot = obj.Type, oid = obj.Id },
             cancellationToken: ct));
 
-        return json is null ? null : Json.Deserialize<Dictionary<string, object?>>(json);
+        return json is null ? null : Json.DeserializeValues(json);
     }
 
     /// <inheritdoc />
