@@ -1,7 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core;
 using Custodex.Core.Conditions;
-using Custodex.Core.Evaluation;
 using Custodex.Storage.SqlServer.Managers;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -77,11 +76,12 @@ public static class CustodexSqlServerBuilderExtensions
         s.TryAddSingleton<IStoreManager>(_ => new CustodexStoreManager(connectionString));
         s.TryAddSingleton<ITenantManager>(_ => new CustodexTenantManager(connectionString));
 
-        s.TryAddSingleton<IAuthorizer>(sp => new EngineDrivenAuthorizer(
-            sp.GetRequiredService<ISchemaStore>(),
-            sp.GetRequiredService<IRelationStore>(),
-            sp.GetRequiredService<IAttributeStore>(),
+        s.TryAddSingleton<SqlServerCteAuthorizer>(sp => new SqlServerCteAuthorizer(
+            connectionString,
+            sp.GetRequiredService<SqlServerSchemaStore>(),
+            sp.GetRequiredService<SqlServerAttributeStore>(),
             sp.GetRequiredService<IConditionEvaluator>()));
+        s.TryAddSingleton<IAuthorizer>(sp => sp.GetRequiredService<SqlServerCteAuthorizer>());
 
         return builder;
     }

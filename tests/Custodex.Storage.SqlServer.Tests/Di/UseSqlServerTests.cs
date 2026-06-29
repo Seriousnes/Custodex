@@ -28,4 +28,13 @@ public class UseSqlServerTests(SqlServerFixture fx)
         provider.GetService<IUnitOfWorkFactory>().ShouldNotBeNull();
         provider.GetService<ICacheStore>().ShouldNotBeNull();
     }
+
+    [Fact]
+    public void UseSqlServer_authorizer_is_the_cte_primary_path()
+    {
+        var services = new ServiceCollection();
+        services.AddCustodex().UseSqlServer(fx.ConnectionString);
+        var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<IAuthorizer>().ShouldBeOfType<SqlServerCteAuthorizer>();
+    }
 }
