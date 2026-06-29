@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Custodex.Abstractions;
 
 namespace Custodex.Core.Conditions;
@@ -85,6 +87,7 @@ public static class ConditionEvaluator
             ConditionType.String when raw is string s => CelValue.String(s),
             ConditionType.Timestamp when raw is DateTimeOffset dto => CelValue.Timestamp(dto),
             ConditionType.Timestamp when raw is DateTime dt => CelValue.Timestamp(dt),
+            ConditionType.Timestamp when raw is string ts => CelValue.Timestamp(ParseTimestamp(ts)),
             _ => throw new EvalException($"parameter '{name}' value does not match declared type {type}."),
         };
     }
@@ -110,7 +113,7 @@ public static class ConditionEvaluator
         IReadOnlyDictionary<string, object?> parameters,
         IReadOnlyDictionary<string, ConditionType> paramTypes)
     {
-        var ts = Eval(h.Timestamp, attributes, context, parameters, paramTypes);
+        var ts = CoerceToTimestamp(Eval(h.Timestamp, attributes, context, parameters, paramTypes));
         if (ts.Kind != CelKind.Timestamp)
             throw new EvalException("hour() requires a timestamp operand.");
         return CelValue.Int(ts.AsTimestamp().Hour);
@@ -140,6 +143,7 @@ public static class ConditionEvaluator
 
     private static bool CompareValues(CelValue l, CelValue r, CompareOp op)
     {
+        (l, r) = CoerceTimestampOperands(l, r);
         if (l.IsNumeric && r.IsNumeric)
             return ApplyOrder(l.AsDouble().CompareTo(r.AsDouble()), op);
         if (l.Kind == CelKind.String && r.Kind == CelKind.String)
@@ -150,6 +154,23 @@ public static class ConditionEvaluator
             return op == CompareOp.Eq ? l.AsBool() == r.AsBool() : l.AsBool() != r.AsBool();
         throw new EvalException($"cannot compare {l.Kind} with {r.Kind}.");
     }
+
+    private static (CelValue Left, CelValue Right) CoerceTimestampOperands(CelValue l, CelValue r)
+    {
+        if (l.Kind == CelKind.Timestamp && r.Kind == CelKind.String)
+            return (l, CoerceToTimestamp(r));
+        if (l.Kind == CelKind.String && r.Kind == CelKind.Timestamp)
+            return (CoerceToTimestamp(l), r);
+        return (l, r);
+    }
+
+    private static CelValue CoerceToTimestamp(CelValue value) =>
+        value.Kind == CelKind.String ? CelValue.Timestamp(ParseTimestamp(value.AsString())) : value;
+
+    private static DateTimeOffset ParseTimestamp(string text) =>
+        DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var value)
+            ? value
+            : throw new EvalException($"value '{text}' is not a valid timestamp.");
 
     private static bool ApplyOrder(int cmp, CompareOp op) => op switch
     {
