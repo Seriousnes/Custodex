@@ -107,9 +107,9 @@ public sealed partial class SqlServerCteAuthorizer(
         using (scope)
         {
             var edges = await SqlServerReachability.EdgesThroughRelationAsync(conn, BoundTx, tenant, obj, relation, ct);
-            var anyConditioned = edges.Any(e => e.Condition is not null);
+            var conditionsMayApply = index.HasConditions || edges.Any(e => e.Condition is not null);
 
-            if (!anyConditioned)
+            if (!conditionsMayApply)
             {
                 var leaves = await SqlServerReachability.SubjectsThroughRelationAsync(conn, BoundTx, tenant, obj, relation, ct);
                 foreach (var leaf in leaves)
