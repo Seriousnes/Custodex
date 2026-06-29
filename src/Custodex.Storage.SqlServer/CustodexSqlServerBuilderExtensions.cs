@@ -52,7 +52,8 @@ public static class CustodexSqlServerBuilderExtensions
 
         s.TryAddSingleton<IConditionEvaluator, CelConditionEvaluator>();
 
-        s.TryAddSingleton<ICacheStore>(_ => new SqlServerCacheStore(connectionString, default));
+        s.TryAddSingleton(new SqlServerCacheStoreFactory(connectionString));
+        s.TryAddSingleton<ICacheStore>(sp => sp.GetRequiredService<SqlServerCacheStoreFactory>().For(default));
 
         s.TryAddSingleton(sp => new AuditedWritePath(
             sp.GetRequiredService<SqlServerRelationStore>(),
