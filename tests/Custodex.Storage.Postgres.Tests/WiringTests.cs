@@ -1,3 +1,8 @@
+using Custodex.Abstractions;
+using Custodex.Core;
+
+using Microsoft.Extensions.DependencyInjection;
+
 using Shouldly;
 
 namespace Custodex.Storage.Postgres.Tests;
@@ -9,5 +14,16 @@ public class WiringTests
     {
         typeof(MigrationRunner).Assembly.GetName().Name
             .ShouldBe("Custodex.Storage.Postgres");
+    }
+
+    [Fact]
+    public void UsePostgres_registers_cache_store_factory_and_cache_store()
+    {
+        var services = new ServiceCollection();
+        services.AddCustodex().UsePostgres("Host=localhost;Database=test;Username=u;Password=p");
+
+        var provider = services.BuildServiceProvider();
+        provider.GetService<PostgresCacheStoreFactory>().ShouldNotBeNull();
+        provider.GetService<ICacheStore>().ShouldBeOfType<PostgresCacheStore>();
     }
 }
