@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using Custodex.Abstractions;
 
 namespace Custodex.Core.Conditions;
@@ -77,9 +79,19 @@ public sealed record ParamRef(string Name) : ConditionExpr;
 
 /// <summary>
 /// Reads a named field from the request's attribute bag. Evaluation fails (default-deny) when the field is absent.
+/// An optional declared type lets the field resolve as that type regardless of how the underlying store encoded the
+/// value; in particular a declared <see cref="ConditionType.Timestamp"/> parses a string-encoded value to a timestamp,
+/// so two encodings of the same instant compare chronologically rather than ordinally. When the type is omitted the
+/// field resolves by the value's runtime type, exactly as an untyped read.
 /// </summary>
 /// <param name="Field">The attribute field name to look up.</param>
-public sealed record AttributeRef(string Field) : ConditionExpr;
+/// <param name="Type">
+/// The declared type the field resolves as, or <see langword="null"/> to resolve by the value's runtime type. A
+/// declared type that the stored value cannot satisfy fails the condition (default-deny).
+/// </param>
+public sealed record AttributeRef(
+    string Field,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ConditionType? Type = null) : ConditionExpr;
 
 /// <summary>
 /// The ambient request time, as a timestamp. Lets a condition compare against "now" deterministically.
