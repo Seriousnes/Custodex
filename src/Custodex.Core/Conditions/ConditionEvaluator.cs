@@ -56,7 +56,7 @@ public static class ConditionEvaluator
         LiteralString l => CelValue.String(l.Value),
 
         ParamRef p => ResolveParam(p.Name, parameters, paramTypes),
-        AttributeRef a => ResolveAttribute(a.Field, attributes),
+        AttributeRef a => ResolveAttribute(a.Field, a.Type, attributes),
         ContextNow => CelValue.Timestamp(context.Now),
         ContextSubject => CelValue.String(context.Subject.Id),
 
@@ -92,10 +92,20 @@ public static class ConditionEvaluator
         };
     }
 
-    private static CelValue ResolveAttribute(string field, IReadOnlyDictionary<string, object?> attributes)
+    private static CelValue ResolveAttribute(
+        string field, ConditionType? declaredType, IReadOnlyDictionary<string, object?> attributes)
     {
         if (!attributes.TryGetValue(field, out var raw) || raw is null)
             throw new EvalException($"attribute '{field}' is missing.");
+        if (declaredType == ConditionType.Timestamp)
+            return raw switch
+            {
+                DateTimeOffset dto => CelValue.Timestamp(dto),
+                DateTime dt => CelValue.Timestamp(dt),
+                string ts => CelValue.Timestamp(ParseTimestamp(ts)),
+                _ => throw new EvalException(
+                    $"attribute '{field}' value does not match declared type {declaredType}."),
+            };
         return raw switch
         {
             bool b => CelValue.Bool(b),

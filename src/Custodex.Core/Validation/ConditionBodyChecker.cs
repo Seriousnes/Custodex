@@ -48,7 +48,7 @@ public static class ConditionBodyChecker
             case LiteralString: return K.String;
             case ContextNow: return K.Timestamp;
             case ContextSubject: return K.String;
-            case AttributeRef: return K.Unknown;
+            case AttributeRef ar: return ar.Type is { } declared ? KindOf(declared) : K.Unknown;
 
             case ParamRef p:
                 if (!paramKinds.TryGetValue(p.Name, out var k))

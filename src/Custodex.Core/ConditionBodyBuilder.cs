@@ -21,6 +21,16 @@ public sealed class ConditionBodyBuilder
     /// <returns>The attribute reference.</returns>
     public ConditionExpr Attribute(string field) => new AttributeRef(field);
 
+    /// <summary>
+    /// References a field of the request's resource attributes, declaring the type it resolves as. A declared
+    /// <see cref="ConditionType.Timestamp"/> parses a string-encoded value to a timestamp so it compares
+    /// chronologically against another timestamp regardless of either side's encoding.
+    /// </summary>
+    /// <param name="field">The attribute field name to read.</param>
+    /// <param name="type">The declared type the field resolves as.</param>
+    /// <returns>The typed attribute reference.</returns>
+    public ConditionExpr Attribute(string field, ConditionType type) => new AttributeRef(field, type);
+
     /// <summary>References the request's current time supplied by the caller.</summary>
     /// <returns>The context-now reference.</returns>
     public ConditionExpr Now() => new ContextNow();
