@@ -71,4 +71,46 @@ public class ConditionedAttributeDifferentialTests(PostgresFixture fx) : IAsyncL
         oracleAllowed.ShouldBe(expected);
         cteAllowed.ShouldBe(oracleAllowed);
     }
+
+    public static IEnumerable<object[]> NumericCases() =>
+    [
+        [5.0, true],
+        [4.0, false],
+    ];
+
+    [Theory]
+    [MemberData(nameof(NumericCases))]
+    public async Task Numeric_attribute_condition_on_deep_membership_matches_oracle(double score, bool expected)
+    {
+        var schema = new SchemaBuilder("cn")
+            .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
+            .Type("doc", t => t
+                .Relation("viewer", s => s.User().SubjectSet("group", "member"))
+                .Permission("view", p => p.Relation("viewer")))
+            .Condition("atleast", _ => { }, b => b.Ge(b.Attribute("score"), b.Const(5L)))
+            .Build();
+
+        var tuples = new List<RelationTuple>
+        {
+            T("doc", "o1", "viewer", Member("g1")),
+            TC("group", "g1", "member", U("u1"), "atleast"),
+        };
+        var attributes = new (EntityRef, IReadOnlyDictionary<string, object?>)[]
+        {
+            (new EntityRef("group", "g1"), new Dictionary<string, object?> { ["score"] = score }),
+        };
+        var model = new GeneratedModel(schema, tuples, attributes, [new EntityRef("doc", "o1")], [U("u1")]);
+
+        var store = $"cn-{(expected ? "allow" : "deny")}";
+        var (oracle, cte) = await DifferentialHarness.BuildAsync(fx, model, store);
+        var tenant = new TenantContext(store, "t");
+        var ctx = new RequestContext(DateTimeOffset.UnixEpoch, U("u1"), new Dictionary<string, object?>());
+        var req = new CheckRequest(tenant, new EntityRef("doc", "o1"), "view", U("u1"), ctx);
+
+        var oracleAllowed = (await oracle.CheckAsync(req)).Allowed;
+        var cteAllowed = (await cte.CheckAsync(req)).Allowed;
+
+        oracleAllowed.ShouldBe(expected);
+        cteAllowed.ShouldBe(oracleAllowed);
+    }
 }
