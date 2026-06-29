@@ -27,6 +27,7 @@ public class UseSqlServerTests(SqlServerFixture fx)
         provider.GetService<ITenantManager>().ShouldNotBeNull();
         provider.GetService<IUnitOfWorkFactory>().ShouldNotBeNull();
         provider.GetService<ICacheStore>().ShouldNotBeNull();
+        provider.GetService<SqlServerCacheStoreFactory>().ShouldNotBeNull();
     }
 
     [Fact]
