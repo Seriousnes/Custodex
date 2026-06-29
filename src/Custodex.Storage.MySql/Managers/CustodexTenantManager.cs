@@ -17,6 +17,7 @@ public sealed class CustodexTenantManager(string connectionString) : ITenantMana
     /// <inheritdoc />
     public async Task CreateTenantAsync(TenantContext tenant, CancellationToken ct = default)
     {
+        MySqlColumnLimits.ValidateTenant(tenant);
         await using var conn = new MySqlConnection(_cs);
         await conn.ExecuteAsync(new CommandDefinition(
             "INSERT IGNORE INTO tenants (store_id, tenant_id) VALUES (@store, @tenant)",

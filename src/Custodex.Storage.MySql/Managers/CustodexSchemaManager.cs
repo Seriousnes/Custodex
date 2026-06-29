@@ -46,6 +46,9 @@ public sealed class CustodexSchemaManager(
 
     private async Task ActivateAsync(string store, Schema schema, IUnitOfWork uow, CancellationToken ct)
     {
+        MySqlColumnLimits.EnsureWithin(store, MySqlColumnLimits.StoreId, "store id");
+        MySqlColumnLimits.EnsureWithin(schema.Version, MySqlColumnLimits.SchemaVersion, "schema version");
+
         var tenant = new TenantContext(store, store);
         var w = MySqlUnitOfWork.From(uow);
         await w.Connection.ExecuteAsync(

@@ -17,6 +17,7 @@ public sealed class CustodexStoreManager(string connectionString) : IStoreManage
     /// <inheritdoc />
     public async Task CreateStoreAsync(string store, CancellationToken ct = default)
     {
+        MySqlColumnLimits.EnsureWithin(store, MySqlColumnLimits.StoreId, "store id");
         await using var conn = new MySqlConnection(_cs);
         await conn.ExecuteAsync(new CommandDefinition(
             "INSERT IGNORE INTO stores (id) VALUES (@store)",

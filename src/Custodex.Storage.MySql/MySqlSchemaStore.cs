@@ -32,6 +32,9 @@ public sealed class MySqlSchemaStore(string connectionString) : ISchemaStore
     /// <inheritdoc />
     public async Task SetActiveAsync(string store, Schema schema, IUnitOfWork uow, CancellationToken ct = default)
     {
+        MySqlColumnLimits.EnsureWithin(store, MySqlColumnLimits.StoreId, "store id");
+        MySqlColumnLimits.EnsureWithin(schema.Version, MySqlColumnLimits.SchemaVersion, "schema version");
+
         var w = MySqlUnitOfWork.From(uow);
 
         await using (var deactivate = new MySqlCommand(

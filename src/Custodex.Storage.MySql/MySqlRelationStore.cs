@@ -93,6 +93,10 @@ public sealed class MySqlRelationStore : IRelationStore
         TenantContext t, IReadOnlyList<RelationTuple> add, IReadOnlyList<RelationTuple> remove,
         IUnitOfWork uow, CancellationToken ct = default)
     {
+        MySqlColumnLimits.ValidateTenant(t);
+        foreach (var tuple in add)
+            MySqlColumnLimits.ValidateTuple(tuple);
+
         var w = MySqlUnitOfWork.From(uow);
 
         foreach (var tuple in remove)

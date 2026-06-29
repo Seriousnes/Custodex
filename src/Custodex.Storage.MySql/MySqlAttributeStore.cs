@@ -39,6 +39,9 @@ public sealed class MySqlAttributeStore(string connectionString) : IAttributeSto
         TenantContext t, EntityRef obj, IReadOnlyDictionary<string, object?> attrs,
         IUnitOfWork uow, CancellationToken ct = default)
     {
+        MySqlColumnLimits.ValidateTenant(t);
+        MySqlColumnLimits.ValidateEntity(obj);
+
         var w = MySqlUnitOfWork.From(uow);
         await using var cmd = new MySqlCommand("""
             INSERT INTO object_attributes (store_id, tenant_id, object_type, object_id, attributes)
