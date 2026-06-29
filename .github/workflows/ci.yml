@@ -48,6 +48,8 @@ jobs:
             filter: "category!=aspire&category!=container"
           - project: Custodex.Storage.Sqlite.Tests
             filter: "category!=aspire&category!=container"
+          - project: Custodex.Storage.MySql.Tests
+            filter: "category!=aspire&category!=container"
           - project: Custodex.Service.Tests
             filter: ""
           - project: Custodex.Client.Tests
