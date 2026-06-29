@@ -11,7 +11,8 @@ public class MigrationRunnerTests(SqlServerFixture fx)
     [
         "stores", "schema_versions", "tenants", "relation_tuples",
         "object_attributes", "cache_entries",
-        "change_log", "tenant_epochs", "schema_migrations"
+        "change_log", "tenant_epochs", "schema_migrations",
+        "reverse_index", "index_build_markers"
     ];
 
     [Fact]
@@ -42,6 +43,8 @@ public class MigrationRunnerTests(SqlServerFixture fx)
         indexes.ShouldContain("ix_relation_tuples_forward");
         indexes.ShouldContain("ix_relation_tuples_reverse");
         indexes.ShouldContain("ux_relation_tuples_natural");
+        indexes.ShouldContain("ix_reverse_index_scan");
+        indexes.ShouldContain("ux_reverse_index_natural");
     }
 
     [Fact]
