@@ -5,6 +5,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>true</IsPackable>
+		<MinVerTagPrefix>postgres-v</MinVerTagPrefix>
 		<Description>PostgreSQL storage provider for Custodex, built on Npgsql and Dapper.</Description>
 	</PropertyGroup>
 

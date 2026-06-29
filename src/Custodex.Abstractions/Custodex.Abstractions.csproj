@@ -5,6 +5,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>true</IsPackable>
+		<MinVerTagPrefix>abstractions-v</MinVerTagPrefix>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<Description>Public contracts (interfaces and records) for the Custodex authorization engine — the dependency for consumers and third-party storage and condition providers.</Description>

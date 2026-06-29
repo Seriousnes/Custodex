@@ -7,6 +7,12 @@ on:
         description: Pack and list resolved versions without pushing
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      dry_run:
+        description: Pack and list resolved versions without pushing
+        type: boolean
+        default: false
 
 permissions:
   contents: read

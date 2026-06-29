@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
+    <MinVerTagPrefix>inmemory-v</MinVerTagPrefix>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Description>In-memory storage providers for Custodex — a database-free path for tests, local development, and demos.</Description>
