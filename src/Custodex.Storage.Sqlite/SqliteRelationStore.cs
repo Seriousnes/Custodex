@@ -2,19 +2,17 @@ using Custodex.Abstractions;
 
 using Dapper;
 
-using Npgsql;
+using Microsoft.Data.Sqlite;
 
-using NpgsqlTypes;
-
-namespace Custodex.Storage.Postgres;
+namespace Custodex.Storage.Sqlite;
 
 /// <summary>
-/// Dapper-backed implementation of <see cref="IRelationStore"/> over Postgres.
+/// Dapper-backed implementation of <see cref="IRelationStore"/> over SQLite.
 /// Reads open short-lived connections from the supplied connection string.
 /// Writes execute through the <see cref="IUnitOfWork"/> supplied by the caller.
 /// Every query hard-filters on both <c>store_id</c> and <c>tenant_id</c>.
 /// </summary>
-public sealed class NpgsqlRelationStore : IRelationStore
+public sealed class SqliteRelationStore : IRelationStore
 {
     private sealed record Row(
         string ObjectType, string ObjectId, string Relation,
@@ -23,16 +21,16 @@ public sealed class NpgsqlRelationStore : IRelationStore
 
     private const string SelectColumns =
         "object_type, object_id, relation, subject_type, subject_id, subject_relation, " +
-        "condition_name, condition_params::text AS condition_params";
+        "condition_name, condition_params";
 
     private readonly string _connectionString;
-    private readonly NpgsqlUnitOfWork? _bound;
+    private readonly SqliteUnitOfWork? _bound;
 
-    /// <summary>Creates a relation store that opens connections from the given Postgres connection string.</summary>
-    /// <param name="connectionString">The Postgres connection string the store reads and writes through.</param>
-    public NpgsqlRelationStore(string connectionString) => _connectionString = CustodexSchema.Apply(connectionString);
+    /// <summary>Creates a relation store that opens connections from the given SQLite connection string.</summary>
+    /// <param name="connectionString">The SQLite connection string the store reads and writes through.</param>
+    public SqliteRelationStore(string connectionString) => _connectionString = connectionString;
 
-    private NpgsqlRelationStore(string connectionString, NpgsqlUnitOfWork bound)
+    private SqliteRelationStore(string connectionString, SqliteUnitOfWork bound)
     {
         _connectionString = connectionString;
         _bound = bound;
@@ -43,14 +41,14 @@ public sealed class NpgsqlRelationStore : IRelationStore
     /// transaction, so they observe writes made earlier on that same uncommitted unit of work.
     /// Writes are unaffected. The returned store does not own the connection and never disposes it.
     /// </summary>
-    public NpgsqlRelationStore OnUnitOfWork(IUnitOfWork uow) => new(_connectionString, NpgsqlUnitOfWork.From(uow));
+    public SqliteRelationStore OnUnitOfWork(IUnitOfWork uow) => new(_connectionString, SqliteUnitOfWork.From(uow));
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<RelationTuple>> GetByObjectAsync(
         TenantContext t, EntityRef obj, string relation, CancellationToken ct = default)
     {
         var sql = $"""
-            SELECT {SelectColumns} FROM custodex.relation_tuples
+            SELECT {SelectColumns} FROM relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND object_type = @ot AND object_id = @oid AND relation = @rel
             """;
@@ -64,7 +62,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         TenantContext t, SubjectRef subject, CancellationToken ct = default)
     {
         var sql = $"""
-            SELECT {SelectColumns} FROM custodex.relation_tuples
+            SELECT {SelectColumns} FROM relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND subject_type = @st AND subject_id = @sid
               AND COALESCE(subject_relation, '') = COALESCE(@srel, '')
@@ -79,8 +77,9 @@ public sealed class NpgsqlRelationStore : IRelationStore
         TenantContext t, string objectType, CancellationToken ct = default)
     {
         const string sql = """
-            SELECT DISTINCT object_id FROM custodex.relation_tuples
+            SELECT DISTINCT object_id FROM relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant AND object_type = @ot
+            ORDER BY object_id
             """;
         return await QueryStringsAsync(sql,
             new { store = t.Store, tenant = t.Tenant, ot = objectType },
@@ -92,12 +91,12 @@ public sealed class NpgsqlRelationStore : IRelationStore
         TenantContext t, IReadOnlyList<RelationTuple> add, IReadOnlyList<RelationTuple> remove,
         IUnitOfWork uow, CancellationToken ct = default)
     {
-        var w = NpgsqlUnitOfWork.From(uow);
+        var w = SqliteUnitOfWork.From(uow);
 
         foreach (var tuple in remove)
         {
-            await using var cmd = new NpgsqlCommand("""
-                DELETE FROM custodex.relation_tuples
+            await using var cmd = new SqliteCommand("""
+                DELETE FROM relation_tuples
                 WHERE store_id = @store AND tenant_id = @tenant
                   AND object_type = @ot AND object_id = @oid AND relation = @rel
                   AND subject_type = @st AND subject_id = @sid
@@ -109,22 +108,20 @@ public sealed class NpgsqlRelationStore : IRelationStore
 
         foreach (var tuple in add)
         {
-            await using var cmd = new NpgsqlCommand("""
-                INSERT INTO custodex.relation_tuples
+            await using var cmd = new SqliteCommand("""
+                INSERT INTO relation_tuples
                     (store_id, tenant_id, object_type, object_id, relation,
                      subject_type, subject_id, subject_relation, condition_name, condition_params)
                 VALUES (@store, @tenant, @ot, @oid, @rel, @st, @sid, @srel, @cname, @cparams)
                 ON CONFLICT (store_id, tenant_id, object_type, object_id, relation,
                              subject_type, subject_id, COALESCE(subject_relation, ''))
-                DO UPDATE SET condition_name = EXCLUDED.condition_name,
-                              condition_params = EXCLUDED.condition_params
+                DO UPDATE SET condition_name = excluded.condition_name,
+                              condition_params = excluded.condition_params
                 """, w.Connection, w.Transaction);
             AddKeyParams(cmd, t, tuple);
-            cmd.Parameters.AddWithValue("cname", (object?)tuple.Condition?.Name ?? DBNull.Value);
-            cmd.Parameters.Add(new NpgsqlParameter("cparams", NpgsqlDbType.Jsonb)
-            {
-                Value = tuple.Condition is null ? DBNull.Value : Json.Serialize(tuple.Condition.Parameters)
-            });
+            cmd.Parameters.AddWithValue("@cname", (object?)tuple.Condition?.Name ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@cparams",
+                tuple.Condition is null ? DBNull.Value : Json.Serialize(tuple.Condition.Parameters));
             await cmd.ExecuteNonQueryAsync(ct);
         }
     }
@@ -137,7 +134,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         TenantContext t, TupleFilter filter, CancellationToken ct = default)
     {
         var sql = $"""
-            SELECT {SelectColumns} FROM custodex.relation_tuples
+            SELECT {SelectColumns} FROM relation_tuples
             WHERE store_id = @store AND tenant_id = @tenant
               AND (@ot IS NULL OR object_type = @ot)
               AND (@oid IS NULL OR object_id = @oid)
@@ -162,7 +159,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
             var rows = await b.Connection.QueryAsync<Row>(new CommandDefinition(sql, args, transaction: b.Transaction, cancellationToken: ct));
             return [.. rows.Select(Map)];
         }
-        await using var conn = new NpgsqlConnection(_connectionString);
+        await using var conn = await SqliteConnections.OpenAsync(_connectionString, ct);
         var ownRows = await conn.QueryAsync<Row>(new CommandDefinition(sql, args, cancellationToken: ct));
         return [.. ownRows.Select(Map)];
     }
@@ -174,21 +171,21 @@ public sealed class NpgsqlRelationStore : IRelationStore
             var rows = await b.Connection.QueryAsync<string>(new CommandDefinition(sql, args, transaction: b.Transaction, cancellationToken: ct));
             return [.. rows];
         }
-        await using var conn = new NpgsqlConnection(_connectionString);
+        await using var conn = await SqliteConnections.OpenAsync(_connectionString, ct);
         var ownRows = await conn.QueryAsync<string>(new CommandDefinition(sql, args, cancellationToken: ct));
         return [.. ownRows];
     }
 
-    private static void AddKeyParams(NpgsqlCommand cmd, TenantContext t, RelationTuple tuple)
+    private static void AddKeyParams(SqliteCommand cmd, TenantContext t, RelationTuple tuple)
     {
-        cmd.Parameters.AddWithValue("store", t.Store);
-        cmd.Parameters.AddWithValue("tenant", t.Tenant);
-        cmd.Parameters.AddWithValue("ot", tuple.Object.Type);
-        cmd.Parameters.AddWithValue("oid", tuple.Object.Id);
-        cmd.Parameters.AddWithValue("rel", tuple.Relation);
-        cmd.Parameters.AddWithValue("st", tuple.Subject.Type);
-        cmd.Parameters.AddWithValue("sid", tuple.Subject.Id);
-        cmd.Parameters.AddWithValue("srel", (object?)tuple.Subject.Relation ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@store", t.Store);
+        cmd.Parameters.AddWithValue("@tenant", t.Tenant);
+        cmd.Parameters.AddWithValue("@ot", tuple.Object.Type);
+        cmd.Parameters.AddWithValue("@oid", tuple.Object.Id);
+        cmd.Parameters.AddWithValue("@rel", tuple.Relation);
+        cmd.Parameters.AddWithValue("@st", tuple.Subject.Type);
+        cmd.Parameters.AddWithValue("@sid", tuple.Subject.Id);
+        cmd.Parameters.AddWithValue("@srel", (object?)tuple.Subject.Relation ?? DBNull.Value);
     }
 
     private static RelationTuple Map(Row r)
@@ -196,7 +193,7 @@ public sealed class NpgsqlRelationStore : IRelationStore
         ConditionRef? condition = r.ConditionName is null
             ? null
             : new ConditionRef(r.ConditionName,
-                Json.DeserializeValues(r.ConditionParams)
+                Json.Deserialize<Dictionary<string, object?>>(r.ConditionParams)
                     ?? []);
 
         return new RelationTuple(
