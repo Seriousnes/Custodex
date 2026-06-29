@@ -88,7 +88,10 @@ public sealed partial class EngineDrivenAuthorizer
         switch (expr)
         {
             case RelationRef r:
-                await CollectFromRelationAsync(index, tenant, obj, r.Relation, subjects, visited, ct);
+                if (index.TryRelation(obj.Type, r.Relation, out _))
+                    await CollectFromRelationAsync(index, tenant, obj, r.Relation, subjects, visited, ct);
+                else
+                    await CollectLeafSubjectsAsync(index, tenant, obj, r.Relation, subjects, visited, ct);
                 break;
             case Union u:
                 await CollectFromExprAsync(index, tenant, obj, u.Left, subjects, visited, ct);

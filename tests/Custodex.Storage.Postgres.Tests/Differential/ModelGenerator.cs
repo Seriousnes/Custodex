@@ -220,10 +220,42 @@ public static class ModelGenerator
                     [.. Users.Select(u => new SubjectRef("user", u))]);
             });
 
+    /// <summary>S6: same-type permission layering. doc.view = edit (a bare reference to another permission
+    /// on the same type), doc.edit = editor - blocked. Exercises resolution of a permission that references
+    /// another permission by name through Check, ListSubjects collection, and the reverse index.</summary>
+    private static Schema S6Schema() => new SchemaBuilder("s6")
+        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
+        .Type("doc", t => t
+            .Relation("editor", s => s.User().SubjectSet("group", "member"))
+            .Relation("blocked", s => s.User())
+            .Permission("edit", p => p.Relation("editor").Exclude(x => x.Relation("blocked")))
+            .Permission("view", p => p.Relation("edit")))
+        .Build();
+
+    private static readonly CsCheck.Gen<GeneratedModel> S6 =
+        CsCheck.Gen.Select(
+            CsCheck.Gen.OneOfConst("d1", "d2"),
+            UserGen,
+            UserGen,
+            UserGen,
+            (docId, editorU, blockedU, memberU) =>
+            {
+                List<RelationTuple> tuples =
+                [
+                    T("doc", docId, "editor", new SubjectRef("user", editorU)),
+                    T("doc", docId, "editor", new SubjectRef("group", "g1", "member")),
+                    T("group", "g1", "member", new SubjectRef("user", memberU)),
+                    T("doc", docId, "blocked", new SubjectRef("user", blockedU)),
+                ];
+                return new GeneratedModel(S6Schema(), tuples, [],
+                    [new EntityRef("doc", docId)],
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
+            });
+
     /// <summary>A <see cref="CsCheck.Gen{T}"/> that randomly selects one of the curated
     /// skeleton schemas and randomizes its relation-tuple data.</summary>
     public static readonly CsCheck.Gen<GeneratedModel> Gen =
-        CsCheck.Gen.OneOf(S1, S2, S3, S4, S5);
+        CsCheck.Gen.OneOf(S1, S2, S3, S4, S5, S6);
 
     /// <summary>SC1: union over a nested group chain whose direct, intermediate, and deep edges may each
     /// carry an attribute condition. Attributes are seeded on every object that owns a conditionable

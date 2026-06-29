@@ -13,9 +13,14 @@ public sealed partial class EngineDrivenAuthorizer
         {
             case RelationRef r:
             {
-                var ok = await ResolveRelationAsync(index, tenant, obj, r.Relation, subject, context, ctx, ct);
-                explain?.Add(new ExplainNode($"relation {r.Relation}", ok, []));
-                return ok;
+                if (index.TryRelation(obj.Type, r.Relation, out _))
+                {
+                    var ok = await ResolveRelationAsync(index, tenant, obj, r.Relation, subject, context, ctx, ct);
+                    explain?.Add(new ExplainNode($"relation {r.Relation}", ok, []));
+                    return ok;
+                }
+
+                return await CheckPermissionAsync(index, tenant, obj, r.Relation, subject, context, ctx, explain, ct);
             }
 
             case Union u:
