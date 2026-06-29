@@ -1,0 +1,23 @@
+@implements IDisposable
+@inject StudioConnectionState State
+
+<div class="studio-connection">
+    @if (State.IsConnected)
+    {
+        <span class="studio-connection-store">@State.Store</span>
+        <span class="studio-connection-separator">/</span>
+        <span class="studio-connection-tenant">@State.Tenant</span>
+    }
+    else
+    {
+        <span class="studio-connection-empty">No store or tenant selected</span>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => State.Changed += OnConnectionChanged;
+
+    private void OnConnectionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= OnConnectionChanged;
+}

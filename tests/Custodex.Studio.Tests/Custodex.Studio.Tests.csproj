@@ -8,17 +8,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="bunit" />
     <PackageReference Include="coverlet.collector">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Grpc.Net.Client" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="Npgsql" />
     <PackageReference Include="Shouldly" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
-    <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
@@ -31,10 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Custodex.Service\Custodex.Service.csproj" />
-    <ProjectReference Include="..\..\src\Custodex.Abstractions\Custodex.Abstractions.csproj" />
-    <ProjectReference Include="..\..\src\Custodex.Core\Custodex.Core.csproj" />
-    <ProjectReference Include="..\..\src\Custodex.Storage.Postgres\Custodex.Storage.Postgres.csproj" />
+    <ProjectReference Include="..\..\src\Custodex.Studio\Custodex.Studio.csproj" />
     <ProjectReference Include="..\Custodex.TestKit\Custodex.TestKit.csproj" />
   </ItemGroup>
 

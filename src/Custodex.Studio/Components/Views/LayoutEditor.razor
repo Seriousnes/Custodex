@@ -1,0 +1,212 @@
+@implements IDisposable
+@inject IStudioViewStore Store
+@inject StudioConnectionState State
+@inject TimeProvider Clock
+
+<section class="studio-panel layout-editor" aria-label="Customize layout">
+    <h2>Customize layout</h2>
+
+    @if (_error is not null)
+    {
+        <div class="layout-error" role="alert">@_error</div>
+    }
+
+    <ul class="layout-card-list">
+        @for (var i = 0; i < _cards.Count; i++)
+        {
+            var index = i;
+            var item = _cards[index];
+            <li class="layout-card-item" data-card="@item.Key">
+                <label class="studio-field">
+                    <input type="checkbox" class="card-toggle" id="@($"toggle-{item.Key}")"
+                           checked="@item.Visible" @onchange="e => ToggleCard(index, e)" />
+                    <span>@item.Title</span>
+                </label>
+                <button type="button" class="studio-button card-up" id="@($"up-{item.Key}")"
+                        @onclick="() => MoveUp(index)" disabled="@(index == 0)">Up</button>
+                <button type="button" class="studio-button card-down" id="@($"down-{item.Key}")"
+                        @onclick="() => MoveDown(index)" disabled="@(index == _cards.Count - 1)">Down</button>
+            </li>
+        }
+    </ul>
+
+    <div class="layout-save">
+        <label class="studio-field">
+            <span>Layout name</span>
+            <input id="layout-name" class="studio-input" @bind="_name" />
+        </label>
+        <button type="button" id="save-layout" class="studio-button" @onclick="SaveAsync" disabled="@CannotSave">Save</button>
+    </div>
+
+    <div class="layout-saved" aria-label="Saved layouts">
+        <h3>Saved layouts</h3>
+        @if (_saved.Count == 0)
+        {
+            <p class="layout-empty">No saved layouts.</p>
+        }
+        else
+        {
+            <table class="layout-saved-grid">
+                <tbody>
+                    @foreach (var view in _saved)
+                    {
+                        var v = view;
+                        <tr class="saved-layout-row" data-key="@v.Key">
+                            <td class="saved-layout-key">@v.Key</td>
+                            <td class="saved-layout-updated">@v.UpdatedAt.UtcDateTime.ToString("u")</td>
+                            <td><button type="button" class="studio-button load-layout" @onclick="() => LoadAsync(v)">Load</button></td>
+                            <td><button type="button" class="studio-button delete-layout" @onclick="() => DeleteAsync(v)">Delete</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter] public DashboardLayout Layout { get; set; } = DashboardLayout.Default;
+
+    [Parameter] public EventCallback<DashboardLayout> LayoutChanged { get; set; }
+
+    private sealed record CardRow(string Key, string Title, bool Visible);
+
+    private List<CardRow> _cards = [];
+    private List<StudioView> _saved = [];
+    private string _name = string.Empty;
+    private string? _error;
+
+    private bool CannotSave => string.IsNullOrWhiteSpace(_name) || !State.IsConnected;
+
+    protected override void OnInitialized() => State.Changed += OnConnectionChanged;
+
+    protected override async Task OnInitializedAsync() => await RefreshSavedAsync();
+
+    protected override void OnParametersSet() => BuildCards();
+
+    private void OnConnectionChanged() =>
+        InvokeAsync(async () =>
+        {
+            await RefreshSavedAsync();
+            StateHasChanged();
+        });
+
+    private void BuildCards()
+    {
+        var rows = new List<CardRow>();
+        foreach (var key in Layout.VisibleCardsInOrder)
+        {
+            var card = DashboardCards.For(key);
+            if (card is not null)
+                rows.Add(new CardRow(card.Key, card.Title, true));
+        }
+
+        foreach (var card in DashboardCards.All)
+        {
+            if (!Layout.VisibleCardsInOrder.Contains(card.Key))
+                rows.Add(new CardRow(card.Key, card.Title, false));
+        }
+
+        _cards = rows;
+    }
+
+    private async Task ToggleCard(int index, ChangeEventArgs e)
+    {
+        _cards[index] = _cards[index] with { Visible = e.Value is true };
+        await EmitAsync();
+    }
+
+    private async Task MoveUp(int index)
+    {
+        if (index <= 0)
+            return;
+
+        (_cards[index - 1], _cards[index]) = (_cards[index], _cards[index - 1]);
+        await EmitAsync();
+    }
+
+    private async Task MoveDown(int index)
+    {
+        if (index >= _cards.Count - 1)
+            return;
+
+        (_cards[index + 1], _cards[index]) = (_cards[index], _cards[index + 1]);
+        await EmitAsync();
+    }
+
+    private DashboardLayout CurrentLayout() =>
+        new([.. _cards.Where(c => c.Visible).Select(c => c.Key)]);
+
+    private Task EmitAsync() => LayoutChanged.InvokeAsync(CurrentLayout());
+
+    private async Task SaveAsync()
+    {
+        if (CannotSave)
+            return;
+
+        _error = null;
+        try
+        {
+            var scope = State.Current;
+            var view = new StudioView(
+                scope.Store, scope.Tenant, StudioView.SharedOwner,
+                DashboardLayout.Kind, _name, CurrentLayout().ToJson(), Clock.GetUtcNow());
+            await Store.SaveAsync(view);
+            await RefreshSavedAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task LoadAsync(StudioView view)
+    {
+        _error = null;
+        try
+        {
+            _name = view.Key;
+            await LayoutChanged.InvokeAsync(DashboardLayout.FromJson(view.ConfigJson));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(StudioView view)
+    {
+        _error = null;
+        try
+        {
+            await Store.DeleteAsync(view.Store, view.Tenant, view.Owner, view.Kind, view.Key);
+            await RefreshSavedAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task RefreshSavedAsync()
+    {
+        if (!State.IsConnected)
+        {
+            _saved = [];
+            return;
+        }
+
+        try
+        {
+            var scope = State.Current;
+            _saved = [.. await Store.ListAsync(scope.Store, scope.Tenant, DashboardLayout.Kind)];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _saved = [];
+        }
+    }
+
+    public void Dispose() => State.Changed -= OnConnectionChanged;
+}

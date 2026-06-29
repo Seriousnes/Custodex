@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" />
+    <PackageReference Include="Z.Blazor.Diagrams" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Custodex.Abstractions\Custodex.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

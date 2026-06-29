@@ -1,0 +1,61 @@
+@page "/studio"
+@implements IDisposable
+@inject StudioConnectionState State
+
+<PageTitle>Custodex Studio</PageTitle>
+
+<h1>Operator console</h1>
+
+<section class="studio-panel" aria-label="Connection">
+    <h2>Connection</h2>
+    <label class="studio-field">
+        <span>Store</span>
+        <input class="studio-input" @bind="_store" />
+    </label>
+    <label class="studio-field">
+        <span>Tenant</span>
+        <input class="studio-input" @bind="_tenant" />
+    </label>
+    <button class="studio-button" @onclick="Connect" disabled="@CannotConnect">Connect</button>
+</section>
+
+@if (State.IsConnected)
+{
+    <LayoutEditor Layout="_layout" LayoutChanged="OnLayoutChanged" />
+}
+
+<section class="studio-widgets" aria-label="Widgets">
+    @foreach (var key in _layout.VisibleCardsInOrder)
+    {
+        var card = DashboardCards.For(key);
+        if (card is not null)
+        {
+            <article class="dashboard-card" id="@($"card-{card.Key}")">
+                <h2>@card.Title</h2>
+                <a class="studio-button dashboard-card-link" href="@card.Href">Open</a>
+            </article>
+        }
+    }
+</section>
+
+@code {
+    private string _store = string.Empty;
+    private string _tenant = string.Empty;
+    private DashboardLayout _layout = DashboardLayout.Default;
+
+    private bool CannotConnect => string.IsNullOrWhiteSpace(_store) || string.IsNullOrWhiteSpace(_tenant);
+
+    protected override void OnInitialized() => State.Changed += OnConnectionChanged;
+
+    private void OnConnectionChanged() => InvokeAsync(StateHasChanged);
+
+    private void Connect() => State.Connect(_store, _tenant);
+
+    private void OnLayoutChanged(DashboardLayout layout)
+    {
+        _layout = layout;
+        StateHasChanged();
+    }
+
+    public void Dispose() => State.Changed -= OnConnectionChanged;
+}

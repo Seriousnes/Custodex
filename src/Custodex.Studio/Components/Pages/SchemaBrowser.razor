@@ -1,0 +1,181 @@
+@page "/studio/schema"
+@using Blazor.Diagrams
+@using Blazor.Diagrams.Components
+@using Blazor.Diagrams.Core.Geometry
+@using Blazor.Diagrams.Core.Models
+@using Custodex.Studio.Components.Schema
+@implements IDisposable
+@inject ISchemaManager SchemaManager
+@inject StudioConnectionState State
+
+<PageTitle>Schema graph — Custodex Studio</PageTitle>
+
+<h1>Schema graph</h1>
+
+@if (!State.IsConnected)
+{
+    <p>Select a store and tenant on the <a href="studio">Overview</a> page first.</p>
+}
+else if (_errorMessage is not null)
+{
+    <div class="schema-error" role="alert">@_errorMessage</div>
+}
+else if (_schema is null)
+{
+    @if (_loaded)
+    {
+        <p>No active schema for this store.</p>
+    }
+}
+else
+{
+    <section class="studio-panel schema-tree" aria-label="Schema tree">
+        <h2>Tree</h2>
+        @foreach (var type in _schema.Types)
+        {
+            <details class="schema-type" open>
+                <summary class="schema-type-name">@type.Name</summary>
+                @if (type.Relations.Count > 0)
+                {
+                    <div class="schema-section">
+                        <h3>Relations</h3>
+                        <ul>
+                            @foreach (var relation in type.Relations)
+                            {
+                                <li class="schema-relation">
+                                    <span class="schema-relation-name">@relation.Name</span>
+                                    <span class="schema-subjects">@SubjectSummary(relation)</span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+                @if (type.Permissions.Count > 0)
+                {
+                    <div class="schema-section">
+                        <h3>Permissions</h3>
+                        <ul>
+                            @foreach (var permission in type.Permissions)
+                            {
+                                <li class="schema-permission">
+                                    <span class="schema-permission-name">@permission.Name</span>
+                                    <span class="schema-expr">@PermExprFormatter.Format(permission.Expression)</span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+            </details>
+        }
+    </section>
+
+    @if (_diagram is { } diagram)
+    {
+        <section class="studio-panel schema-graph" aria-label="Schema graph">
+            <h2>Graph</h2>
+            <CascadingValue Value="diagram" IsFixed="true">
+                <DiagramCanvas Class="schema-diagram-canvas" />
+            </CascadingValue>
+        </section>
+    }
+}
+
+@code {
+    private const double ColumnSpacing = 280;
+    private const double RowSpacing = 80;
+    private const double Margin = 40;
+
+    private Schema? _schema;
+    private BlazorDiagram? _diagram;
+    private string? _errorMessage;
+    private bool _loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnConnectionChanged;
+        await LoadAsync();
+    }
+
+    private void OnConnectionChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => State.Changed -= OnConnectionChanged;
+
+    private async Task LoadAsync()
+    {
+        _schema = null;
+        _diagram = null;
+        _errorMessage = null;
+        _loaded = false;
+
+        if (!State.IsConnected)
+            return;
+
+        try
+        {
+            _schema = await SchemaManager.GetActiveSchemaAsync(State.Current.Store, CancellationToken.None);
+            if (_schema is not null)
+                _diagram = BuildDiagram(_schema);
+        }
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        {
+            _errorMessage = ex.Message;
+        }
+
+        _loaded = true;
+    }
+
+    private static BlazorDiagram BuildDiagram(Schema schema)
+    {
+        var graph = SchemaGraphProjection.Project(schema);
+        var diagram = new BlazorDiagram();
+        var byId = new Dictionary<string, NodeModel>(StringComparer.Ordinal);
+        var rows = new Dictionary<SchemaNodeKind, int>();
+
+        foreach (var node in graph.Nodes)
+        {
+            var column = ColumnOf(node.Kind);
+            var row = rows.TryGetValue(node.Kind, out var current) ? current : 0;
+            rows[node.Kind] = row + 1;
+
+            var model = new NodeModel(new Point(column * ColumnSpacing + Margin, row * RowSpacing + Margin))
+            {
+                Title = node.Label
+            };
+            diagram.Nodes.Add(model);
+            byId[node.Id] = model;
+        }
+
+        foreach (var edge in graph.Edges)
+        {
+            if (byId.TryGetValue(edge.FromId, out var from) && byId.TryGetValue(edge.ToId, out var to))
+                diagram.Links.Add(new LinkModel(from, to));
+        }
+
+        return diagram;
+    }
+
+    private static int ColumnOf(SchemaNodeKind kind) => kind switch
+    {
+        SchemaNodeKind.Type => 0,
+        SchemaNodeKind.Relation => 1,
+        SchemaNodeKind.Permission => 2,
+        _ => 0
+    };
+
+    private static string SubjectSummary(RelationDef relation)
+    {
+        if (relation.AllowedSubjects.Count == 0)
+            return string.Empty;
+
+        var parts = relation.AllowedSubjects.Select(s =>
+            s.Wildcard ? $"{s.Type}:*" :
+            s.Relation is { } r ? $"{s.Type}#{r}" :
+            s.Type);
+
+        return string.Join(", ", parts);
+    }
+}

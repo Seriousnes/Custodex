@@ -1,0 +1,157 @@
+@page "/studio/playground"
+@implements IDisposable
+@inject IAuthorizer Authorizer
+@inject StudioConnectionState State
+
+<PageTitle>Check playground — Custodex Studio</PageTitle>
+
+<h1>Check playground</h1>
+
+@if (!State.IsConnected)
+{
+    <p>Select a store and tenant on the <a href="studio">Overview</a> page first.</p>
+}
+else
+{
+    <section class="studio-panel" aria-label="Check form">
+        <h2>Object</h2>
+        <label class="studio-field">
+            <span>Type</span>
+            <input id="obj-type" class="studio-input" @bind="_objType" />
+        </label>
+        <label class="studio-field">
+            <span>Id</span>
+            <input id="obj-id" class="studio-input" @bind="_objId" />
+        </label>
+
+        <h2>Permission</h2>
+        <label class="studio-field">
+            <input id="permission" class="studio-input" @bind="_permission" />
+        </label>
+
+        <h2>Subject</h2>
+        <label class="studio-field">
+            <span>Type</span>
+            <input id="subj-type" class="studio-input" @bind="_subjType" />
+        </label>
+        <label class="studio-field">
+            <span>Id</span>
+            <input id="subj-id" class="studio-input" @bind="_subjId" />
+        </label>
+        <label class="studio-field">
+            <span>Relation (optional)</span>
+            <input id="subj-relation" class="studio-input" @bind="_relation" />
+        </label>
+
+        <h2>Evaluation time (optional)</h2>
+        <label class="studio-field">
+            <input id="eval-time" class="studio-input" @bind="_evalTimeText" />
+        </label>
+
+        <h2>Context attributes</h2>
+        @for (var i = 0; i < _attrKeys.Count; i++)
+        {
+            var idx = i;
+            <div class="playground-attr-row">
+                <input class="studio-input" @bind="_attrKeys[idx]" placeholder="Key" />
+                <input class="studio-input" @bind="_attrValues[idx]" placeholder="Value" />
+                <button class="studio-button" @onclick="() => RemoveAttr(idx)">Remove</button>
+            </div>
+        }
+        <button class="studio-button" @onclick="AddAttr">Add attribute</button>
+
+        <div class="playground-actions">
+            <button id="run-check" class="studio-button" @onclick="RunCheckAsync">Run check</button>
+        </div>
+    </section>
+
+    @if (_errorMessage is not null)
+    {
+        <div class="playground-error" role="alert">@_errorMessage</div>
+    }
+
+    @if (_result is not null)
+    {
+        <div class="playground-result">
+            <span class="@(_result.Allowed ? "badge-allow" : "badge-deny")">
+                @(_result.Allowed ? "Allowed" : "Denied")
+            </span>
+            @if (_result.Explain is not null)
+            {
+                <div class="playground-explain">
+                    <ExplainNodeView Node="_result.Explain" />
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private string _objType = string.Empty;
+    private string _objId = string.Empty;
+    private string _permission = string.Empty;
+    private string _subjType = string.Empty;
+    private string _subjId = string.Empty;
+    private string _relation = string.Empty;
+    private string _evalTimeText = string.Empty;
+    private List<string> _attrKeys = [];
+    private List<string> _attrValues = [];
+    private CheckResult? _result;
+    private string? _errorMessage;
+
+    protected override void OnInitialized() => State.Changed += OnConnectionChanged;
+
+    private void OnConnectionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= OnConnectionChanged;
+
+    private void AddAttr()
+    {
+        _attrKeys.Add(string.Empty);
+        _attrValues.Add(string.Empty);
+    }
+
+    private void RemoveAttr(int index)
+    {
+        _attrKeys.RemoveAt(index);
+        _attrValues.RemoveAt(index);
+    }
+
+    private async Task RunCheckAsync()
+    {
+        _result = null;
+        _errorMessage = null;
+
+        var now = DateTimeOffset.TryParse(_evalTimeText, out var parsed)
+            ? parsed
+            : DateTimeOffset.UtcNow;
+
+        var subjectRelation = string.IsNullOrWhiteSpace(_relation) ? null : _relation;
+        var subject = new SubjectRef(_subjType, _subjId, subjectRelation);
+
+        var attrs = new Dictionary<string, object?>(StringComparer.Ordinal);
+        for (var i = 0; i < _attrKeys.Count; i++)
+        {
+            var key = _attrKeys[i];
+            if (!string.IsNullOrWhiteSpace(key))
+                attrs[key] = _attrValues[i];
+        }
+
+        var req = new CheckRequest(
+            State.Current,
+            new EntityRef(_objType, _objId),
+            _permission,
+            subject,
+            new RequestContext(now, subject, attrs),
+            Explain: true);
+
+        try
+        {
+            _result = await Authorizer.CheckAsync(req, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}
