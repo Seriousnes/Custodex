@@ -85,7 +85,7 @@ public static class CteReachability
             ConditionRef? condition = r.ConditionName is null
                 ? null
                 : new ConditionRef(r.ConditionName,
-                    Json.Deserialize<Dictionary<string, object?>>(r.ConditionParams) ?? []);
+                    Json.DeserializeValues(r.ConditionParams) ?? []);
             return new RelationTuple(obj, relation,
                 new SubjectRef(r.SubjectType, r.SubjectId, r.SubjectRelation), condition);
         })];

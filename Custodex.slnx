@@ -8,18 +8,24 @@
     <Project Path="src/Custodex.Service/Custodex.Service.csproj" />
     <Project Path="src/Custodex.ServiceDefaults/Custodex.ServiceDefaults.csproj" />
     <Project Path="src/Custodex.Storage.InMemory/Custodex.Storage.InMemory.csproj" />
+    <Project Path="src/Custodex.Storage.MySql/Custodex.Storage.MySql.csproj" />
     <Project Path="src/Custodex.Storage.Postgres/Custodex.Storage.Postgres.csproj" />
     <Project Path="src/Custodex.Studio/Custodex.Studio.csproj" />
+    <Project Path="src/Custodex.Storage.SqlServer/Custodex.Storage.SqlServer.csproj" />
+    <Project Path="src/Custodex.Storage.Sqlite/Custodex.Storage.Sqlite.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Custodex.Abstractions.Tests/Custodex.Abstractions.Tests.csproj" Id="6ba2306f-43eb-438a-b5c7-7ddbb98bffc6" />
     <Project Path="tests/Custodex.Benchmarks/Custodex.Benchmarks.csproj" />
     <Project Path="tests/Custodex.Core.Tests/Custodex.Core.Tests.csproj" />
     <Project Path="tests/Custodex.Storage.InMemory.Tests/Custodex.Storage.InMemory.Tests.csproj" />
+    <Project Path="tests/Custodex.Storage.MySql.Tests/Custodex.Storage.MySql.Tests.csproj" />
     <Project Path="tests/Custodex.TestKit/Custodex.TestKit.csproj" />
     <Project Path="tests/Custodex.Client.Tests/Custodex.Client.Tests.csproj" />
     <Project Path="tests/Custodex.Service.Tests/Custodex.Service.Tests.csproj" />
     <Project Path="tests/Custodex.Storage.Postgres.Tests/Custodex.Storage.Postgres.Tests.csproj" />
     <Project Path="tests/Custodex.Studio.Tests/Custodex.Studio.Tests.csproj" />
+    <Project Path="tests/Custodex.Storage.SqlServer.Tests/Custodex.Storage.SqlServer.Tests.csproj" />
+    <Project Path="tests/Custodex.Storage.Sqlite.Tests/Custodex.Storage.Sqlite.Tests.csproj" />
   </Folder>
 </Solution>

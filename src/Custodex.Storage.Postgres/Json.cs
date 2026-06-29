@@ -37,4 +37,33 @@ public static class Json
     /// </summary>
     public static T? Deserialize<T>(string? json) =>
         json is null ? default : JsonSerializer.Deserialize<T>(json, Options);
+
+    /// <summary>
+    /// Deserializes a JSON object into a string-keyed map whose values are materialized as CLR
+    /// primitives (<see langword="bool"/>, <see langword="long"/>, <see langword="double"/>,
+    /// <see langword="string"/>, or <see langword="null"/>) rather than <see cref="JsonElement"/>.
+    /// Use this for attribute bags and condition parameters so the condition evaluator sees the same
+    /// runtime types the in-memory stores hold; values that are not JSON scalars are returned as their
+    /// raw JSON text. Returns <see langword="null"/> when <paramref name="json"/> is <see langword="null"/>.
+    /// </summary>
+    public static Dictionary<string, object?>? DeserializeValues(string? json)
+    {
+        if (json is null) return null;
+        var raw = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, Options);
+        if (raw is null) return null;
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var (key, element) in raw)
+            values[key] = ToClrValue(element);
+        return values;
+    }
+
+    private static object? ToClrValue(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.String => element.GetString(),
+        JsonValueKind.Number => element.TryGetInt64(out var l) ? l : element.GetDouble(),
+        JsonValueKind.Null => null,
+        _ => element.GetRawText(),
+    };
 }
