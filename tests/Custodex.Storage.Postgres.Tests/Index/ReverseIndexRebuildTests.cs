@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core;
+using Custodex.Core.Conditions;
 using Custodex.Storage.Postgres.Index;
 
 using Dapper;
@@ -78,8 +79,18 @@ public class ReverseIndexRebuildTests(PostgresFixture fx) : IAsyncLifetime
 
         (await _index.IsBuiltAsync(t, "v1")).ShouldBeTrue();
         var alice = await _index.QueryObjectsAsync(t, "v1", "user:alice", "edit", "doc", 100, null);
-        alice.Select(r => r.ObjectId).ShouldBe(["alpha"]);
-        alice.ShouldAllBe(r => r.Conditioned == false);
+        alice.Select(r => r.ObjectId).OrderBy(x => x, StringComparer.Ordinal).ShouldBe(["alpha", "beta"]);
+        alice.Single(r => r.ObjectId == "alpha").Conditioned.ShouldBeFalse();
+        alice.Single(r => r.ObjectId == "beta").Conditioned
+            .ShouldBeTrue("an unconditional exclusion under a conditioned schema is over-included and flagged, then re-checked away at query time");
+
+        var indexed = new IndexedAuthorizer(
+            new NpgsqlCteAuthorizer(fx.ConnectionString, _schemas, _attributes, new CelConditionEvaluator()),
+            _index, _schemas);
+        var ctx = new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef("user", "alice"), new Dictionary<string, object?>());
+        var listed = await indexed.ListObjectsAsync(
+            new ListObjectsRequest(t, new SubjectRef("user", "alice"), "doc", "edit", ctx, PageSize: 100));
+        listed.ObjectIds.ShouldBe(["alpha"]);
     }
 
     [Fact]
