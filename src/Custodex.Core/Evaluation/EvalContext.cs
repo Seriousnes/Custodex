@@ -31,6 +31,8 @@ public sealed class EvalContext(EvaluationOptions options)
     /// <summary>Whether any condition was reached during this evaluation.</summary>
     public bool ConditionTouched { get; private set; }
 
+    internal bool StructuralMarking { get; set; }
+
     /// <summary>Latches <see cref="ConditionTouched"/> to indicate a condition was evaluated.</summary>
     public void MarkConditionTouched() => ConditionTouched = true;
 
