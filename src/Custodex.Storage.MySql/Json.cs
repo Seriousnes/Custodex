@@ -53,11 +53,18 @@ internal sealed class ObjectJsonConverter : JsonConverter<object?>
             JsonTokenType.False => false,
             JsonTokenType.Null => null,
             JsonTokenType.String => reader.GetString(),
-            JsonTokenType.Number => reader.TryGetInt64(out var l) ? l : reader.GetDouble(),
+            JsonTokenType.Number => ReadNumber(ref reader),
             JsonTokenType.StartObject => ReadObject(ref reader, options),
             JsonTokenType.StartArray => ReadArray(ref reader, options),
             _ => throw new JsonException($"Unsupported JSON token '{reader.TokenType}'."),
         };
+
+    private static object ReadNumber(ref Utf8JsonReader reader)
+    {
+        if (reader.TryGetInt64(out var l))
+            return l;
+        return reader.GetDouble();
+    }
 
     private Dictionary<string, object?> ReadObject(ref Utf8JsonReader reader, JsonSerializerOptions options)
     {

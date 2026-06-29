@@ -47,7 +47,7 @@ public sealed class MySqlChangeLogStore(string connectionString) : IChangeLogSto
     {
         await using var conn = new MySqlConnection(_cs);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition("""
-            SELECT id, actor, operation, target, `before` AS before, `after` AS after, occurred_at
+            SELECT id, actor, operation, target, `before`, `after`, occurred_at
             FROM change_log
             WHERE store_id = @store AND tenant_id = @tenant
               AND (@since IS NULL OR occurred_at >= @since)
