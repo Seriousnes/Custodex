@@ -25,6 +25,17 @@ public static class ModelGenerator
     private static RelationTuple T(string ot, string oid, string rel, SubjectRef s) =>
         new(new EntityRef(ot, oid), rel, s);
 
+    private static RelationTuple TG(string ot, string oid, string rel, SubjectRef s, bool gated) =>
+        new(new EntityRef(ot, oid), rel, s,
+            gated ? new ConditionRef("gate", new Dictionary<string, object?>()) : null);
+
+    private static RelationTuple TOwns(string ot, string oid, string rel, SubjectRef s, string allowed, bool on) =>
+        new(new EntityRef(ot, oid), rel, s,
+            on ? new ConditionRef("owns", new Dictionary<string, object?> { ["allowed"] = allowed }) : null);
+
+    private static (EntityRef, IReadOnlyDictionary<string, object?>) Flag(string type, string id, bool flag) =>
+        (new EntityRef(type, id), new Dictionary<string, object?> { ["flag"] = flag });
+
     private static readonly CsCheck.Gen<string> UserGen =
         CsCheck.Gen.OneOfConst(Users);
 
@@ -213,4 +224,116 @@ public static class ModelGenerator
     /// skeleton schemas and randomizes its relation-tuple data.</summary>
     public static readonly CsCheck.Gen<GeneratedModel> Gen =
         CsCheck.Gen.OneOf(S1, S2, S3, S4, S5);
+
+    /// <summary>SC1: union over a nested group chain whose direct, intermediate, and deep edges may each
+    /// carry an attribute condition. Attributes are seeded on every object that owns a conditionable
+    /// tuple, both true and false, so the deep condition is reached through an unconditioned edge.</summary>
+    private static Schema SC1Schema() => new SchemaBuilder("sc1")
+        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
+        .Type("doc", t => t
+            .Relation("viewer", s => s.User().SubjectSet("group", "member"))
+            .Relation("reader", s => s.User())
+            .Permission("view", p => p.Relation("viewer").Union(x => x.Relation("reader"))))
+        .Condition("gate", _ => { }, b => b.Eq(b.Attribute("flag"), b.Const(true)))
+        .Build();
+
+    private static readonly CsCheck.Gen<GeneratedModel> SC1 =
+        CsCheck.Gen.Select(
+            UserGen, UserGen, CsCheck.Gen.Bool, CsCheck.Gen.Bool, CsCheck.Gen.Bool, CsCheck.Gen.Bool, CsCheck.Gen.Bool,
+            (leafU, directU, gateDirect, gateInter, gateDeep, flagDoc, flagGroup) =>
+            {
+                List<RelationTuple> tuples =
+                [
+                    TG("doc", "d1", "viewer", new SubjectRef("user", directU), gateDirect),
+                    T("doc", "d1", "viewer", new SubjectRef("group", "g1", "member")),
+                    TG("group", "g1", "member", new SubjectRef("group", "g2", "member"), gateInter),
+                    TG("group", "g2", "member", new SubjectRef("user", leafU), gateDeep),
+                ];
+                var attributes = new (EntityRef, IReadOnlyDictionary<string, object?>)[]
+                {
+                    Flag("doc", "d1", flagDoc),
+                    Flag("group", "g1", flagGroup),
+                    Flag("group", "g2", flagGroup),
+                };
+                return new GeneratedModel(SC1Schema(), tuples, attributes,
+                    [new EntityRef("doc", "d1")],
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
+            });
+
+    /// <summary>SC2: arrow into an exclusion permission whose granting relation reaches a nested group;
+    /// the direct edge and the deep leaf may each carry an attribute condition, exercising the bug shape
+    /// through arrow traversal.</summary>
+    private static Schema SC2Schema() => new SchemaBuilder("sc2")
+        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
+        .Type("res", t => t
+            .Relation("editor", s => s.User().SubjectSet("group", "member"))
+            .Relation("blocked", s => s.User())
+            .Permission("edit", p => p.Relation("editor").Exclude(x => x.Relation("blocked"))))
+        .Type("asset", t => t
+            .Relation("crate", s => s.Type("res"))
+            .Permission("edit", p => p.Arrow("crate", "edit")))
+        .Condition("gate", _ => { }, b => b.Eq(b.Attribute("flag"), b.Const(true)))
+        .Build();
+
+    private static readonly CsCheck.Gen<GeneratedModel> SC2 =
+        CsCheck.Gen.Select(
+            UserGen, UserGen, UserGen, CsCheck.Gen.Bool, CsCheck.Gen.Bool, CsCheck.Gen.Bool, CsCheck.Gen.Bool,
+            (leafU, directU, blockU, gateDirect, gateDeep, flagRes, flagGroup) =>
+            {
+                List<RelationTuple> tuples =
+                [
+                    T("asset", "a1", "crate", new SubjectRef("res", "e1")),
+                    TG("res", "e1", "editor", new SubjectRef("user", directU), gateDirect),
+                    T("res", "e1", "editor", new SubjectRef("group", "g1", "member")),
+                    TG("group", "g1", "member", new SubjectRef("user", leafU), gateDeep),
+                    T("res", "e1", "blocked", new SubjectRef("user", blockU)),
+                ];
+                var attributes = new (EntityRef, IReadOnlyDictionary<string, object?>)[]
+                {
+                    Flag("res", "e1", flagRes),
+                    Flag("group", "g1", flagGroup),
+                };
+                return new GeneratedModel(SC2Schema(), tuples, attributes,
+                    [new EntityRef("asset", "a1")],
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
+            });
+
+    /// <summary>SC3: intersection whose first operand reaches a conditioned nested membership (attribute
+    /// gate) and whose second operand is gated by a subject-equals-parameter condition, exercising both
+    /// attribute and parameter/context condition reads through the CTE path.</summary>
+    private static Schema SC3Schema() => new SchemaBuilder("sc3")
+        .Type("group", t => t.Relation("member", s => s.User().SubjectSet("group", "member")))
+        .Type("res", t => t
+            .Relation("a", s => s.User().SubjectSet("group", "member"))
+            .Relation("b", s => s.User())
+            .Permission("grant", p => p.Relation("a").Intersect(x => x.Relation("b"))))
+        .Condition("gate", _ => { }, b => b.Eq(b.Attribute("flag"), b.Const(true)))
+        .Condition("owns", p => p.String("allowed"), b => b.Eq(b.Subject(), b.Param("allowed")))
+        .Build();
+
+    private static readonly CsCheck.Gen<GeneratedModel> SC3 =
+        CsCheck.Gen.Select(
+            UserGen, UserGen, UserGen, CsCheck.Gen.Bool, CsCheck.Gen.Bool, CsCheck.Gen.Bool,
+            (leafU, bUser, allowedU, gateA, ownsB, flagGroup) =>
+            {
+                List<RelationTuple> tuples =
+                [
+                    T("res", "r1", "a", new SubjectRef("group", "ga", "member")),
+                    TG("group", "ga", "member", new SubjectRef("user", leafU), gateA),
+                    TOwns("res", "r1", "b", new SubjectRef("user", bUser), allowedU, ownsB),
+                ];
+                var attributes = new (EntityRef, IReadOnlyDictionary<string, object?>)[]
+                {
+                    Flag("group", "ga", flagGroup),
+                };
+                return new GeneratedModel(SC3Schema(), tuples, attributes,
+                    [new EntityRef("res", "r1")],
+                    [.. Users.Select(u => new SubjectRef("user", u))]);
+            });
+
+    /// <summary>A <see cref="CsCheck.Gen{T}"/> over conditioned skeletons: each emits relation tuples whose
+    /// direct, intermediate, and deep edges may carry conditions, plus the object attributes those
+    /// conditions read, so both authorizers are differentially checked under real condition evaluation.</summary>
+    public static readonly CsCheck.Gen<GeneratedModel> ConditionedGen =
+        CsCheck.Gen.OneOf(SC1, SC2, SC3);
 }

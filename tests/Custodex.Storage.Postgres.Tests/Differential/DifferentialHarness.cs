@@ -15,7 +15,8 @@ public static partial class DifferentialHarness
     /// <summary>Seeds <paramref name="model"/> into the in-memory oracle stores and into a fresh
     /// <c>(<paramref name="store"/>, "t")</c> tenant in Postgres, then constructs one
     /// <see cref="EngineDrivenAuthorizer"/> and one <see cref="NpgsqlCteAuthorizer"/>, both
-    /// using the same <see cref="NullConditionEvaluator"/>.</summary>
+    /// using the same <see cref="CelConditionEvaluator"/> so conditioned tuples are evaluated
+    /// identically on both paths.</summary>
     /// <param name="fx">The shared Postgres fixture whose container is already running and migrated.</param>
     /// <param name="model">The schema, tuples, and attributes to seed into both authorizers.</param>
     /// <param name="store">A unique store identifier for this seeding; isolates Postgres state between test runs.</param>
@@ -25,7 +26,7 @@ public static partial class DifferentialHarness
         PostgresFixture fx, GeneratedModel model, string store, CancellationToken ct = default)
     {
         var tenant = new TenantContext(store, "t");
-        var conditions = new NullConditionEvaluator();
+        var conditions = new CelConditionEvaluator();
 
         var memSchema = new InMemorySchemaStore();
         var memRelations = new InMemoryRelationStore();
