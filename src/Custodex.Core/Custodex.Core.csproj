@@ -9,6 +9,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>true</IsPackable>
+		<MinVerTagPrefix>core-v</MinVerTagPrefix>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<PackageId>Custodex</PackageId>
 		<PackageReadmeFile>README.md</PackageReadmeFile>

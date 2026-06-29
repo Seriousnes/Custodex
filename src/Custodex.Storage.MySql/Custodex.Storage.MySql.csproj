@@ -5,6 +5,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>true</IsPackable>
+		<MinVerTagPrefix>mysql-v</MinVerTagPrefix>
 		<Description>MySQL storage provider for Custodex, built on MySqlConnector and Dapper.</Description>
 	</PropertyGroup>
 

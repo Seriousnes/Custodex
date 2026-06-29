@@ -5,6 +5,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>true</IsPackable>
+		<MinVerTagPrefix>sqlite-v</MinVerTagPrefix>
 		<Description>SQLite storage provider for Custodex, built on Microsoft.Data.Sqlite and Dapper. Evaluation runs through the portable engine-driven authorizer.</Description>
 	</PropertyGroup>
 

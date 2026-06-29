@@ -5,6 +5,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsPackable>true</IsPackable>
+		<MinVerTagPrefix>sqlserver-v</MinVerTagPrefix>
 		<Description>SQL Server storage and evaluation provider for Custodex, built on Microsoft.Data.SqlClient and Dapper.</Description>
 	</PropertyGroup>
 
