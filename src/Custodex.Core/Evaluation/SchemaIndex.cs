@@ -33,6 +33,14 @@ public sealed class SchemaIndex
     /// <summary>The schema this index was built from.</summary>
     public Schema Schema { get; }
 
+    /// <summary>
+    /// Whether the schema declares at least one condition. When false, no tuple anywhere in the
+    /// tenant can carry a condition, so a provider may take a condition-unaware reachability
+    /// shortcut; when true, a conditioned tuple may appear at any depth and conditions must be
+    /// evaluated per level.
+    /// </summary>
+    public bool HasConditions => _conditions.Count > 0;
+
     /// <summary>Resolves an entity type by name.</summary>
     /// <param name="name">The entity type name.</param>
     /// <returns>The matching type definition.</returns>
