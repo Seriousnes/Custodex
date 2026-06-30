@@ -116,6 +116,7 @@ public static class SchemaWriter
             : d.Value.ToString("G", CultureInfo.InvariantCulture) + ".0",
         LiteralString s => $"\"{s.Value}\"",
         ParamRef p => p.Name,
+        AttributeRef { Type: ConditionType.Timestamp } a => $"timestamp(resource[\"{a.Field}\"])",
         AttributeRef a => $"resource[\"{a.Field}\"]",
         ContextNow => "context.now",
         ContextSubject => "context.subject",

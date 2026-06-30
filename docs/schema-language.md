@@ -266,6 +266,7 @@ The value sources available in a primary:
 | `42`, `3.14`, `"text"`, `true`, `false` | `.Const(...)` | a literal |
 | `start` | `.Param("start")` | a declared parameter |
 | `resource["weight"]` | `.Attribute("weight")` | a field of the object's stored attributes |
+| `timestamp(resource["expires"])` | `.Attribute("expires", ConditionType.Timestamp)` | a stored attribute read resolved as a timestamp, so a string-encoded instant compares chronologically rather than ordinally |
 | `context.now` | `.Now()` | the request time (`RequestContext.Now`) |
 | `context.subject` | `.Subject()` | the subject being checked |
 | `hour(expr)` | `.Hour(expr)` | hour-of-day (0–23) of a timestamp |
@@ -273,6 +274,19 @@ The value sources available in a primary:
 | `( expr )` | nested builder calls | grouping |
 
 Time enters evaluation only through `context.now`; evaluation is otherwise deterministic. A condition that fails, or that reads a missing attribute, is **default-deny with a diagnostic — never an exception**.
+
+A plain `resource["field"]` resolves by the stored value's runtime type, so two encodings of the same instant (say a string and a `DateTimeOffset`, or two differently-offset strings) compare ordinally and need not match. Wrapping the read in `timestamp(...)` declares the field a timestamp, so the value is parsed to an instant and compared chronologically:
+
+```
+condition not_expired() = context.now <= timestamp(resource["expires"])
+```
+
+```csharp
+.Condition("not_expired", _ => { },
+    b => b.Le(b.Now(), b.Attribute("expires", ConditionType.Timestamp)))
+```
+
+The cast applies only to an attribute read; both operands of a chronological comparison should be timestamps (`context.now`, a `timestamp` parameter, or another `timestamp(resource[...])`).
 
 Gating a permission branch on a condition:
 
@@ -326,6 +340,7 @@ unary         := "!" unary | condPrimary
 condPrimary   := "(" condExpr ")"
               | number | string | "true" | "false"
               | "resource" "[" string "]"
+              | "timestamp" "(" "resource" "[" string "]" ")"
               | "context" "." ( "now" | "subject" )
               | "hour" "(" condExpr ")"
               | ident "in" "(" condExpr ( "," condExpr )* ")"

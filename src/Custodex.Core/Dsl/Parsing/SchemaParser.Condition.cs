@@ -185,6 +185,17 @@ public static partial class SchemaParser
             return new HourOf(arg);
         }
 
+        if (t.Kind == TokenKind.Ident && t.Text == "timestamp")
+        {
+            stream.Next();
+            stream.Expect(TokenKind.LParen);
+            var inner = ParseCondExpr(stream);
+            stream.Expect(TokenKind.RParen);
+            if (inner is AttributeRef { Type: null } attr)
+                return new AttributeRef(attr.Field, ConditionType.Timestamp);
+            throw new DslParseException("timestamp(...) requires a resource attribute read", t.Line, t.Column);
+        }
+
         if (t.Kind == TokenKind.Ident)
         {
             stream.Next();

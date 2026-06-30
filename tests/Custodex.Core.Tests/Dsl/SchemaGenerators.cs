@@ -58,5 +58,7 @@ internal static class SchemaGenerators
                         BoolConnective.And,
                         new Compare(new HourOf(new ContextNow()), CompareOp.Lt, new ParamRef("end")))),
                 new ConditionDef("restricted", [], new EmptyConditionBody()),
+                new ConditionDef("recent", [],
+                    new Compare(new AttributeRef("created", ConditionType.Timestamp), CompareOp.Le, new ContextNow())),
             ]));
 }
