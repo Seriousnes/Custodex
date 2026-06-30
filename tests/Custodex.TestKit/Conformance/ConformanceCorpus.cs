@@ -28,6 +28,7 @@ public static class ConformanceCorpus
         ConditionAttributeGate(),
         ExclusionThroughArrow(),
         ConditionThroughArrow(),
+        ConditionedExclusionTimestampWindow(),
     ];
 
     /// <summary>Resolves a scenario by its unique <see cref="ConformanceScenario.Name"/>.</summary>
@@ -446,6 +447,56 @@ public static class ConformanceCorpus
             [
                 new ListSubjectsExpectation("active-editors", Obj("asset", "a1"), "edit", [U("u1")]),
                 new ListSubjectsExpectation("inactive-none", Obj("asset", "a2"), "edit", []),
+            ]);
+    }
+
+    private static ConformanceScenario ConditionedExclusionTimestampWindow()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("doc", t => t
+                .Relation("viewer", s => s.User())
+                .Relation("blocked", s => s.User())
+                .Permission("view", p => p.Relation("viewer").Exclude(x => x.Relation("blocked").Conditioned("window"))))
+            .Condition("window", _ => { }, b => b.Ge(
+                b.Attribute("blockedUntil", ConditionType.Timestamp),
+                b.Attribute("checkpoint", ConditionType.Timestamp)))
+            .Build();
+
+        return new ConformanceScenario("conditioned-exclusion-timestamp-window", schema,
+            [
+                T("doc", "d1", "viewer", U("u1")), T("doc", "d1", "viewer", U("u2")), T("doc", "d1", "blocked", U("u1")),
+                T("doc", "d2", "viewer", U("u1")), T("doc", "d2", "viewer", U("u2")), T("doc", "d2", "blocked", U("u1")),
+                T("doc", "d3", "viewer", U("u1")),
+            ],
+            [
+                new AttributeSeed(Obj("doc", "d1"), new Dictionary<string, object?>
+                {
+                    ["blockedUntil"] = "2024-03-01T23:00:00+09:00",
+                    ["checkpoint"] = "2024-03-01T20:00:00+00:00",
+                }),
+                new AttributeSeed(Obj("doc", "d2"), new Dictionary<string, object?>
+                {
+                    ["blockedUntil"] = "2024-05-01T12:00:00+00:00",
+                    ["checkpoint"] = "2024-05-01T08:00:00+00:00",
+                }),
+            ],
+            [
+                new CheckExpectation("blocked-window-open", Obj("doc", "d1"), "view", U("u1"), true),
+                new CheckExpectation("unblocked-viewer", Obj("doc", "d1"), "view", U("u2"), true),
+                new CheckExpectation("blocked-window-closed", Obj("doc", "d2"), "view", U("u1"), false),
+                new CheckExpectation("unblocked-viewer-d2", Obj("doc", "d2"), "view", U("u2"), true),
+                new CheckExpectation("unblocked-no-window", Obj("doc", "d3"), "view", U("u1"), true),
+                new CheckExpectation("stranger", Obj("doc", "d1"), "view", U("u3"), false),
+            ],
+            [
+                new ListObjectsExpectation("u1-open-window-and-unblocked", U("u1"), "doc", "view", ["d1", "d3"]),
+                new ListObjectsExpectation("u2-all-viewer", U("u2"), "doc", "view", ["d1", "d2"]),
+                new ListObjectsExpectation("u3-none", U("u3"), "doc", "view", []),
+            ],
+            [
+                new ListSubjectsExpectation("d1-window-open", Obj("doc", "d1"), "view", [U("u1"), U("u2")]),
+                new ListSubjectsExpectation("d2-window-closed", Obj("doc", "d2"), "view", [U("u2")]),
+                new ListSubjectsExpectation("d3-plain", Obj("doc", "d3"), "view", [U("u1")]),
             ]);
     }
 }
