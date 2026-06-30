@@ -33,7 +33,8 @@ public class CustodexAuthorizeViewTests
         public void Dispose() => Context.Dispose();
     }
 
-    private static Scenario Arrange(TestWorld world, CheckResult result)
+    private static Scenario Arrange(TestWorld world, CheckResult result,
+        Action<CustodexAuthorizationOptions>? configure = null)
     {
         var objType = world.EntityType();
         var objId = world.ObjectId();
@@ -44,7 +45,11 @@ public class CustodexAuthorizeViewTests
         var authorizer = new RecordingAuthorizer(result);
         ctx.Services.AddSingleton<IAuthorizer>(authorizer);
         ctx.Services.AddLogging();
-        ctx.Services.AddCustodexAuthorization(o => o.SubjectType = world.UserType);
+        ctx.Services.AddCustodexAuthorization(o =>
+        {
+            o.SubjectType = world.UserType;
+            configure?.Invoke(o);
+        });
         ctx.Services.AddTransient<IAuthorizationService, DefaultAuthorizationService>();
 
         return new Scenario(ctx, world, authorizer, objType, objId, permission, subjectId);
@@ -102,5 +107,55 @@ public class CustodexAuthorizeViewTests
 
         cut.WaitForAssertion(() => cut.FindAll("#no").ShouldNotBeEmpty());
         s.Authorizer.Last.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void Object_parameter_takes_precedence()
+    {
+        var world = TestWorld.New();
+        using var s = Arrange(world, new CheckResult(true));
+        var expected = new EntityRef(world.EntityType(), world.ObjectId());
+        var authState = AuthState(s);
+
+        var cut = s.Context.Render(builder =>
+        {
+            builder.OpenComponent<CascadingValue<Task<AuthenticationState>>>(0);
+            builder.AddAttribute(1, nameof(CascadingValue<Task<AuthenticationState>>.Value), authState);
+            builder.AddAttribute(2, nameof(CascadingValue<Task<AuthenticationState>>.IsFixed), true);
+            builder.AddAttribute(3, nameof(CascadingValue<Task<AuthenticationState>>.ChildContent), (RenderFragment)(inner =>
+            {
+                inner.OpenComponent<CustodexAuthorizeView>(0);
+                inner.AddAttribute(1, nameof(CustodexAuthorizeView.Object), expected);
+                inner.AddAttribute(2, nameof(CustodexAuthorizeView.Permission), s.Permission);
+                inner.AddAttribute(3, nameof(CustodexAuthorizeView.Authorized),
+                    (RenderFragment<AuthenticationState>)(_ => mb => mb.AddMarkupContent(0, "<span id=\"ok\">granted</span>")));
+                inner.AddAttribute(4, nameof(CustodexAuthorizeView.NotAuthorized),
+                    (RenderFragment<AuthenticationState>)(_ => mb => mb.AddMarkupContent(0, "<span id=\"no\">denied</span>")));
+                inner.CloseComponent();
+            }));
+            builder.CloseComponent();
+        });
+
+        cut.WaitForAssertion(() => cut.FindAll("#ok").ShouldNotBeEmpty());
+        s.Authorizer.Last.ShouldNotBeNull();
+        s.Authorizer.Last!.Object.ShouldBe(expected);
+    }
+
+    [Fact]
+    public void Custom_prefix_and_separator_round_trip()
+    {
+        var world = TestWorld.New();
+        using var s = Arrange(world, new CheckResult(true), o =>
+        {
+            o.PolicyPrefix = "cdx";
+            o.PolicySeparator = "/";
+        });
+        var authState = AuthState(s);
+
+        var cut = RenderView(s, authState);
+
+        cut.WaitForAssertion(() => cut.FindAll("#ok").ShouldNotBeEmpty());
+        s.Authorizer.Last.ShouldNotBeNull();
+        s.Authorizer.Last!.Permission.ShouldBe(s.Permission);
     }
 }

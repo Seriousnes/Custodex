@@ -31,6 +31,7 @@ public partial class CustodexAuthorizeView
 
     /// <summary>The permission to check on the object.</summary>
     [Parameter]
+    [EditorRequired]
     public string Permission { get; set; } = default!;
 
     /// <summary>Content shown when the subject is authorized.</summary>
