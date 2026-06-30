@@ -101,5 +101,6 @@ public class CustodexAuthorizeViewTests
         var cut = RenderView(s, AuthState(s));
 
         cut.WaitForAssertion(() => cut.FindAll("#no").ShouldNotBeEmpty());
+        s.Authorizer.Last.ShouldNotBeNull();
     }
 }

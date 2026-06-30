@@ -58,6 +58,8 @@ jobs:
             filter: ""
           - project: Custodex.AspNetCore.Tests
             filter: ""
+          - project: Custodex.Blazor.Tests
+            filter: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v7
