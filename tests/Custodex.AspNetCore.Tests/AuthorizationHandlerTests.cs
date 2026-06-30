@@ -120,6 +120,21 @@ public class AuthorizationHandlerTests
     }
 
     [Fact]
+    public async Task Denies_when_no_tenant_claims()
+    {
+        var world = TestWorld.New();
+        var h = Build(new FakeAuthorizer(new CheckResult(true)), world);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, world.SubjectId())], "Test"));
+        var ctx = new AuthorizationHandlerContext([h.Requirement], principal, new EntityRef(h.Requirement.ObjectType, world.ObjectId()));
+
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeFalse();
+        h.Authorizer.LastRequest.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Engine_exception_denies_by_default()
     {
         var world = TestWorld.New();

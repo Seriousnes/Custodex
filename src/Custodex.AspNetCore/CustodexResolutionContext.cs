@@ -13,7 +13,17 @@ namespace Custodex.AspNetCore;
 /// </summary>
 public sealed class CustodexResolutionContext
 {
-    internal CustodexResolutionContext(
+    /// <summary>
+    /// Builds a resolution context passed to consumer-implemented <see cref="ICustodexObjectResolver"/>,
+    /// <see cref="ICustodexAttributeSource"/>, and <see cref="IRequestContextFactory"/> (and usable in their tests).
+    /// </summary>
+    /// <param name="objectType">The object entity type parsed from the policy name.</param>
+    /// <param name="permission">The permission parsed from the policy name.</param>
+    /// <param name="user">The authenticated principal the decision concerns.</param>
+    /// <param name="resource">The authorization resource passed by the caller (for example an <c>AuthorizeView</c> resource), or <see langword="null"/>.</param>
+    /// <param name="httpContext">The ambient request context, or <see langword="null"/> outside an HTTP request (for example in a Blazor circuit).</param>
+    /// <param name="tenant">The store and tenant the decision is evaluated within.</param>
+    public CustodexResolutionContext(
         string objectType, string permission, ClaimsPrincipal user,
         object? resource, HttpContext? httpContext, TenantContext tenant)
     {

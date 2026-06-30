@@ -63,6 +63,10 @@ internal sealed class CustodexAuthorizationHandler(
             if (result.Allowed)
                 context.Succeed(requirement);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex) when (!options.Value.ThrowOnEvaluationError)
         {
             logger.LogError(ex, "Custodex evaluation failed for {Type}:{Permission}; denying", requirement.ObjectType, requirement.Permission);
