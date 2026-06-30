@@ -4,6 +4,8 @@ The evaluation engine for [Custodex](https://github.com/Seriousnes/Custodex) —
 
 ## Authoring a schema
 
+The full grammar — every construct in both DSL text and `SchemaBuilder` form, with a Zanzibar/SpiceDB mapping — is documented in [the schema language reference](https://github.com/Seriousnes/Custodex/blob/main/docs/schema-language.md).
+
 `SchemaBuilder` produces the canonical schema AST. A type declares **relations** (who can be linked to an object) and **permissions** (computed from relations through the algebra):
 
 ```csharp

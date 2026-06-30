@@ -90,7 +90,10 @@ public sealed partial class SqlServerCteAuthorizer
         switch (expr)
         {
             case RelationRef r:
-                await CollectFromRelationAsync(conn, index, tenant, obj, r.Relation, subjects, visited, ct);
+                if (index.TryRelation(obj.Type, r.Relation, out _))
+                    await CollectFromRelationAsync(conn, index, tenant, obj, r.Relation, subjects, visited, ct);
+                else
+                    await CollectLeafSubjectsAsync(conn, index, tenant, obj, r.Relation, subjects, visited, ct);
                 break;
             case Union u:
                 await CollectFromExprAsync(conn, index, tenant, obj, u.Left, subjects, visited, ct);

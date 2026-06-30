@@ -33,6 +33,7 @@
     <ProjectReference Include="..\..\src\Custodex.Storage.MySql\Custodex.Storage.MySql.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Abstractions\Custodex.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Core\Custodex.Core.csproj" />
+    <ProjectReference Include="..\Custodex.TestKit\Custodex.TestKit.csproj" />
   </ItemGroup>
 
 </Project>
