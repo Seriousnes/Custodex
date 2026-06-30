@@ -13,6 +13,7 @@
     <Project Path="src/Custodex.Studio/Custodex.Studio.csproj" />
     <Project Path="src/Custodex.Storage.SqlServer/Custodex.Storage.SqlServer.csproj" />
     <Project Path="src/Custodex.Storage.Sqlite/Custodex.Storage.Sqlite.csproj" />
+    <Project Path="src/Custodex.AspNetCore/Custodex.AspNetCore.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Custodex.Abstractions.Tests/Custodex.Abstractions.Tests.csproj" Id="6ba2306f-43eb-438a-b5c7-7ddbb98bffc6" />
@@ -27,5 +28,6 @@
     <Project Path="tests/Custodex.Studio.Tests/Custodex.Studio.Tests.csproj" />
     <Project Path="tests/Custodex.Storage.SqlServer.Tests/Custodex.Storage.SqlServer.Tests.csproj" />
     <Project Path="tests/Custodex.Storage.Sqlite.Tests/Custodex.Storage.Sqlite.Tests.csproj" />
+    <Project Path="tests/Custodex.AspNetCore.Tests/Custodex.AspNetCore.Tests.csproj" />
   </Folder>
 </Solution>
