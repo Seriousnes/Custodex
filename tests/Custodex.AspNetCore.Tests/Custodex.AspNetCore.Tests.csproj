@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Custodex.AspNetCore\Custodex.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\Custodex.Core\Custodex.Core.csproj" />
     <ProjectReference Include="..\Custodex.TestKit\Custodex.TestKit.csproj" />
   </ItemGroup>
 
