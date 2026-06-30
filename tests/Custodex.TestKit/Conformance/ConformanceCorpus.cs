@@ -26,6 +26,8 @@ public static class ConformanceCorpus
         NameCollisionRelationWins(),
         PrecedenceFlat(),
         ConditionAttributeGate(),
+        ExclusionThroughArrow(),
+        ConditionThroughArrow(),
     ];
 
     /// <summary>Resolves a scenario by its unique <see cref="ConformanceScenario.Name"/>.</summary>
@@ -372,6 +374,78 @@ public static class ConformanceCorpus
             [
                 new ListSubjectsExpectation("active-viewers", Obj("doc", "d1"), "view", [U("u1")]),
                 new ListSubjectsExpectation("inactive-none", Obj("doc", "d2"), "view", []),
+            ]);
+    }
+
+    private static ConformanceScenario ExclusionThroughArrow()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("group", t => t
+                .Relation("member", s => s.User().SubjectSet("group", "member")))
+            .Type("crate", t => t
+                .Relation("editor", s => s.User().SubjectSet("group", "member"))
+                .Relation("blocked", s => s.User())
+                .Permission("edit", p => p.Relation("editor").Exclude(x => x.Relation("blocked"))))
+            .Type("asset", t => t
+                .Relation("crate", s => s.Type("crate"))
+                .Permission("edit", p => p.Arrow("crate", "edit")))
+            .Build();
+
+        return new ConformanceScenario("exclusion-through-arrow", schema,
+            [
+                T("asset", "a1", "crate", new SubjectRef("crate", "c1")),
+                T("crate", "c1", "editor", U("u1")),
+                T("crate", "c1", "editor", Member("g1")),
+                T("group", "g1", "member", U("u2")),
+                T("crate", "c1", "editor", U("u3")),
+                T("crate", "c1", "blocked", U("u3")),
+            ],
+            [],
+            [
+                new CheckExpectation("direct-editor", Obj("asset", "a1"), "edit", U("u1"), true),
+                new CheckExpectation("nested-member", Obj("asset", "a1"), "edit", U("u2"), true),
+                new CheckExpectation("blocked-editor", Obj("asset", "a1"), "edit", U("u3"), false),
+                new CheckExpectation("stranger", Obj("asset", "a1"), "edit", U("u4"), false),
+            ],
+            [
+                new ListObjectsExpectation("u1", U("u1"), "asset", "edit", ["a1"]),
+                new ListObjectsExpectation("u3-blocked", U("u3"), "asset", "edit", []),
+            ],
+            [new ListSubjectsExpectation("unblocked-editors", Obj("asset", "a1"), "edit", [U("u1"), U("u2")])]);
+    }
+
+    private static ConformanceScenario ConditionThroughArrow()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("crate", t => t
+                .Relation("editor", s => s.User())
+                .Permission("edit", p => p.Relation("editor").Conditioned("active")))
+            .Type("asset", t => t
+                .Relation("crate", s => s.Type("crate"))
+                .Permission("edit", p => p.Arrow("crate", "edit")))
+            .Condition("active", _ => { }, b => b.Eq(b.Attribute("flag"), b.Const(true)))
+            .Build();
+
+        return new ConformanceScenario("condition-through-arrow", schema,
+            [
+                T("asset", "a1", "crate", new SubjectRef("crate", "c1")),
+                T("asset", "a2", "crate", new SubjectRef("crate", "c2")),
+                T("crate", "c1", "editor", U("u1")),
+                T("crate", "c2", "editor", U("u1")),
+            ],
+            [
+                new AttributeSeed(Obj("crate", "c1"), new Dictionary<string, object?> { ["flag"] = true }),
+                new AttributeSeed(Obj("crate", "c2"), new Dictionary<string, object?> { ["flag"] = false }),
+            ],
+            [
+                new CheckExpectation("active-crate", Obj("asset", "a1"), "edit", U("u1"), true),
+                new CheckExpectation("inactive-crate", Obj("asset", "a2"), "edit", U("u1"), false),
+                new CheckExpectation("stranger", Obj("asset", "a1"), "edit", U("u2"), false),
+            ],
+            [new ListObjectsExpectation("u1-active-only", U("u1"), "asset", "edit", ["a1"])],
+            [
+                new ListSubjectsExpectation("active-editors", Obj("asset", "a1"), "edit", [U("u1")]),
+                new ListSubjectsExpectation("inactive-none", Obj("asset", "a2"), "edit", []),
             ]);
     }
 }
