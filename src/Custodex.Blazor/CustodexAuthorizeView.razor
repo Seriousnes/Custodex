@@ -1,0 +1,8 @@
+@namespace Custodex.Blazor
+
+<AuthorizeView Policy="@PolicyName"
+               Resource="@ResolvedObjectBox"
+               Authorized="@Authorized"
+               NotAuthorized="@NotAuthorized"
+               Authorizing="@Authorizing"
+               ChildContent="@ChildContent" />
