@@ -70,6 +70,29 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void UseClaimOnlyTenantResolver_replaces_the_default_after_AddCustodexAuthorization()
+    {
+        var services = new ServiceCollection();
+
+        services.AddCustodexAuthorization().UseClaimOnlyTenantResolver();
+
+        var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<ICustodexTenantResolver>().ShouldBeOfType<ClaimsCustodexTenantResolver>();
+    }
+
+    [Fact]
+    public void UseClaimOnlyTenantResolver_replaces_the_default_before_AddCustodexAuthorization()
+    {
+        var services = new ServiceCollection();
+
+        services.UseClaimOnlyTenantResolver();
+        services.AddCustodexAuthorization();
+
+        var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<ICustodexTenantResolver>().ShouldBeOfType<ClaimsCustodexTenantResolver>();
+    }
+
+    [Fact]
     public void Validation_throws_when_no_authorizer_is_registered()
     {
         var services = new ServiceCollection();

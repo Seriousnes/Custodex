@@ -43,4 +43,19 @@ public static class CustodexAuthorizationServiceCollectionExtensions
         services.AddHostedService<CustodexAuthorizerRegistrationCheck>();
         return services;
     }
+
+    /// <summary>
+    /// Replaces the tenant resolver with the built-in claim-only resolver, which reads the store and
+    /// tenant from claims and ignores the <c>X-Custodex-Tenant</c> header. Use this when the tenant is
+    /// fixed by the login token so a client-supplied header cannot request evaluation against another
+    /// tenant's grant graph within the same store. Order-independent with respect to
+    /// <see cref="AddCustodexAuthorization"/>.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    public static IServiceCollection UseClaimOnlyTenantResolver(this IServiceCollection services)
+    {
+        services.Replace(ServiceDescriptor.Singleton<ICustodexTenantResolver, ClaimsCustodexTenantResolver>());
+        return services;
+    }
 }
