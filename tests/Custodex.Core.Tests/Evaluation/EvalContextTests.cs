@@ -58,6 +58,35 @@ public class EvalContextTests
     }
 
     [Fact]
+    public void Reentering_a_frame_across_a_negation_throws_exclusion_cycle()
+    {
+        var ctx = new EvalContext(new EvaluationOptions());
+        ctx.TryEnter(Frame(), out _).ShouldBeTrue();
+        using (ctx.EnterNegation())
+            Should.Throw<ExclusionCycleException>(() => ctx.TryEnter(Frame(), out _));
+    }
+
+    [Fact]
+    public void Reentering_a_frame_after_a_negation_closed_is_a_plain_cycle()
+    {
+        var ctx = new EvalContext(new EvaluationOptions());
+        ctx.TryEnter(Frame(), out _).ShouldBeTrue();
+        ctx.EnterNegation().Dispose();
+        ctx.TryEnter(Frame(), out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Reentering_a_frame_entered_inside_the_same_negation_is_a_plain_cycle()
+    {
+        var ctx = new EvalContext(new EvaluationOptions());
+        using (ctx.EnterNegation())
+        {
+            ctx.TryEnter(Frame(), out _).ShouldBeTrue();
+            ctx.TryEnter(Frame(), out _).ShouldBeFalse();
+        }
+    }
+
+    [Fact]
     public void Condition_touched_flag_latches()
     {
         var ctx = new EvalContext(new EvaluationOptions());

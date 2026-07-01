@@ -203,7 +203,7 @@ else
         {
             _tuples = await Manager.ReadTuplesAsync(State.Current, filter, CancellationToken.None);
         }
-        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException or ExclusionCycleException)
         {
             _errorMessage = ex.Message;
         }
@@ -218,7 +218,7 @@ else
             await Manager.DeleteTuplesAsync(State.Current, _actor, [tuple], CancellationToken.None);
             await RefreshAsync();
         }
-        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException or ExclusionCycleException)
         {
             _errorMessage = ex.Message;
         }
@@ -240,7 +240,7 @@ else
             await Manager.WriteTuplesAsync(State.Current, _actor, [tuple], CancellationToken.None);
             await RefreshAsync();
         }
-        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException or ExclusionCycleException)
         {
             _errorMessage = ex.Message;
         }
@@ -263,7 +263,7 @@ else
             await Manager.WriteAttributesAsync(State.Current, _actor,
                 new EntityRef(_attrObjType, _attrObjId), attrs, CancellationToken.None);
         }
-        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException or ExclusionCycleException)
         {
             _errorMessage = ex.Message;
         }
