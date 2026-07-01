@@ -15,6 +15,7 @@ public class OptionDefaultsTests
 
         options.PolicyPrefix.ShouldBe("custodex");
         options.PolicySeparator.ShouldBe(":");
+        options.AnyObjectSegment.ShouldBe("any");
         options.SubjectType.ShouldBe("user");
         options.SubjectIdClaim.ShouldBe(ClaimTypes.NameIdentifier);
         options.StoreClaim.ShouldBe("Custodex:store");

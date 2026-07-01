@@ -10,7 +10,10 @@ namespace Custodex.Blazor;
 /// <summary>
 /// Authorizes its content against a Custodex permission on a specific object. A per-object wrapper
 /// over <see cref="AuthorizeView"/>: it computes the <c>{prefix}:{type}:{permission}</c> policy and
-/// passes the object as the authorization resource, so it shares the engine evaluation path.
+/// passes the object as the authorization resource, so it shares the engine evaluation path. Set
+/// <see cref="Any"/> to authorize on the any-object (exists) form
+/// (<c>{prefix}:{any}:{type}:{permission}</c>) instead, which grants when the subject holds the
+/// permission on at least one object of the type.
 /// </summary>
 public partial class CustodexAuthorizeView
 {
@@ -28,6 +31,14 @@ public partial class CustodexAuthorizeView
     /// <summary>The object's id, used with <see cref="ObjectType"/> when <see cref="Object"/> is not set.</summary>
     [Parameter]
     public string? ObjectId { get; set; }
+
+    /// <summary>
+    /// When <see langword="true"/>, authorizes on the any-object (exists) form: the subject holds
+    /// <see cref="Permission"/> on at least one object of <see cref="ObjectType"/>. Only
+    /// <see cref="ObjectType"/> is read; <see cref="Object"/> and <see cref="ObjectId"/> are ignored.
+    /// </summary>
+    [Parameter]
+    public bool Any { get; set; }
 
     /// <summary>The permission to check on the object.</summary>
     [Parameter]
@@ -54,13 +65,19 @@ public partial class CustodexAuthorizeView
         ObjectType ?? throw new InvalidOperationException("CustodexAuthorizeView requires Object or both ObjectType and ObjectId."),
         ObjectId ?? throw new InvalidOperationException("CustodexAuthorizeView requires Object or both ObjectType and ObjectId."));
 
-    private object ResolvedObjectBox => ResolvedObject;
+    private object? ResolvedObjectBox => Any ? null : ResolvedObject;
 
     private string PolicyName
     {
         get
         {
             var o = Options.Value;
+            if (Any)
+            {
+                var type = ObjectType ?? throw new InvalidOperationException("CustodexAuthorizeView with Any requires ObjectType.");
+                return $"{o.PolicyPrefix}{o.PolicySeparator}{o.AnyObjectSegment}{o.PolicySeparator}{type}{o.PolicySeparator}{Permission}";
+            }
+
             var entity = ResolvedObject;
             return $"{o.PolicyPrefix}{o.PolicySeparator}{entity.Type}{o.PolicySeparator}{Permission}";
         }

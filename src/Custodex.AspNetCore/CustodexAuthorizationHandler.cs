@@ -41,6 +41,18 @@ internal sealed class CustodexAuthorizationHandler(
             var resolution = new CustodexResolutionContext(
                 requirement.ObjectType, requirement.Permission, context.User, context.Resource, http, tenant.Value);
 
+            if (requirement.AnyObject)
+            {
+                var anyContext = requestContextFactory.Create(subject.Value, resolution);
+                var page = await authorizer.ListObjectsAsync(
+                    new ListObjectsRequest(
+                        tenant.Value, subject.Value, requirement.ObjectType, requirement.Permission, anyContext, PageSize: 1),
+                    ct);
+                if (page.ObjectIds.Count > 0)
+                    context.Succeed(requirement);
+                return;
+            }
+
             EntityRef? entity = null;
             foreach (var resolver in objectResolvers)
             {

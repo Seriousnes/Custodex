@@ -26,6 +26,26 @@ The policy name is `custodex:{type}:{permission}`. The object id is taken from t
 (`{type}Id`, `{type}`, or `id`) or from the `AuthorizeView` `Resource`. Unknown policy names
 fall through to the framework's default provider, so existing named policies keep working.
 
+## Any-object (exists) gate
+
+The four-segment form `custodex:any:{type}:{permission}` authorizes when the subject holds the
+permission on **at least one** object of the type, without naming a specific object:
+
+```csharp
+app.MapGet("/documents", ListDocuments)
+   .RequireAuthorization("custodex:any:document:view");
+```
+
+It binds no object and ignores the resource and route; it resolves the subject and tenant, then
+asks the engine `ListObjectsAsync(..., PageSize: 1)` and grants when the page has any id. The `any`
+segment is configurable via `AnyObjectSegment` (default `any`). A three-segment policy whose type is
+literally `any` (`custodex:any:view`) is unchanged: it still means type `any`, permission `view`.
+
+Cost note: the any-gate is a candidate-set scan, not an O(1) membership test. `PageSize: 1` stops
+the enumeration at the first confirmed object, but confirming that first object still walks the
+subject's reachable set for the type, so it is more expensive than a single `Check` on a known
+object. Prefer a concrete-object policy when you already have the id.
+
 ## Security and operational notes
 
 - **Tenant comes from the `X-Custodex-Tenant` header first, then the `Custodex:tenant` claim.** This mirrors the Custodex service so the same tokens and headers work unchanged. Because the header is client-supplied, a principal can request evaluation against a different tenant's grant graph within the same store; access is still granted only where that subject actually holds the permission, and the `Custodex:store` claim (never the header) bounds the scope. To pin the tenant to the token instead, replace `ICustodexTenantResolver` with one that reads the tenant from a trusted claim only.
