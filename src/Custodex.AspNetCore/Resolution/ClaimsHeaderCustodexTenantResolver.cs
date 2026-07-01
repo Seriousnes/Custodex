@@ -9,14 +9,13 @@ namespace Custodex.AspNetCore;
 
 internal sealed class ClaimsHeaderCustodexTenantResolver(IOptions<CustodexAuthorizationOptions> options) : ICustodexTenantResolver
 {
-    public bool TryResolve(ClaimsPrincipal user, HttpContext? httpContext, out TenantContext tenant)
+    public ValueTask<TenantContext?> ResolveAsync(ClaimsPrincipal user, HttpContext? httpContext, CancellationToken cancellationToken)
     {
-        tenant = default;
         var o = options.Value;
 
         var store = user.FindFirstValue(o.StoreClaim);
         if (string.IsNullOrEmpty(store))
-            return false;
+            return ValueTask.FromResult<TenantContext?>(null);
 
         string? tenantId = null;
         if (httpContext is not null && httpContext.Request.Headers.TryGetValue(o.TenantHeader, out var header))
@@ -24,9 +23,8 @@ internal sealed class ClaimsHeaderCustodexTenantResolver(IOptions<CustodexAuthor
         if (string.IsNullOrEmpty(tenantId))
             tenantId = user.FindFirstValue(o.TenantClaim);
         if (string.IsNullOrEmpty(tenantId))
-            return false;
+            return ValueTask.FromResult<TenantContext?>(null);
 
-        tenant = new TenantContext(store, tenantId);
-        return true;
+        return ValueTask.FromResult<TenantContext?>(new TenantContext(store, tenantId));
     }
 }

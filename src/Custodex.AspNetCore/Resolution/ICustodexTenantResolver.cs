@@ -12,7 +12,7 @@ public interface ICustodexTenantResolver
     /// <summary>Attempts to resolve the tenant scope for the current request.</summary>
     /// <param name="user">The authenticated principal.</param>
     /// <param name="httpContext">The ambient request, or <see langword="null"/> outside an HTTP request.</param>
-    /// <param name="tenant">The resolved store and tenant when this returns <see langword="true"/>.</param>
-    /// <returns><see langword="true"/> when a tenant was resolved; otherwise <see langword="false"/>, which denies the request.</returns>
-    bool TryResolve(ClaimsPrincipal user, HttpContext? httpContext, out TenantContext tenant);
+    /// <param name="cancellationToken">A token that is cancelled when the request is aborted.</param>
+    /// <returns>The resolved store and tenant, or <see langword="null"/> to deny the request.</returns>
+    ValueTask<TenantContext?> ResolveAsync(ClaimsPrincipal user, HttpContext? httpContext, CancellationToken cancellationToken);
 }

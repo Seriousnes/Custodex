@@ -26,14 +26,15 @@ public class AuthorizationHandlerTests
         IAuthorizer authorizer,
         TestWorld world,
         HttpContext? http = null,
-        CustodexAuthorizationOptions? options = null)
+        CustodexAuthorizationOptions? options = null,
+        ICustodexObjectResolver[]? objectResolvers = null)
     {
         var opts = Options.Create(options ?? new CustodexAuthorizationOptions { SubjectType = world.UserType });
         var fake = authorizer as FakeAuthorizer;
 
         var subjectResolver = new ClaimsCustodexSubjectResolver(opts);
         var tenantResolver = new ClaimsHeaderCustodexTenantResolver(opts);
-        ICustodexObjectResolver[] objectResolvers =
+        objectResolvers ??=
         [
             new ResourceEntityRefResolver(),
             new ResourceIdResolver(),
@@ -157,5 +158,88 @@ public class AuthorizationHandlerTests
         var ctx = ContextFor(h, new EntityRef(h.Requirement.ObjectType, world.ObjectId()));
 
         await Should.ThrowAsync<InvalidOperationException>(() => h.Handler.HandleAsync(ctx));
+    }
+
+    [Fact]
+    public async Task Awaits_an_async_object_resolver()
+    {
+        var world = TestWorld.New();
+        var fake = new FakeAuthorizer(new CheckResult(true));
+        var entity = new EntityRef(world.EntityType(), world.ObjectId());
+        var h = Build(fake, world, objectResolvers: [new AsyncObjectResolver(entity)]);
+
+        var ctx = ContextFor(h, resource: null);
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeTrue();
+        h.Authorizer.LastRequest!.Object.ShouldBe(entity);
+    }
+
+    [Fact]
+    public async Task Throwing_object_resolver_denies_by_default()
+    {
+        var world = TestWorld.New();
+        var h = Build(new FakeAuthorizer(new CheckResult(true)), world, objectResolvers: [new ThrowingObjectResolver()]);
+        var ctx = ContextFor(h, resource: null);
+
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Throwing_object_resolver_rethrows_when_configured()
+    {
+        var world = TestWorld.New();
+        var h = Build(
+            new FakeAuthorizer(new CheckResult(true)),
+            world,
+            options: new CustodexAuthorizationOptions { SubjectType = world.UserType, ThrowOnEvaluationError = true },
+            objectResolvers: [new ThrowingObjectResolver()]);
+        var ctx = ContextFor(h, resource: null);
+
+        await Should.ThrowAsync<InvalidOperationException>(() => h.Handler.HandleAsync(ctx));
+    }
+
+    [Fact]
+    public async Task Cancellation_token_flows_to_resolvers()
+    {
+        var world = TestWorld.New();
+        using var cts = new CancellationTokenSource();
+        var http = new DefaultHttpContext { RequestAborted = cts.Token };
+        var entity = new EntityRef(world.EntityType(), world.ObjectId());
+        var capturing = new CapturingObjectResolver(entity);
+        var h = Build(new FakeAuthorizer(new CheckResult(true)), world, http: http, objectResolvers: [capturing]);
+
+        var ctx = ContextFor(h, resource: null);
+        await h.Handler.HandleAsync(ctx);
+
+        capturing.Captured.ShouldBe(cts.Token);
+    }
+
+    private sealed class AsyncObjectResolver(EntityRef entity) : ICustodexObjectResolver
+    {
+        public async ValueTask<EntityRef?> ResolveAsync(CustodexResolutionContext context, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            return entity;
+        }
+    }
+
+    private sealed class ThrowingObjectResolver : ICustodexObjectResolver
+    {
+        public ValueTask<EntityRef?> ResolveAsync(CustodexResolutionContext context, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("resolver boom");
+    }
+
+    private sealed class CapturingObjectResolver(EntityRef entity) : ICustodexObjectResolver
+    {
+        public CancellationToken Captured { get; private set; }
+
+        public ValueTask<EntityRef?> ResolveAsync(CustodexResolutionContext context, CancellationToken cancellationToken)
+        {
+            Captured = cancellationToken;
+            return ValueTask.FromResult<EntityRef?>(entity);
+        }
     }
 }

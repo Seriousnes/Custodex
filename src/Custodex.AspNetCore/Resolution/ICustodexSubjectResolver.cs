@@ -9,7 +9,7 @@ public interface ICustodexSubjectResolver
 {
     /// <summary>Attempts to resolve a subject from <paramref name="user"/>.</summary>
     /// <param name="user">The authenticated principal.</param>
-    /// <param name="subject">The resolved subject when this returns <see langword="true"/>.</param>
-    /// <returns><see langword="true"/> when a subject was resolved; otherwise <see langword="false"/>, which denies the request.</returns>
-    bool TryResolve(ClaimsPrincipal user, out SubjectRef subject);
+    /// <param name="cancellationToken">A token that is cancelled when the request is aborted.</param>
+    /// <returns>The resolved subject, or <see langword="null"/> to deny the request.</returns>
+    ValueTask<SubjectRef?> ResolveAsync(ClaimsPrincipal user, CancellationToken cancellationToken);
 }

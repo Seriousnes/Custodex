@@ -6,13 +6,11 @@ namespace Custodex.AspNetCore;
 
 internal sealed class RouteValueResolver : ICustodexObjectResolver
 {
-    public bool TryResolve(CustodexResolutionContext context, out EntityRef entity)
+    public ValueTask<EntityRef?> ResolveAsync(CustodexResolutionContext context, CancellationToken cancellationToken)
     {
-        entity = default;
-
         var http = context.HttpContext;
         if (http is null)
-            return false;
+            return ValueTask.FromResult<EntityRef?>(null);
 
         var binding = http.GetEndpoint()?.Metadata.GetMetadata<CustodexObjectBindingMetadata>();
         var type = binding?.ObjectType ?? context.ObjectType;
@@ -20,13 +18,10 @@ internal sealed class RouteValueResolver : ICustodexObjectResolver
         foreach (var key in CandidateKeys(binding?.RouteKey, context.ObjectType))
         {
             if (http.Request.RouteValues.TryGetValue(key, out var value) && value?.ToString() is { Length: > 0 } id)
-            {
-                entity = new EntityRef(type, id);
-                return true;
-            }
+                return ValueTask.FromResult<EntityRef?>(new EntityRef(type, id));
         }
 
-        return false;
+        return ValueTask.FromResult<EntityRef?>(null);
     }
 
     private static IEnumerable<string> CandidateKeys(string? overrideKey, string type)

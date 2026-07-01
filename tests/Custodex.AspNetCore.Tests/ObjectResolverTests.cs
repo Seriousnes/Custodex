@@ -15,36 +15,36 @@ public class ObjectResolverTests
         ResolutionContextFactory.Create(objectType, "view", resource, http, new TenantContext("s", "t"));
 
     [Fact]
-    public void Resource_entity_ref_is_used_directly()
+    public async Task Resource_entity_ref_is_used_directly()
     {
         var world = TestWorld.New();
         var entity = new EntityRef(world.EntityType(), world.ObjectId());
 
-        new ResourceEntityRefResolver().TryResolve(Context(world.EntityType(), resource: entity), out var resolved).ShouldBeTrue();
+        var resolved = await new ResourceEntityRefResolver().ResolveAsync(Context(world.EntityType(), resource: entity), CancellationToken.None);
 
         resolved.ShouldBe(entity);
     }
 
     [Fact]
-    public void Resource_string_combines_with_policy_type()
+    public async Task Resource_string_combines_with_policy_type()
     {
         var world = TestWorld.New();
         var type = world.EntityType();
         var id = world.ObjectId();
 
-        new ResourceIdResolver().TryResolve(Context(type, resource: id), out var resolved).ShouldBeTrue();
+        var resolved = await new ResourceIdResolver().ResolveAsync(Context(type, resource: id), CancellationToken.None);
 
         resolved.ShouldBe(new EntityRef(type, id));
     }
 
     [Fact]
-    public void Empty_resource_string_does_not_resolve()
+    public async Task Empty_resource_string_does_not_resolve()
     {
-        new ResourceIdResolver().TryResolve(Context("thing", resource: ""), out _).ShouldBeFalse();
+        (await new ResourceIdResolver().ResolveAsync(Context("thing", resource: ""), CancellationToken.None)).ShouldBeNull();
     }
 
     [Fact]
-    public void Route_value_binds_by_id_key()
+    public async Task Route_value_binds_by_id_key()
     {
         var world = TestWorld.New();
         var type = world.EntityType();
@@ -52,13 +52,13 @@ public class ObjectResolverTests
         var http = new DefaultHttpContext();
         http.Request.RouteValues["id"] = id;
 
-        new RouteValueResolver().TryResolve(Context(type, http: http), out var resolved).ShouldBeTrue();
+        var resolved = await new RouteValueResolver().ResolveAsync(Context(type, http: http), CancellationToken.None);
 
         resolved.ShouldBe(new EntityRef(type, id));
     }
 
     [Fact]
-    public void Route_value_binds_by_type_id_key()
+    public async Task Route_value_binds_by_type_id_key()
     {
         var world = TestWorld.New();
         var type = world.EntityType();
@@ -66,13 +66,13 @@ public class ObjectResolverTests
         var http = new DefaultHttpContext();
         http.Request.RouteValues[type + "Id"] = id;
 
-        new RouteValueResolver().TryResolve(Context(type, http: http), out var resolved).ShouldBeTrue();
+        var resolved = await new RouteValueResolver().ResolveAsync(Context(type, http: http), CancellationToken.None);
 
         resolved.ShouldBe(new EntityRef(type, id));
     }
 
     [Fact]
-    public void Route_value_binding_metadata_overrides_key_and_type()
+    public async Task Route_value_binding_metadata_overrides_key_and_type()
     {
         var world = TestWorld.New();
         var policyType = world.EntityType();
@@ -85,34 +85,34 @@ public class ObjectResolverTests
             new EndpointMetadataCollection(new CustodexObjectBindingMetadata("slug", boundType)),
             "test"));
 
-        new RouteValueResolver().TryResolve(Context(policyType, http: http), out var resolved).ShouldBeTrue();
+        var resolved = await new RouteValueResolver().ResolveAsync(Context(policyType, http: http), CancellationToken.None);
 
         resolved.ShouldBe(new EntityRef(boundType, id));
     }
 
     [Fact]
-    public void No_http_context_does_not_resolve_from_route()
+    public async Task No_http_context_does_not_resolve_from_route()
     {
-        new RouteValueResolver().TryResolve(Context("thing"), out _).ShouldBeFalse();
+        (await new RouteValueResolver().ResolveAsync(Context("thing"), CancellationToken.None)).ShouldBeNull();
     }
 
     [Fact]
-    public void Root_object_resolves_from_options_delegate()
+    public async Task Root_object_resolves_from_options_delegate()
     {
         var world = TestWorld.New();
         var root = new EntityRef(world.EntityType(), world.ObjectId());
         var resolver = new RootObjectResolver(Options.Create(new CustodexAuthorizationOptions { RootObject = _ => root }));
 
-        resolver.TryResolve(Context("thing"), out var resolved).ShouldBeTrue();
+        var resolved = await resolver.ResolveAsync(Context("thing"), CancellationToken.None);
 
         resolved.ShouldBe(root);
     }
 
     [Fact]
-    public void Root_object_absent_does_not_resolve()
+    public async Task Root_object_absent_does_not_resolve()
     {
         var resolver = new RootObjectResolver(Options.Create(new CustodexAuthorizationOptions()));
 
-        resolver.TryResolve(Context("thing"), out _).ShouldBeFalse();
+        (await resolver.ResolveAsync(Context("thing"), CancellationToken.None)).ShouldBeNull();
     }
 }
