@@ -51,4 +51,9 @@ public sealed class CustodexAuthorizationOptions
     /// <see langword="false"/> (the default) it is logged and treated as a denial.
     /// </summary>
     public bool ThrowOnEvaluationError { get; set; }
+
+    /// <summary>
+    /// Tunes the DI-scoped in-process decision cache the handler consults around each engine check.
+    /// </summary>
+    public DecisionCacheOptions DecisionCache { get; } = new();
 }
