@@ -27,6 +27,7 @@ public static class ConformanceCorpus
         PrecedenceFlat(),
         ConditionAttributeGate(),
         ExclusionThroughArrow(),
+        StratifiedExclusionCyclicAncestry(),
         ConditionThroughArrow(),
         ConditionedExclusionTimestampWindow(),
     ];
@@ -413,6 +414,48 @@ public static class ConformanceCorpus
                 new ListObjectsExpectation("u3-blocked", U("u3"), "asset", "edit", []),
             ],
             [new ListSubjectsExpectation("unblocked-editors", Obj("asset", "a1"), "edit", [U("u1"), U("u2")])]);
+    }
+
+    private static ConformanceScenario StratifiedExclusionCyclicAncestry()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("folder", t => t
+                .Relation("flag", s => s.User())
+                .Relation("parent", s => s.Type("folder"))
+                .Permission("flagged", p => p.Relation("flag").Union(u => u.Arrow("parent", "flagged"))))
+            .Type("doc", t => t
+                .Relation("viewer", s => s.User())
+                .Relation("home", s => s.Type("folder"))
+                .Permission("view", p => p.Relation("viewer").Exclude(x => x.Arrow("home", "flagged"))))
+            .Build();
+
+        return new ConformanceScenario("stratified-exclusion-cyclic-ancestry", schema,
+            [
+                T("doc", "d1", "viewer", U("u1")),
+                T("doc", "d1", "viewer", U("u2")),
+                T("doc", "d2", "viewer", U("u1")),
+                T("doc", "d2", "viewer", U("u2")),
+                T("doc", "d1", "home", new SubjectRef("folder", "f1")),
+                T("doc", "d2", "home", new SubjectRef("folder", "f3")),
+                T("folder", "f1", "parent", new SubjectRef("folder", "f2")),
+                T("folder", "f2", "parent", new SubjectRef("folder", "f1")),
+                T("folder", "f3", "parent", new SubjectRef("folder", "f4")),
+                T("folder", "f4", "parent", new SubjectRef("folder", "f3")),
+                T("folder", "f4", "flag", U("u2")),
+            ],
+            [],
+            [
+                new CheckExpectation("clean-cycle", Obj("doc", "d1"), "view", U("u1"), true),
+                new CheckExpectation("clean-cycle-second-viewer", Obj("doc", "d1"), "view", U("u2"), true),
+                new CheckExpectation("flagged-through-cycle", Obj("doc", "d2"), "view", U("u2"), false),
+                new CheckExpectation("unflagged-viewer", Obj("doc", "d2"), "view", U("u1"), true),
+                new CheckExpectation("stranger", Obj("doc", "d1"), "view", U("u3"), false),
+            ],
+            [
+                new ListObjectsExpectation("u1-views", U("u1"), "doc", "view", ["d1", "d2"]),
+                new ListObjectsExpectation("u2-views", U("u2"), "doc", "view", ["d1"]),
+            ],
+            [new ListSubjectsExpectation("d2-viewers", Obj("doc", "d2"), "view", [U("u1")])]);
     }
 
     private static ConformanceScenario ConditionThroughArrow()
