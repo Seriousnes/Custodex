@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core;
+using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
 
@@ -43,12 +44,20 @@ public class UseSqliteTests(SqliteFixture fx) : IClassFixture<SqliteFixture>
     }
 
     [Fact]
-    public void UseSqlite_authorizer_is_the_engine_driven_path()
+    public void UseSqlite_authorizer_is_the_scoped_cache_over_the_engine_driven_path()
     {
         var services = new ServiceCollection();
         services.AddCustodex().UseSqlite(fx.ConnectionString);
-        var provider = services.BuildServiceProvider();
-        provider.GetRequiredService<IAuthorizer>().ShouldBeOfType<EngineDrivenAuthorizer>();
+
+        services.Where(d => d.ServiceType == typeof(IAuthorizer) && !d.IsKeyedService)
+            .ShouldHaveSingleItem()
+            .Lifetime.ShouldBe(ServiceLifetime.Scoped);
+
+        var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        using var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IAuthorizer>().ShouldBeOfType<ScopedCachingAuthorizer>();
+        provider.GetRequiredService<EngineDrivenAuthorizer>().ShouldNotBeNull();
     }
 
     [Fact]

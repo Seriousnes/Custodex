@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core;
+using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
 using Custodex.Storage.MySql.Managers;
@@ -88,6 +89,8 @@ public static class CustodexMySqlBuilderExtensions
             sp.GetRequiredService<IRelationStore>(),
             sp.GetRequiredService<IAttributeStore>(),
             sp.GetRequiredService<IConditionEvaluator>()));
+
+        s.AddCustodexDecisionCache();
 
         return builder;
     }

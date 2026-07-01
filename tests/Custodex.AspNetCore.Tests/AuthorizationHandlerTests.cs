@@ -44,11 +44,9 @@ public class AuthorizationHandlerTests
         ];
         var factory = new DefaultRequestContextFactory(new FakeTimeProvider(DateTimeOffset.UnixEpoch), []);
         var accessor = new HttpContextAccessor { HttpContext = http };
-        var decisionCache = new CustodexDecisionCache(
-            authorizer, schemaStore: null, cacheStore: null, opts, new FakeTimeProvider(DateTimeOffset.UnixEpoch));
 
         var handler = new CustodexAuthorizationHandler(
-            authorizer, decisionCache, subjectResolver, tenantResolver, objectResolvers, factory, accessor, opts,
+            authorizer, subjectResolver, tenantResolver, objectResolvers, factory, accessor, opts,
             NullLogger<CustodexAuthorizationHandler>.Instance);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(

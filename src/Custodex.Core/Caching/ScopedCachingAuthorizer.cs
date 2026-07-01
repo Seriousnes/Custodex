@@ -2,16 +2,25 @@ using System.Collections.Concurrent;
 
 using Custodex.Abstractions;
 
-using Microsoft.Extensions.Options;
+namespace Custodex.Core.Caching;
 
-namespace Custodex.AspNetCore;
-
-internal sealed class CustodexDecisionCache : ICustodexDecisionCache
+/// <summary>
+/// A DI-scoped <see cref="IAuthorizer"/> decorator that memoizes <see cref="CheckAsync"/> decisions for
+/// the lifetime of one scope (a Blazor circuit or an HTTP request), so every check, whether issued
+/// directly through <see cref="IAuthorizer"/> or through the ASP.NET Core authorization adapter, is
+/// reused across the burst a single render pass or request fires without ever leaking a decision across
+/// scopes. Soundness comes from stamping each entry with the <c>(schemaVersion, epoch)</c> it was
+/// computed under and validating that stamp against the current values on every read; an
+/// <see cref="CheckRequest.Explain"/> request always evaluates live. <see cref="BatchCheckAsync"/>,
+/// <see cref="ListObjectsAsync"/>, and <see cref="ListSubjectsAsync"/> delegate straight to the inner
+/// engine, uncached.
+/// </summary>
+public sealed class ScopedCachingAuthorizer : IAuthorizer, ICustodexScopedCache
 {
-    private readonly IAuthorizer _authorizer;
+    private readonly IAuthorizer _inner;
     private readonly ISchemaStore? _schemaStore;
     private readonly ICacheStore? _cacheStore;
-    private readonly DecisionCacheOptions _options;
+    private readonly CustodexCacheOptions _options;
     private readonly TimeProvider _time;
     private readonly bool _enabled;
 
@@ -19,17 +28,23 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
     private readonly Lock _snapshotGate = new();
     private readonly Dictionary<TenantContext, Snapshot> _snapshots = [];
 
-    public CustodexDecisionCache(
-        IAuthorizer authorizer,
+    /// <summary>Creates a scoped caching decorator over <paramref name="inner"/>.</summary>
+    /// <param name="inner">The engine the decorator caches. Every miss, and every uncached operation, is delegated to it.</param>
+    /// <param name="schemaStore">The active-schema source used to stamp and validate entries. When absent, the cache is disabled and every check evaluates live.</param>
+    /// <param name="cacheStore">The tenant-epoch source used to invalidate entries on cross-scope writes. When absent, the cache is disabled and every check evaluates live.</param>
+    /// <param name="options">The cache tuning. When <see cref="CustodexCacheOptions.Enabled"/> is <see langword="false"/> or <see cref="CustodexCacheOptions.Ttl"/> is not positive, the cache is disabled and every check evaluates live.</param>
+    /// <param name="time">The clock the bounded TTL and the snapshot-refresh interval are measured against, using its monotonic timestamp.</param>
+    public ScopedCachingAuthorizer(
+        IAuthorizer inner,
         ISchemaStore? schemaStore,
         ICacheStore? cacheStore,
-        IOptions<CustodexAuthorizationOptions> options,
+        CustodexCacheOptions options,
         TimeProvider time)
     {
-        _authorizer = authorizer;
+        _inner = inner;
         _schemaStore = schemaStore;
         _cacheStore = cacheStore;
-        _options = options.Value.DecisionCache;
+        _options = options;
         _time = time;
         _enabled = _options.Enabled
             && schemaStore is not null
@@ -37,21 +52,22 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
             && _options.Ttl > TimeSpan.Zero;
     }
 
+    /// <inheritdoc />
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
         if (!_enabled || request.Explain)
-            return await _authorizer.CheckAsync(request, ct);
+            return await _inner.CheckAsync(request, ct);
 
         var now = _time.GetTimestamp();
         var snapshot = await GetSnapshotAsync(request.Tenant, now, ct);
         if (snapshot is null)
-            return await _authorizer.CheckAsync(request, ct);
+            return await _inner.CheckAsync(request, ct);
 
         string? contextFingerprint = null;
         if (snapshot.ConditionCount > 0)
         {
             if (_options.Conditioned == ConditionedCaching.Skip)
-                return await _authorizer.CheckAsync(request, ct);
+                return await _inner.CheckAsync(request, ct);
             contextFingerprint = DecisionCacheKey.Fingerprint(request.Context);
         }
 
@@ -87,8 +103,22 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
         }
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<CheckResult>> BatchCheckAsync(BatchCheckRequest request, CancellationToken ct = default)
+        => _inner.BatchCheckAsync(request, ct);
+
+    /// <inheritdoc />
+    public Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
+        => _inner.ListObjectsAsync(request, ct);
+
+    /// <inheritdoc />
+    public Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
+        => _inner.ListSubjectsAsync(request, ct);
+
+    /// <inheritdoc />
     public void Clear() => _entries.Clear();
 
+    /// <inheritdoc />
     public void InvalidateSubject(SubjectRef subject)
     {
         foreach (var pair in _entries)
@@ -98,6 +128,7 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
         }
     }
 
+    /// <inheritdoc />
     public void InvalidateObject(EntityRef obj)
     {
         foreach (var pair in _entries)
@@ -121,7 +152,7 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
         CustodexDiagnostics.CacheMisses.Add(1);
         try
         {
-            return await _authorizer.CheckAsync(request, CancellationToken.None);
+            return await _inner.CheckAsync(request, CancellationToken.None);
         }
         catch
         {

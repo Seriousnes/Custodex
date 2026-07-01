@@ -3,7 +3,7 @@ using System.Text;
 
 using Custodex.Abstractions;
 
-namespace Custodex.AspNetCore;
+namespace Custodex.Core.Caching;
 
 internal static class DecisionCacheKey
 {

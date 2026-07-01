@@ -1,4 +1,4 @@
-namespace Custodex.AspNetCore;
+namespace Custodex.Core.Caching;
 
 /// <summary>
 /// How the scoped in-process decision cache treats decisions drawn from a schema that declares
@@ -18,13 +18,13 @@ public enum ConditionedCaching
 }
 
 /// <summary>
-/// Tunes the scoped in-process authorization-decision cache the ASP.NET Core adapter consults around
-/// <see cref="Custodex.Abstractions.IAuthorizer.CheckAsync"/>. The cache is sound by construction: every
-/// entry is stamped with the <c>(schemaVersion, epoch)</c> it was computed under and re-evaluated when
-/// either advances, so a cross-scope grant, deny, revocation, schema republish, or structural reach
+/// Tunes the scoped in-process authorization-decision cache the <c>ScopedCachingAuthorizer</c> applies
+/// around <see cref="Custodex.Abstractions.IAuthorizer.CheckAsync"/>. The cache is sound by construction:
+/// every entry is stamped with the <c>(schemaVersion, epoch)</c> it was computed under and re-evaluated
+/// when either advances, so a cross-scope grant, deny, revocation, schema republish, or structural reach
 /// change invalidates stale entries automatically.
 /// </summary>
-public sealed class DecisionCacheOptions
+public sealed class CustodexCacheOptions
 {
     /// <summary>Whether the decision cache is active. When <see langword="false"/>, every check evaluates live. Defaults to <see langword="true"/>.</summary>
     public bool Enabled { get; set; } = true;
@@ -52,8 +52,8 @@ public sealed class DecisionCacheOptions
     /// invalidated. <see cref="Ttl"/> is the hard ceiling on top of this window. A scope shorter-lived than
     /// the interval, such as an HTTP request, never outlives it. Defaults to five seconds. Zero re-reads
     /// the epoch and schema version on every check. For immediate same-scope invalidation after a known
-    /// write, call <see cref="ICustodexDecisionCache.InvalidateSubject"/>,
-    /// <see cref="ICustodexDecisionCache.InvalidateObject"/>, or <see cref="ICustodexDecisionCache.Clear"/>.
+    /// write, call <see cref="ICustodexScopedCache.InvalidateSubject"/>,
+    /// <see cref="ICustodexScopedCache.InvalidateObject"/>, or <see cref="ICustodexScopedCache.Clear"/>.
     /// </summary>
     public TimeSpan EpochRefreshInterval { get; set; } = TimeSpan.FromSeconds(5);
 }

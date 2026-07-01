@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core;
+using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
 using Custodex.Core.Evaluation;
 using Custodex.Storage.Sqlite.Managers;
@@ -89,6 +90,8 @@ public static class CustodexSqliteBuilderExtensions
             sp.GetRequiredService<SqliteAttributeStore>(),
             sp.GetRequiredService<IConditionEvaluator>()));
         s.TryAddSingleton<IAuthorizer>(sp => sp.GetRequiredService<EngineDrivenAuthorizer>());
+
+        s.AddCustodexDecisionCache();
 
         return builder;
     }

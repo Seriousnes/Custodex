@@ -1,16 +1,16 @@
 using Custodex.Abstractions;
+using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
 using Custodex.Storage.InMemory;
 using Custodex.TestKit;
 
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 using Shouldly;
 
-namespace Custodex.AspNetCore.Tests.Caching;
+namespace Custodex.Core.Tests.Caching;
 
-public class CustodexDecisionCacheTests
+public class ScopedCachingAuthorizerTests
 {
     private const string V1 = "v1";
     private const string V2 = "v2";
@@ -26,18 +26,18 @@ public class CustodexDecisionCacheTests
         public required InMemorySchemaStore SchemaStore { get; init; }
         public required InMemoryCacheStore CacheStore { get; init; }
         public required FakeTimeProvider Time { get; init; }
-        public required CustodexAuthorizationOptions Options { get; init; }
+        public required CustodexCacheOptions Options { get; init; }
         public required TenantContext Tenant { get; init; }
         public required EntityRef Object { get; init; }
         public required string Permission { get; init; }
         public required SubjectRef Subject { get; init; }
 
-        public CustodexDecisionCache NewCache(ISchemaStore? schema = null, ICacheStore? cache = null) =>
-            new(Authorizer, schema ?? SchemaStore, cache ?? CacheStore, Microsoft.Extensions.Options.Options.Create(Options), Time);
+        public ScopedCachingAuthorizer NewCache(ISchemaStore? schema = null, ICacheStore? cache = null) =>
+            new(Authorizer, schema ?? SchemaStore, cache ?? CacheStore, Options, Time);
 
         public CheckRequest Request(DateTimeOffset? now = null, IReadOnlyDictionary<string, object?>? attributes = null, bool explain = false)
         {
-            var context = new RequestContext(now ?? Time.GetUtcNow(), Subject, attributes ?? EmptyAttributes);
+            var context = new RequestContext(now ?? Time.GetUtcNow(), Subject, attributes ?? EmptyAttrs);
             return new CheckRequest(Tenant, Object, Permission, Subject, context, explain);
         }
 
@@ -54,21 +54,17 @@ public class CustodexDecisionCacheTests
             await SchemaStore.SetActiveAsync(Tenant.Store, schema, uow);
             await uow.CommitAsync();
         }
-
-        private static readonly IReadOnlyDictionary<string, object?> EmptyAttributes =
-            new Dictionary<string, object?>(StringComparer.Ordinal);
     }
 
     private static async Task<Harness> BuildAsync(
         Schema schema,
         bool allowed = true,
-        Action<DecisionCacheOptions>? configure = null,
+        Action<CustodexCacheOptions>? configure = null,
         Func<CheckRequest, CheckResult>? decide = null)
     {
         var world = TestWorld.New();
-        var options = new CustodexAuthorizationOptions { SubjectType = world.UserType };
-        options.DecisionCache.EpochRefreshInterval = TimeSpan.Zero;
-        configure?.Invoke(options.DecisionCache);
+        var options = new CustodexCacheOptions { EpochRefreshInterval = TimeSpan.Zero };
+        configure?.Invoke(options);
 
         var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch);
         var schemaStore = new InMemorySchemaStore();
@@ -92,7 +88,7 @@ public class CustodexDecisionCacheTests
     }
 
     private sealed record Manual(
-        CustodexDecisionCache Cache,
+        ScopedCachingAuthorizer Cache,
         CountingAuthorizer Authorizer,
         InMemoryCacheStore CacheStore,
         TenantContext Tenant,
@@ -101,13 +97,12 @@ public class CustodexDecisionCacheTests
     private static async Task<Manual> BuildManualAsync(
         ControllableTimeProvider time,
         Schema schema,
-        Action<DecisionCacheOptions> configure,
+        Action<CustodexCacheOptions> configure,
         Func<CheckRequest, CheckResult> decide)
     {
         var world = TestWorld.New();
-        var options = new CustodexAuthorizationOptions { SubjectType = world.UserType };
-        options.DecisionCache.EpochRefreshInterval = TimeSpan.Zero;
-        configure(options.DecisionCache);
+        var options = new CustodexCacheOptions { EpochRefreshInterval = TimeSpan.Zero };
+        configure(options);
 
         var schemaStore = new InMemorySchemaStore();
         var cacheStore = new InMemoryCacheStore(time);
@@ -116,8 +111,7 @@ public class CustodexDecisionCacheTests
         await uow.CommitAsync();
 
         var authorizer = new CountingAuthorizer(decide);
-        var cache = new CustodexDecisionCache(
-            authorizer, schemaStore, cacheStore, Microsoft.Extensions.Options.Options.Create(options), time);
+        var cache = new ScopedCachingAuthorizer(authorizer, schemaStore, cacheStore, options, time);
 
         var subject = world.User(world.SubjectId());
         var obj = new EntityRef(world.EntityType(), world.ObjectId());
@@ -128,7 +122,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit1_second_identical_check_is_served_from_cache()
+    public async Task Crit1_second_identical_direct_check_is_served_from_cache()
     {
         var h = await BuildAsync(Unconditioned());
         var cache = h.NewCache();
@@ -140,7 +134,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit2_distinct_scopes_do_not_share_cached_decisions()
+    public async Task Distinct_scopes_do_not_share_cached_decisions()
     {
         var h = await BuildAsync(Unconditioned());
         var scopeA = h.NewCache();
@@ -153,7 +147,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit3_epoch_bump_reinvokes_the_engine_and_serves_the_new_decision()
+    public async Task Crit3_epoch_bump_reinvokes_the_engine_and_serves_the_flipped_decision()
     {
         var allow = true;
         var h = await BuildAsync(Unconditioned(), decide: _ => new CheckResult(allow));
@@ -172,7 +166,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit3b_epoch_bump_is_masked_within_the_refresh_interval_and_observed_after_it()
+    public async Task Epoch_bump_is_masked_within_the_refresh_interval_and_observed_after_it()
     {
         var allow = true;
         var h = await BuildAsync(
@@ -198,7 +192,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit4_schema_version_change_invalidates_entries()
+    public async Task Schema_version_change_invalidates_entries()
     {
         var h = await BuildAsync(Unconditioned(V1));
         var cache = h.NewCache();
@@ -213,7 +207,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit5_conditioned_skip_evaluates_every_check_live()
+    public async Task Conditioned_skip_evaluates_every_check_live()
     {
         var h = await BuildAsync(Conditioned(), configure: o => o.Conditioned = ConditionedCaching.Skip);
         var cache = h.NewCache();
@@ -225,7 +219,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit5_conditioned_context_in_key_reuses_only_when_context_matches()
+    public async Task Conditioned_context_in_key_reuses_only_when_context_matches()
     {
         var h = await BuildAsync(Conditioned(), configure: o => o.Conditioned = ConditionedCaching.ContextInKey);
         var cache = h.NewCache();
@@ -240,7 +234,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit5_conditioned_context_in_key_varies_on_attributes()
+    public async Task Conditioned_context_in_key_varies_on_attributes()
     {
         var h = await BuildAsync(Conditioned(), configure: o => o.Conditioned = ConditionedCaching.ContextInKey);
         var cache = h.NewCache();
@@ -258,7 +252,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit6_ttl_expiry_forces_reevaluation()
+    public async Task Ttl_expiry_forces_reevaluation()
     {
         var h = await BuildAsync(Unconditioned(), configure: o => o.Ttl = TimeSpan.FromMinutes(2));
         var cache = h.NewCache();
@@ -334,7 +328,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit7_disabled_evaluates_every_check_live()
+    public async Task Disabled_evaluates_every_check_live()
     {
         var h = await BuildAsync(Unconditioned(), configure: o => o.Enabled = false);
         var cache = h.NewCache();
@@ -346,7 +340,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit8_concurrent_identical_checks_share_one_engine_call()
+    public async Task Concurrent_identical_checks_share_one_engine_call()
     {
         var gate = new TaskCompletionSource();
         var h = await BuildAsync(Unconditioned());
@@ -362,7 +356,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit8_write_during_inflight_compute_is_detected_on_the_next_read()
+    public async Task Write_during_inflight_compute_is_detected_on_the_next_read()
     {
         var gate = new TaskCompletionSource();
         var allow = true;
@@ -385,7 +379,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit8_a_faulting_engine_call_is_not_pinned()
+    public async Task A_faulting_engine_call_is_not_pinned()
     {
         var h = await BuildAsync(Unconditioned());
         h.Authorizer.ThrowOn = call => call == 1 ? new InvalidOperationException("boom") : null;
@@ -400,7 +394,7 @@ public class CustodexDecisionCacheTests
     }
 
     [Fact]
-    public async Task Crit9_explain_requests_bypass_the_cache()
+    public async Task Explain_requests_bypass_the_cache()
     {
         var h = await BuildAsync(Unconditioned());
         var cache = h.NewCache();
@@ -415,9 +409,7 @@ public class CustodexDecisionCacheTests
     public async Task Failsafe_without_stores_the_cache_is_disabled_and_every_check_is_live()
     {
         var h = await BuildAsync(Unconditioned());
-        var cache = new CustodexDecisionCache(
-            h.Authorizer, schemaStore: null, cacheStore: null,
-            Microsoft.Extensions.Options.Options.Create(h.Options), h.Time);
+        var cache = new ScopedCachingAuthorizer(h.Authorizer, schemaStore: null, cacheStore: null, h.Options, h.Time);
 
         await cache.CheckAsync(h.Request());
         await cache.CheckAsync(h.Request());
@@ -436,6 +428,21 @@ public class CustodexDecisionCacheTests
         await cache.CheckAsync(h.Request());
 
         h.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Batch_and_list_operations_delegate_straight_to_the_inner_engine()
+    {
+        var h = await BuildAsync(Unconditioned());
+        var cache = h.NewCache();
+
+        await cache.ListObjectsAsync(new ListObjectsRequest(
+            h.Tenant, h.Subject, h.Object.Type, h.Permission, new RequestContext(h.Time.GetUtcNow(), h.Subject, EmptyAttrs)));
+        await cache.ListObjectsAsync(new ListObjectsRequest(
+            h.Tenant, h.Subject, h.Object.Type, h.Permission, new RequestContext(h.Time.GetUtcNow(), h.Subject, EmptyAttrs)));
+
+        h.Authorizer.ListCalls.ShouldBe(2);
+        h.Authorizer.CheckCalls.ShouldBe(0);
     }
 
     [Fact]

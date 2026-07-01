@@ -28,35 +28,6 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void Registers_the_decision_cache_scoped()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<IAuthorizer>(new FakeAuthorizer(new CheckResult(true)));
-
-        services.AddCustodexAuthorization();
-
-        services.ShouldContain(d =>
-            d.ServiceType == typeof(ICustodexDecisionCache) && d.Lifetime == ServiceLifetime.Scoped);
-
-        using var scope = services.BuildServiceProvider().CreateScope();
-        scope.ServiceProvider.GetRequiredService<ICustodexDecisionCache>().ShouldBeOfType<CustodexDecisionCache>();
-    }
-
-    [Fact]
-    public void The_decision_cache_resolves_without_a_schema_or_cache_store()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<IAuthorizer>(new FakeAuthorizer(new CheckResult(true)));
-
-        services.AddCustodexAuthorization();
-
-        using var scope = services.BuildServiceProvider().CreateScope();
-        Should.NotThrow(() => scope.ServiceProvider.GetRequiredService<ICustodexDecisionCache>());
-    }
-
-    [Fact]
     public void Object_resolvers_register_in_priority_order()
     {
         var services = new ServiceCollection();

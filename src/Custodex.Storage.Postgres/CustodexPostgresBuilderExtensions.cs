@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core;
+using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
 using Custodex.Storage.Postgres.Managers;
 
@@ -83,6 +84,8 @@ public static class CustodexPostgresBuilderExtensions
             sp.GetRequiredService<NpgsqlAttributeStore>(),
             sp.GetRequiredService<IConditionEvaluator>()));
         s.TryAddSingleton<IAuthorizer>(sp => sp.GetRequiredService<NpgsqlCteAuthorizer>());
+
+        s.AddCustodexDecisionCache();
 
         return builder;
     }

@@ -1,4 +1,4 @@
-namespace Custodex.AspNetCore.Tests.Caching;
+namespace Custodex.Core.Tests.Caching;
 
 internal sealed class ControllableTimeProvider(DateTimeOffset start) : TimeProvider
 {
