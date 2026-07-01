@@ -64,7 +64,7 @@ Implement these to add a provider; the engine depends only on the interfaces:
 
 ### Exceptions
 
-Allow and deny are always a `CheckResult`, never an exception. The exceptions here signal caller or schema errors: `SchemaValidationException`, `UnknownTypeException`, `UnknownRelationException`, `UnknownPermissionException`, and `EvaluationLimitException` (a tripped depth or cycle guard).
+Allow and deny are always a `CheckResult`, never an exception. The exceptions here signal caller or schema errors: `SchemaValidationException`, `UnknownTypeException`, `UnknownRelationException`, `UnknownPermissionException`, `EvaluationLimitException` (a tripped depth or cycle guard), and `ExclusionCycleException` (a permission that re-entered itself through an exclusion, which has no sound decision).
 
 ## License
 

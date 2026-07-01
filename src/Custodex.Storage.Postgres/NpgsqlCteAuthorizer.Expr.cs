@@ -52,7 +52,9 @@ public sealed partial class NpgsqlCteAuthorizer
                 var children = explain is null ? null : new List<ExplainNode>();
                 var left = await EvalExprAsync(conn, index, tenant, obj, e.Left, subject, context, ctx, children, ct);
                 if (!left && explain is null) return false;
-                var right = await EvalExprAsync(conn, index, tenant, obj, e.Right, subject, context, ctx, children, ct);
+                bool right;
+                using (ctx.EnterNegation())
+                    right = await EvalExprAsync(conn, index, tenant, obj, e.Right, subject, context, ctx, children, ct);
                 var result = left && !right;
                 explain?.Add(new ExplainNode("exclude (-)", result, children!));
                 return result;

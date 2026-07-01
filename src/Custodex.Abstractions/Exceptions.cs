@@ -46,3 +46,11 @@ public sealed class UnknownPermissionException(string type, string permission)
 /// <summary>Thrown when evaluation exceeds a safety limit, such as the recursion-depth bound.</summary>
 /// <param name="detail">A description of the limit that was reached.</param>
 public sealed class EvaluationLimitException(string detail) : Exception(detail);
+
+/// <summary>
+/// Thrown when evaluation re-enters a permission it is already deciding after crossing an
+/// exclusion (<c>-</c>). Such a cycle has no sound answer, so evaluation refuses to decide
+/// rather than fail open; schema validation rejects schemas that can reach this state.
+/// </summary>
+/// <param name="detail">A description of the cycle that was detected.</param>
+public sealed class ExclusionCycleException(string detail) : Exception(detail);

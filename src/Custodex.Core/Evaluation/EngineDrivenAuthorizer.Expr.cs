@@ -50,7 +50,9 @@ public sealed partial class EngineDrivenAuthorizer
                 var children = explain is null ? null : new List<ExplainNode>();
                 var left = await EvalExprAsync(index, tenant, obj, e.Left, subject, context, ctx, children, ct);
                 if (!left && explain is null) { return false; }
-                var right = await EvalExprAsync(index, tenant, obj, e.Right, subject, context, ctx, children, ct);
+                bool right;
+                using (ctx.EnterNegation())
+                    right = await EvalExprAsync(index, tenant, obj, e.Right, subject, context, ctx, children, ct);
 
                 bool result;
                 if (ctx.StructuralMarking && index.HasConditions)
