@@ -6,7 +6,8 @@ namespace Custodex.Core.Validation;
 /// Validates a schema before it is activated. Checks that names resolve and are unique, that
 /// permission expressions reference declared relations, permissions, conditions, and arrow
 /// targets, that condition bodies are well-typed, and that no permission depends on itself
-/// through a non-terminating cycle.
+/// through a non-terminating cycle or through an exclusion (<c>-</c>), which would have no
+/// sound evaluation.
 /// </summary>
 public static class SchemaValidator
 {
@@ -30,7 +31,10 @@ public static class SchemaValidator
         }
 
         if (errors.Count == 0)
+        {
             DetectCycles(schema, types, errors);
+            DetectNonStratifiedExclusions(schema, types, errors);
+        }
 
         return new SchemaValidationResult(errors.Count == 0, errors);
     }
@@ -198,6 +202,100 @@ public static class SchemaValidator
         var perm = type.Permissions.First(p => string.Equals(p.Name, node.Perm, StringComparison.Ordinal));
         foreach (var edge in ExprEdges(type, perm.Expression, types))
             yield return edge;
+    }
+
+    private static void DetectNonStratifiedExclusions(
+        Schema schema,
+        IReadOnlyDictionary<string, EntityTypeDef> types,
+        List<string> errors)
+    {
+        var edges = new HashSet<(string FromType, string FromPerm, string ToType, string ToPerm, bool Negated)>();
+        foreach (var type in schema.Types)
+            foreach (var perm in type.Permissions)
+                CollectPolarityEdges(type, perm.Name, perm.Expression, negated: false, types, edges);
+
+        var adjacency = new Dictionary<(string Type, string Perm), List<(string Type, string Perm)>>();
+        foreach (var (fromType, fromPerm, toType, toPerm, _) in edges)
+        {
+            if (!adjacency.TryGetValue((fromType, fromPerm), out var next))
+                adjacency[(fromType, fromPerm)] = next = [];
+            next.Add((toType, toPerm));
+        }
+
+        foreach (var (fromType, fromPerm, toType, toPerm, negated) in edges)
+        {
+            if (!negated) continue;
+            if (Reaches((toType, toPerm), (fromType, fromPerm), adjacency))
+                errors.Add($"Permission '{fromType}.{fromPerm}' depends on itself through an " +
+                           $"exclusion of '{toType}.{toPerm}'.");
+        }
+    }
+
+    private static void CollectPolarityEdges(
+        EntityTypeDef type, string permission, PermExpr expr, bool negated,
+        IReadOnlyDictionary<string, EntityTypeDef> types,
+        HashSet<(string FromType, string FromPerm, string ToType, string ToPerm, bool Negated)> edges)
+    {
+        switch (expr)
+        {
+            case RelationRef r when !HasRelation(type, r.Relation) && HasPermission(type, r.Relation):
+                edges.Add((type.Name, permission, type.Name, r.Relation, negated));
+                break;
+            case RelationRef:
+                break;
+            case Union u:
+                CollectPolarityEdges(type, permission, u.Left, negated, types, edges);
+                CollectPolarityEdges(type, permission, u.Right, negated, types, edges);
+                break;
+            case Intersect i:
+                CollectPolarityEdges(type, permission, i.Left, negated, types, edges);
+                CollectPolarityEdges(type, permission, i.Right, negated, types, edges);
+                break;
+            case Exclude x:
+                CollectPolarityEdges(type, permission, x.Left, negated, types, edges);
+                CollectPolarityEdges(type, permission, x.Right, negated: true, types, edges);
+                break;
+            case Conditioned c:
+                CollectPolarityEdges(type, permission, c.Inner, negated, types, edges);
+                break;
+            case Arrow a:
+            {
+                var relation = type.Relations.FirstOrDefault(r =>
+                    string.Equals(r.Name, a.Relation, StringComparison.Ordinal));
+                if (relation is null)
+                    break;
+                foreach (var filler in relation.AllowedSubjects)
+                    if (types.TryGetValue(filler.Type, out var target) && HasPermission(target, a.Permission))
+                        edges.Add((type.Name, permission, filler.Type, a.Permission, negated));
+                break;
+            }
+        }
+    }
+
+    private static bool Reaches(
+        (string Type, string Perm) from,
+        (string Type, string Perm) target,
+        IReadOnlyDictionary<(string Type, string Perm), List<(string Type, string Perm)>> adjacency)
+    {
+        if (from == target)
+            return true;
+        var visited = new HashSet<(string Type, string Perm)> { from };
+        var pending = new Stack<(string Type, string Perm)>();
+        pending.Push(from);
+        while (pending.Count > 0)
+        {
+            var node = pending.Pop();
+            if (!adjacency.TryGetValue(node, out var next))
+                continue;
+            foreach (var n in next)
+            {
+                if (n == target)
+                    return true;
+                if (visited.Add(n))
+                    pending.Push(n);
+            }
+        }
+        return false;
     }
 
     private static IEnumerable<(string Type, string Perm)> ExprEdges(
