@@ -91,6 +91,42 @@ public class CustodexDecisionCacheTests
         return harness;
     }
 
+    private sealed record Manual(
+        CustodexDecisionCache Cache,
+        CountingAuthorizer Authorizer,
+        InMemoryCacheStore CacheStore,
+        TenantContext Tenant,
+        CheckRequest Request);
+
+    private static async Task<Manual> BuildManualAsync(
+        ControllableTimeProvider time,
+        Schema schema,
+        Action<DecisionCacheOptions> configure,
+        Func<CheckRequest, CheckResult> decide)
+    {
+        var world = TestWorld.New();
+        var options = new CustodexAuthorizationOptions { SubjectType = world.UserType };
+        options.DecisionCache.EpochRefreshInterval = TimeSpan.Zero;
+        configure(options.DecisionCache);
+
+        var schemaStore = new InMemorySchemaStore();
+        var cacheStore = new InMemoryCacheStore(time);
+        var uow = new NoOpUnitOfWork();
+        await schemaStore.SetActiveAsync(world.Tenant.Store, schema, uow);
+        await uow.CommitAsync();
+
+        var authorizer = new CountingAuthorizer(decide);
+        var cache = new CustodexDecisionCache(
+            authorizer, schemaStore, cacheStore, Microsoft.Extensions.Options.Options.Create(options), time);
+
+        var subject = world.User(world.SubjectId());
+        var obj = new EntityRef(world.EntityType(), world.ObjectId());
+        var request = new CheckRequest(
+            world.Tenant, obj, world.Permission(), subject, new RequestContext(time.GetUtcNow(), subject, EmptyAttrs));
+
+        return new Manual(cache, authorizer, cacheStore, world.Tenant, request);
+    }
+
     [Fact]
     public async Task Crit1_second_identical_check_is_served_from_cache()
     {
@@ -234,6 +270,67 @@ public class CustodexDecisionCacheTests
 
         await cache.CheckAsync(h.Request());
         h.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Ttl_of_zero_disables_the_cache_and_every_check_is_a_live_engine_call()
+    {
+        var h = await BuildAsync(Unconditioned(), configure: o => o.Ttl = TimeSpan.Zero);
+        var cache = h.NewCache();
+
+        var first = await cache.CheckAsync(h.Request());
+        var second = await cache.CheckAsync(h.Request());
+
+        first.Allowed.ShouldBeTrue();
+        second.Allowed.ShouldBeTrue();
+        h.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Ttl_is_measured_monotonically_a_backward_wall_clock_does_not_extend_an_entry()
+    {
+        var time = new ControllableTimeProvider(DateTimeOffset.UnixEpoch);
+        var m = await BuildManualAsync(time, Unconditioned(), o => o.Ttl = TimeSpan.FromMinutes(2), _ => new CheckResult(true));
+
+        await m.Cache.CheckAsync(m.Request);
+        m.Authorizer.CheckCalls.ShouldBe(1);
+
+        time.SetUtcNow(DateTimeOffset.UnixEpoch.AddHours(-1));
+        time.AdvanceTimestamp(TimeSpan.FromMinutes(3));
+
+        await m.Cache.CheckAsync(m.Request);
+        m.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Epoch_refresh_is_measured_monotonically_a_backward_wall_clock_does_not_freeze_it()
+    {
+        var time = new ControllableTimeProvider(DateTimeOffset.UnixEpoch);
+        var allow = true;
+        var m = await BuildManualAsync(
+            time,
+            Unconditioned(),
+            o =>
+            {
+                o.EpochRefreshInterval = TimeSpan.FromSeconds(5);
+                o.Ttl = TimeSpan.FromMinutes(2);
+            },
+            _ => new CheckResult(allow));
+
+        (await m.Cache.CheckAsync(m.Request)).Allowed.ShouldBeTrue();
+        m.Authorizer.CheckCalls.ShouldBe(1);
+
+        allow = false;
+        var uow = new NoOpUnitOfWork();
+        await m.CacheStore.BumpEpochAsync(m.Tenant, uow);
+        await uow.CommitAsync();
+
+        time.SetUtcNow(DateTimeOffset.UnixEpoch.AddHours(-1));
+        time.AdvanceTimestamp(TimeSpan.FromSeconds(6));
+
+        var afterRefresh = await m.Cache.CheckAsync(m.Request);
+        m.Authorizer.CheckCalls.ShouldBe(2);
+        afterRefresh.Allowed.ShouldBeFalse();
     }
 
     [Fact]

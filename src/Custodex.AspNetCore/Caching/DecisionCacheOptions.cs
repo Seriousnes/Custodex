@@ -30,8 +30,10 @@ public sealed class DecisionCacheOptions
     public bool Enabled { get; set; } = true;
 
     /// <summary>
-    /// A hard staleness ceiling on every cached entry, on top of epoch and schema-version validation.
-    /// Defaults to two minutes.
+    /// A hard staleness ceiling on every cached entry, on top of epoch and schema-version validation,
+    /// measured against a monotonic clock so it holds regardless of wall-clock adjustments. Defaults to
+    /// two minutes. A value of <see cref="TimeSpan.Zero"/> or less disables the cache, so every check
+    /// evaluates live.
     /// </summary>
     public TimeSpan Ttl { get; set; } = TimeSpan.FromMinutes(2);
 
@@ -41,11 +43,17 @@ public sealed class DecisionCacheOptions
     /// <summary>
     /// How long the per-scope snapshot of the active schema version and the tenant epoch is reused before
     /// it is refreshed from <see cref="Custodex.Abstractions.ISchemaStore"/> and
-    /// <see cref="Custodex.Abstractions.ICacheStore"/>. This throttles store reads to roughly one per
-    /// interval per tenant so a render burst does not fan out a round-trip per check. It also bounds the
-    /// window in which a write in another scope can go unobserved within one long-lived scope (for example
-    /// a Blazor circuit) to at most this interval; a shorter-lived scope such as an HTTP request never
-    /// outlives it. Defaults to five seconds. Zero refreshes on every check.
+    /// <see cref="Custodex.Abstractions.ICacheStore"/>, measured against a monotonic clock. This throttles
+    /// store reads to roughly one per interval per tenant so a render burst does not fan out a round-trip
+    /// per check. Because the tenant epoch is only re-read once per interval, it also bounds how long a
+    /// write can go unobserved to at most this interval: both a write in another scope and a write in this
+    /// same scope (for example an admin who revokes a permission and re-checks within the same Blazor
+    /// circuit) can see a stale decision for up to this interval before the epoch is re-read and the entry
+    /// invalidated. <see cref="Ttl"/> is the hard ceiling on top of this window. A scope shorter-lived than
+    /// the interval, such as an HTTP request, never outlives it. Defaults to five seconds. Zero re-reads
+    /// the epoch and schema version on every check. For immediate same-scope invalidation after a known
+    /// write, call <see cref="ICustodexDecisionCache.InvalidateSubject"/>,
+    /// <see cref="ICustodexDecisionCache.InvalidateObject"/>, or <see cref="ICustodexDecisionCache.Clear"/>.
     /// </summary>
     public TimeSpan EpochRefreshInterval { get; set; } = TimeSpan.FromSeconds(5);
 }

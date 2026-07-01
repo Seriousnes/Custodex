@@ -14,8 +14,6 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
     private readonly DecisionCacheOptions _options;
     private readonly TimeProvider _time;
     private readonly bool _enabled;
-    private readonly long _ttlTicks;
-    private readonly long _refreshTicks;
 
     private readonly ConcurrentDictionary<string, CacheSlot> _entries = new(StringComparer.Ordinal);
     private readonly Lock _snapshotGate = new();
@@ -33,9 +31,10 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
         _cacheStore = cacheStore;
         _options = options.Value.DecisionCache;
         _time = time;
-        _enabled = _options.Enabled && schemaStore is not null && cacheStore is not null;
-        _ttlTicks = _options.Ttl.Ticks;
-        _refreshTicks = _options.EpochRefreshInterval.Ticks;
+        _enabled = _options.Enabled
+            && schemaStore is not null
+            && cacheStore is not null
+            && _options.Ttl > TimeSpan.Zero;
     }
 
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
@@ -43,7 +42,8 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
         if (!_enabled || request.Explain)
             return await _authorizer.CheckAsync(request, ct);
 
-        var snapshot = await GetSnapshotAsync(request.Tenant, ct);
+        var now = _time.GetTimestamp();
+        var snapshot = await GetSnapshotAsync(request.Tenant, now, ct);
         if (snapshot is null)
             return await _authorizer.CheckAsync(request, ct);
 
@@ -57,12 +57,11 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
 
         var key = DecisionCacheKey.Build(
             request.Tenant, snapshot.SchemaVersion, request.Object, request.Permission, request.Subject, contextFingerprint);
-        var nowTicks = _time.GetUtcNow().UtcTicks;
 
         while (true)
         {
-            var slot = _entries.GetOrAdd(key, _ => NewSlot(request, snapshot, key, nowTicks));
-            if (IsFresh(slot, snapshot, nowTicks))
+            var slot = _entries.GetOrAdd(key, _ => NewSlot(request, snapshot, key, now));
+            if (IsFresh(slot, snapshot, now))
             {
                 var joined = slot.Work.IsValueCreated;
                 try
@@ -108,11 +107,11 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
         }
     }
 
-    private CacheSlot NewSlot(CheckRequest request, Snapshot snapshot, string key, long nowTicks) =>
+    private CacheSlot NewSlot(CheckRequest request, Snapshot snapshot, string key, long createdTimestamp) =>
         new(
             snapshot.SchemaVersion,
             snapshot.Epoch,
-            nowTicks + _ttlTicks,
+            createdTimestamp,
             request.Object,
             request.Subject,
             new Lazy<Task<CheckResult>>(() => EvaluateAsync(request, key), LazyThreadSafetyMode.ExecutionAndPublication));
@@ -131,17 +130,17 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
         }
     }
 
-    private static bool IsFresh(CacheSlot slot, Snapshot snapshot, long nowTicks) =>
+    private bool IsFresh(CacheSlot slot, Snapshot snapshot, long now) =>
         slot.SchemaVersion == snapshot.SchemaVersion
             && slot.Epoch >= snapshot.Epoch
-            && nowTicks < slot.ExpiresAtTicks;
+            && _time.GetElapsedTime(slot.CreatedTimestamp, now) < _options.Ttl;
 
-    private async Task<Snapshot?> GetSnapshotAsync(TenantContext tenant, CancellationToken ct)
+    private async Task<Snapshot?> GetSnapshotAsync(TenantContext tenant, long now, CancellationToken ct)
     {
-        var nowTicks = _time.GetUtcNow().UtcTicks;
         lock (_snapshotGate)
         {
-            if (_snapshots.TryGetValue(tenant, out var cached) && nowTicks - cached.RefreshedAtTicks < _refreshTicks)
+            if (_snapshots.TryGetValue(tenant, out var cached)
+                && _time.GetElapsedTime(cached.RefreshedTimestamp, now) < _options.EpochRefreshInterval)
                 return cached;
         }
 
@@ -150,23 +149,23 @@ internal sealed class CustodexDecisionCache : ICustodexDecisionCache
             return null;
 
         var epoch = await _cacheStore!.GetEpochAsync(tenant, ct);
-        var snapshot = new Snapshot(schema.Version, schema.Conditions.Count, epoch, nowTicks);
+        var snapshot = new Snapshot(schema.Version, schema.Conditions.Count, epoch, now);
         lock (_snapshotGate)
             _snapshots[tenant] = snapshot;
         return snapshot;
     }
 
-    private sealed record Snapshot(string SchemaVersion, int ConditionCount, long Epoch, long RefreshedAtTicks);
+    private sealed record Snapshot(string SchemaVersion, int ConditionCount, long Epoch, long RefreshedTimestamp);
 
     private sealed class CacheSlot(
-        string schemaVersion, long epoch, long expiresAtTicks, EntityRef obj, SubjectRef subject,
+        string schemaVersion, long epoch, long createdTimestamp, EntityRef obj, SubjectRef subject,
         Lazy<Task<CheckResult>> work)
     {
         public string SchemaVersion { get; } = schemaVersion;
 
         public long Epoch { get; } = epoch;
 
-        public long ExpiresAtTicks { get; } = expiresAtTicks;
+        public long CreatedTimestamp { get; } = createdTimestamp;
 
         public EntityRef Object { get; } = obj;
 
