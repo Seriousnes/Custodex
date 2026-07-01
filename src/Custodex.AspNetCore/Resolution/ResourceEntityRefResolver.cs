@@ -4,15 +4,6 @@ namespace Custodex.AspNetCore;
 
 internal sealed class ResourceEntityRefResolver : ICustodexObjectResolver
 {
-    public bool TryResolve(CustodexResolutionContext context, out EntityRef entity)
-    {
-        if (context.Resource is EntityRef e)
-        {
-            entity = e;
-            return true;
-        }
-
-        entity = default;
-        return false;
-    }
+    public ValueTask<EntityRef?> ResolveAsync(CustodexResolutionContext context, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<EntityRef?>(context.Resource is EntityRef e ? e : null);
 }

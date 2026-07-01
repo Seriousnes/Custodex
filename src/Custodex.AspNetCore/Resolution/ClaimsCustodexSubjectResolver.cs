@@ -8,14 +8,11 @@ namespace Custodex.AspNetCore;
 
 internal sealed class ClaimsCustodexSubjectResolver(IOptions<CustodexAuthorizationOptions> options) : ICustodexSubjectResolver
 {
-    public bool TryResolve(ClaimsPrincipal user, out SubjectRef subject)
+    public ValueTask<SubjectRef?> ResolveAsync(ClaimsPrincipal user, CancellationToken cancellationToken)
     {
-        subject = default;
         var id = user.FindFirstValue(options.Value.SubjectIdClaim);
-        if (string.IsNullOrEmpty(id))
-            return false;
-
-        subject = new SubjectRef(options.Value.SubjectType, id);
-        return true;
+        return string.IsNullOrEmpty(id)
+            ? ValueTask.FromResult<SubjectRef?>(null)
+            : ValueTask.FromResult<SubjectRef?>(new SubjectRef(options.Value.SubjectType, id));
     }
 }

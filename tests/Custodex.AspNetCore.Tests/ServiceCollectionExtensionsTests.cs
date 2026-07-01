@@ -92,10 +92,7 @@ public class ServiceCollectionExtensionsTests
 
     private sealed class OverrideSubjectResolver : ICustodexSubjectResolver
     {
-        public bool TryResolve(System.Security.Claims.ClaimsPrincipal user, out SubjectRef subject)
-        {
-            subject = default;
-            return false;
-        }
+        public ValueTask<SubjectRef?> ResolveAsync(System.Security.Claims.ClaimsPrincipal user, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<SubjectRef?>(null);
     }
 }
