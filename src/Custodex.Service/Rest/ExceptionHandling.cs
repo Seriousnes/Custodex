@@ -11,7 +11,7 @@ public static partial class RestEndpoints
     /// <summary>
     /// Registers an exception handler that converts engine exceptions to HTTP problem details.
     /// Caller-bug exceptions (unknown type/relation/permission, schema validation) map to 400;
-    /// evaluation limit to 422; all others to 500.
+    /// evaluation limit and exclusion cycle to 422; all others to 500.
     /// </summary>
     public static WebApplication UseCustodexProblemDetails(this WebApplication app)
     {
@@ -32,6 +32,7 @@ public static partial class RestEndpoints
                     SchemaValidationException => (400, "Schema validation failed."),
                     System.Text.Json.JsonException => (400, "Malformed JSON in request body."),
                     EvaluationLimitException => (422, "Evaluation limit exceeded."),
+                    ExclusionCycleException => (422, "Permission cycle through an exclusion."),
                     _ => (500, "An unexpected error occurred."),
                 };
 

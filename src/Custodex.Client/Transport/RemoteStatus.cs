@@ -47,6 +47,8 @@ public static class RemoteStatus
                         .Select(e => e.Value)]),
             "evaluation_limit" =>
                 new EvaluationLimitException(ex.Trailers.GetValue("custodex-error-detail") ?? ex.Message),
+            "exclusion_cycle" =>
+                new ExclusionCycleException(ex.Trailers.GetValue("custodex-error-detail") ?? ex.Message),
             _ => ex,
         };
     }

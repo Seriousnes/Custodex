@@ -120,7 +120,7 @@ else
             if (_schema is not null)
                 _diagram = BuildDiagram(_schema);
         }
-        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException)
+        catch (Exception ex) when (ex is UnknownTypeException or UnknownRelationException or UnknownPermissionException or SchemaValidationException or EvaluationLimitException or ExclusionCycleException)
         {
             _errorMessage = ex.Message;
         }
