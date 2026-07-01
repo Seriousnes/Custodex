@@ -5,6 +5,7 @@ using Bunit;
 using Custodex.Abstractions;
 using Custodex.AspNetCore;
 using Custodex.Blazor;
+using Custodex.Core.Caching;
 using Custodex.Storage.InMemory;
 using Custodex.TestKit;
 
@@ -37,6 +38,7 @@ public class CustodexAuthorizeViewCachingTests
         ctx.Services.AddSingleton<ISchemaStore>(schemaStore);
         ctx.Services.AddSingleton<ICacheStore>(new InMemoryCacheStore());
         ctx.Services.AddLogging();
+        ctx.Services.AddCustodexDecisionCache();
         ctx.Services.AddCustodexAuthorization(o => o.SubjectType = world.UserType);
         ctx.Services.AddTransient<IAuthorizationService, DefaultAuthorizationService>();
 
