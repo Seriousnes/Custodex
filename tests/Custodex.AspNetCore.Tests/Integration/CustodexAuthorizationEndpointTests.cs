@@ -48,6 +48,7 @@ public class CustodexAuthorizationEndpointTests
             TestWorld.Tuple(objType, grantedObjectId, view, world.User(grantedSubjectId)));
 
         var policy = $"custodex:{objType}:{view}";
+        var anyPolicy = $"custodex:any:{objType}:{view}";
 
         var host = await new HostBuilder()
             .ConfigureWebHost(web => web
@@ -72,6 +73,7 @@ public class CustodexAuthorizationEndpointTests
                         endpoints.MapGet("/widgets/{slug}", () => Results.Ok())
                             .RequireAuthorization(policy)
                             .WithCustodexObject(routeKey: "slug", type: objType);
+                        endpoints.MapGet("/any-things", () => Results.Ok()).RequireAuthorization(anyPolicy);
                     });
                 }))
             .StartAsync();
@@ -131,6 +133,39 @@ public class CustodexAuthorizationEndpointTests
         var client = f.Host.GetTestClient();
 
         var response = await client.SendAsync(Request($"/things/{f.GrantedObjectId}", subject: null, f.World));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Any_object_granted_subject_gets_200()
+    {
+        using var f = await StartAsync();
+        var client = f.Host.GetTestClient();
+
+        var response = await client.SendAsync(Request("/any-things", f.GrantedSubjectId, f.World));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Any_object_ungranted_subject_gets_403()
+    {
+        using var f = await StartAsync();
+        var client = f.Host.GetTestClient();
+
+        var response = await client.SendAsync(Request("/any-things", f.World.SubjectId(), f.World));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Any_object_anonymous_request_gets_401()
+    {
+        using var f = await StartAsync();
+        var client = f.Host.GetTestClient();
+
+        var response = await client.SendAsync(Request("/any-things", subject: null, f.World));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }

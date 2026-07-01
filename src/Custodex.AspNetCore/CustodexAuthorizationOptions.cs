@@ -17,6 +17,13 @@ public sealed class CustodexAuthorizationOptions
     /// <summary>The separator between policy-name segments. Defaults to <c>:</c>.</summary>
     public string PolicySeparator { get; set; } = ":";
 
+    /// <summary>
+    /// The segment that marks the any-object (exists) form <c>{prefix}:{any}:{type}:{permission}</c>,
+    /// which authorizes when the subject holds the permission on at least one object of the type.
+    /// Defaults to <c>any</c>.
+    /// </summary>
+    public string AnyObjectSegment { get; set; } = "any";
+
     /// <summary>The subject entity type used for every resolved subject. Defaults to <c>user</c>.</summary>
     public string SubjectType { get; set; } = "user";
 

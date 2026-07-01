@@ -106,6 +106,49 @@ public class ListObjectsTests
     }
 
     [Fact]
+    public async Task PageSize_one_answers_existence_when_no_object_grants_access()
+    {
+        var subject = _world.SubjectId();
+        var auth = await NewAsync();
+
+        var page = await auth.ListObjectsAsync(Req(subject, pageSize: 1));
+
+        page.ObjectIds.Count.ShouldBe(0);
+        page.ContinuationToken.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PageSize_one_answers_existence_when_exactly_one_object_grants_access()
+    {
+        var subject = _world.SubjectId();
+        var only = _world.ObjectId();
+        var auth = await NewAsync(
+            Tuple(_objType, only, _editor, _world.User(subject)));
+
+        var page = await auth.ListObjectsAsync(Req(subject, pageSize: 1));
+
+        page.ObjectIds.Count.ShouldBe(1);
+        page.ObjectIds.ShouldBe([only]);
+        page.ContinuationToken.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PageSize_one_answers_existence_and_truncates_when_many_objects_grant_access()
+    {
+        var anyone = _world.SubjectId();
+        var ids = _sortedIds.Take(3).ToArray();
+        var auth = await NewAsync(
+            Tuple(_objType, ids[0], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[1], _editor, new SubjectRef(_world.UserType, "*")),
+            Tuple(_objType, ids[2], _editor, new SubjectRef(_world.UserType, "*")));
+
+        var page = await auth.ListObjectsAsync(Req(anyone, pageSize: 1));
+
+        page.ObjectIds.Count.ShouldBe(1);
+        page.ContinuationToken.ShouldNotBeNull();
+    }
+
+    [Fact]
     public async Task Pages_do_not_overlap_or_drop_across_the_full_range()
     {
         var anyone = _world.SubjectId();

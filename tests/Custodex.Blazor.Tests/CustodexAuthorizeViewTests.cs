@@ -34,7 +34,7 @@ public class CustodexAuthorizeViewTests
     }
 
     private static Scenario Arrange(TestWorld world, CheckResult result,
-        Action<CustodexAuthorizationOptions>? configure = null)
+        Action<CustodexAuthorizationOptions>? configure = null, ListObjectsResult? listResult = null)
     {
         var objType = world.EntityType();
         var objId = world.ObjectId();
@@ -42,7 +42,7 @@ public class CustodexAuthorizeViewTests
         var subjectId = world.SubjectId();
 
         var ctx = new BunitContext();
-        var authorizer = new RecordingAuthorizer(result);
+        var authorizer = new RecordingAuthorizer(result, listResult);
         ctx.Services.AddSingleton<IAuthorizer>(authorizer);
         ctx.Services.AddLogging();
         ctx.Services.AddCustodexAuthorization(o =>
@@ -157,5 +157,75 @@ public class CustodexAuthorizeViewTests
         cut.WaitForAssertion(() => cut.FindAll("#ok").ShouldNotBeEmpty());
         s.Authorizer.Last.ShouldNotBeNull();
         s.Authorizer.Last!.Permission.ShouldBe(s.Permission);
+    }
+
+    private static IRenderedComponent<IComponent> RenderAnyView(Scenario s, Task<AuthenticationState> authState) =>
+        s.Context.Render(builder =>
+        {
+            builder.OpenComponent<CascadingValue<Task<AuthenticationState>>>(0);
+            builder.AddAttribute(1, nameof(CascadingValue<Task<AuthenticationState>>.Value), authState);
+            builder.AddAttribute(2, nameof(CascadingValue<Task<AuthenticationState>>.IsFixed), true);
+            builder.AddAttribute(3, nameof(CascadingValue<Task<AuthenticationState>>.ChildContent), (RenderFragment)(inner =>
+            {
+                inner.OpenComponent<CustodexAuthorizeView>(0);
+                inner.AddAttribute(1, nameof(CustodexAuthorizeView.Any), true);
+                inner.AddAttribute(2, nameof(CustodexAuthorizeView.ObjectType), s.ObjType);
+                inner.AddAttribute(3, nameof(CustodexAuthorizeView.Permission), s.Permission);
+                inner.AddAttribute(4, nameof(CustodexAuthorizeView.Authorized),
+                    (RenderFragment<AuthenticationState>)(_ => mb => mb.AddMarkupContent(0, "<span id=\"ok\">granted</span>")));
+                inner.AddAttribute(5, nameof(CustodexAuthorizeView.NotAuthorized),
+                    (RenderFragment<AuthenticationState>)(_ => mb => mb.AddMarkupContent(0, "<span id=\"no\">denied</span>")));
+                inner.CloseComponent();
+            }));
+            builder.CloseComponent();
+        });
+
+    [Fact]
+    public void Any_authorized_renders_authorized_via_list_with_page_size_one()
+    {
+        var world = TestWorld.New();
+        using var s = Arrange(world, new CheckResult(false), listResult: new ListObjectsResult([world.ObjectId()], null));
+
+        var cut = RenderAnyView(s, AuthState(s));
+
+        cut.WaitForAssertion(() => cut.FindAll("#ok").ShouldNotBeEmpty());
+        s.Authorizer.LastList.ShouldNotBeNull();
+        s.Authorizer.LastList!.PageSize.ShouldBe(1);
+        s.Authorizer.LastList.ObjectType.ShouldBe(s.ObjType);
+        s.Authorizer.LastList.Permission.ShouldBe(s.Permission);
+        s.Authorizer.LastList.Subject.Id.ShouldBe(s.SubjectId);
+        s.Authorizer.Last.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Any_not_authorized_renders_not_authorized_when_list_is_empty()
+    {
+        var world = TestWorld.New();
+        using var s = Arrange(world, new CheckResult(true), listResult: new ListObjectsResult([], null));
+
+        var cut = RenderAnyView(s, AuthState(s));
+
+        cut.WaitForAssertion(() => cut.FindAll("#no").ShouldNotBeEmpty());
+        s.Authorizer.LastList.ShouldNotBeNull();
+        s.Authorizer.Last.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Any_form_round_trips_under_a_custom_prefix_and_separator()
+    {
+        var world = TestWorld.New();
+        using var s = Arrange(world, new CheckResult(false), o =>
+        {
+            o.PolicyPrefix = "cdx";
+            o.PolicySeparator = "/";
+        }, listResult: new ListObjectsResult([world.ObjectId()], null));
+
+        var cut = RenderAnyView(s, AuthState(s));
+
+        cut.WaitForAssertion(() => cut.FindAll("#ok").ShouldNotBeEmpty());
+        s.Authorizer.LastList.ShouldNotBeNull();
+        s.Authorizer.LastList!.PageSize.ShouldBe(1);
+        s.Authorizer.LastList.ObjectType.ShouldBe(s.ObjType);
+        s.Authorizer.Last.ShouldBeNull();
     }
 }

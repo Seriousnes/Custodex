@@ -25,11 +25,11 @@ internal sealed class CustodexPolicyProvider : IAuthorizationPolicyProvider
 
     public Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
-        if (TryParse(policyName, out var type, out var permission))
+        if (TryParse(policyName, out var type, out var permission, out var anyObject))
         {
             var policy = _cache.GetOrAdd(policyName, _ => new AuthorizationPolicyBuilder()
                 .RequireAuthenticatedUser()
-                .AddRequirements(new CustodexRequirement(type, permission))
+                .AddRequirements(new CustodexRequirement(type, permission, anyObject))
                 .Build());
             return Task.FromResult<AuthorizationPolicy?>(policy);
         }
@@ -37,21 +37,35 @@ internal sealed class CustodexPolicyProvider : IAuthorizationPolicyProvider
         return _inner.GetPolicyAsync(policyName);
     }
 
-    private bool TryParse(string name, out string type, out string permission)
+    private bool TryParse(string name, out string type, out string permission, out bool anyObject)
     {
         type = string.Empty;
         permission = string.Empty;
+        anyObject = false;
 
         var prefix = _options.PolicyPrefix + _options.PolicySeparator;
         if (!name.StartsWith(prefix, StringComparison.Ordinal))
             return false;
 
         var parts = name.Split(_options.PolicySeparator);
-        if (parts.Length != 3 || parts[0] != _options.PolicyPrefix || parts[1].Length == 0 || parts[2].Length == 0)
+        if (parts[0] != _options.PolicyPrefix)
             return false;
 
-        type = parts[1];
-        permission = parts[2];
-        return true;
+        if (parts.Length == 3 && parts[1].Length > 0 && parts[2].Length > 0)
+        {
+            type = parts[1];
+            permission = parts[2];
+            return true;
+        }
+
+        if (parts.Length == 4 && parts[1] == _options.AnyObjectSegment && parts[2].Length > 0 && parts[3].Length > 0)
+        {
+            type = parts[2];
+            permission = parts[3];
+            anyObject = true;
+            return true;
+        }
+
+        return false;
     }
 }

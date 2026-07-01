@@ -27,7 +27,8 @@ public class AuthorizationHandlerTests
         TestWorld world,
         HttpContext? http = null,
         CustodexAuthorizationOptions? options = null,
-        ICustodexObjectResolver[]? objectResolvers = null)
+        ICustodexObjectResolver[]? objectResolvers = null,
+        bool anyObject = false)
     {
         var opts = Options.Create(options ?? new CustodexAuthorizationOptions { SubjectType = world.UserType });
         var fake = authorizer as FakeAuthorizer;
@@ -56,7 +57,7 @@ public class AuthorizationHandlerTests
         ], "Test"));
 
         var objType = world.EntityType();
-        var requirement = new CustodexRequirement(objType, world.Permission());
+        var requirement = new CustodexRequirement(objType, world.Permission(), anyObject);
         return new Harness(handler, user, requirement, fake!);
     }
 
@@ -215,6 +216,107 @@ public class AuthorizationHandlerTests
         await h.Handler.HandleAsync(ctx);
 
         capturing.Captured.ShouldBe(cts.Token);
+    }
+
+    [Fact]
+    public async Task Any_path_allows_when_list_is_non_empty()
+    {
+        var world = TestWorld.New();
+        var fake = new FakeAuthorizer(new ListObjectsResult([world.ObjectId()], null));
+        var h = Build(fake, world, anyObject: true);
+
+        var ctx = ContextFor(h, resource: null);
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeTrue();
+        h.Authorizer.LastListRequest.ShouldNotBeNull();
+        h.Authorizer.LastListRequest!.PageSize.ShouldBe(1);
+        h.Authorizer.LastListRequest.ObjectType.ShouldBe(h.Requirement.ObjectType);
+        h.Authorizer.LastListRequest.Permission.ShouldBe(h.Requirement.Permission);
+        h.Authorizer.LastListRequest.Tenant.ShouldBe(world.Tenant);
+        h.Authorizer.LastListRequest.Subject.Type.ShouldBe(world.UserType);
+        h.Authorizer.LastRequest.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Any_path_denies_when_list_is_empty()
+    {
+        var world = TestWorld.New();
+        var h = Build(new FakeAuthorizer(new ListObjectsResult([], null)), world, anyObject: true);
+
+        var ctx = ContextFor(h, resource: null);
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Any_path_ignores_resource_and_never_invokes_object_resolvers()
+    {
+        var world = TestWorld.New();
+        var fake = new FakeAuthorizer(new ListObjectsResult([world.ObjectId()], null));
+        var h = Build(fake, world, objectResolvers: [new ThrowingObjectResolver()], anyObject: true);
+
+        var ctx = ContextFor(h, resource: new EntityRef("unrelated", world.ObjectId()));
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeTrue();
+        h.Authorizer.LastListRequest.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Any_path_denies_when_no_subject_claim()
+    {
+        var world = TestWorld.New();
+        var h = Build(new FakeAuthorizer(new ListObjectsResult([world.ObjectId()], null)), world, anyObject: true);
+        var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
+        var ctx = new AuthorizationHandlerContext([h.Requirement], anonymous, resource: null);
+
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeFalse();
+        h.Authorizer.LastListRequest.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Any_path_denies_when_no_tenant_claims()
+    {
+        var world = TestWorld.New();
+        var h = Build(new FakeAuthorizer(new ListObjectsResult([world.ObjectId()], null)), world, anyObject: true);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, world.SubjectId())], "Test"));
+        var ctx = new AuthorizationHandlerContext([h.Requirement], principal, resource: null);
+
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeFalse();
+        h.Authorizer.LastListRequest.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Any_path_engine_exception_denies_by_default()
+    {
+        var world = TestWorld.New();
+        var h = Build(new FakeAuthorizer(new InvalidOperationException("boom")), world, anyObject: true);
+
+        var ctx = ContextFor(h, resource: null);
+        await h.Handler.HandleAsync(ctx);
+
+        ctx.HasSucceeded.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Any_path_engine_exception_rethrows_when_configured()
+    {
+        var world = TestWorld.New();
+        var h = Build(
+            new FakeAuthorizer(new InvalidOperationException("boom")),
+            world,
+            options: new CustodexAuthorizationOptions { SubjectType = world.UserType, ThrowOnEvaluationError = true },
+            anyObject: true);
+
+        var ctx = ContextFor(h, resource: null);
+        await Should.ThrowAsync<InvalidOperationException>(() => h.Handler.HandleAsync(ctx));
     }
 
     private sealed class AsyncObjectResolver(EntityRef entity) : ICustodexObjectResolver

@@ -63,4 +63,65 @@ public class PolicyProviderTests
         policy.ShouldNotBeNull();
         policy.Requirements.OfType<CustodexRequirement>().ShouldHaveSingleItem().Permission.ShouldBe("view");
     }
+
+    [Fact]
+    public async Task Any_object_policy_name_sets_the_any_flag()
+    {
+        var policy = await Provider().GetPolicyAsync("custodex:any:thing:view");
+
+        policy.ShouldNotBeNull();
+        var requirement = policy.Requirements.OfType<CustodexRequirement>().ShouldHaveSingleItem();
+        requirement.ObjectType.ShouldBe("thing");
+        requirement.Permission.ShouldBe("view");
+        requirement.AnyObject.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Three_segment_type_literally_any_is_not_the_any_form()
+    {
+        var policy = await Provider().GetPolicyAsync("custodex:any:view");
+
+        policy.ShouldNotBeNull();
+        var requirement = policy.Requirements.OfType<CustodexRequirement>().ShouldHaveSingleItem();
+        requirement.ObjectType.ShouldBe("any");
+        requirement.Permission.ShouldBe("view");
+        requirement.AnyObject.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Any_form_with_empty_type_or_permission_is_not_handled()
+    {
+        (await Provider().GetPolicyAsync("custodex:any::view")).ShouldBeNull();
+        (await Provider().GetPolicyAsync("custodex:any:thing:")).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Five_segment_form_is_not_handled()
+    {
+        (await Provider().GetPolicyAsync("custodex:any:thing:view:extra")).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Custom_any_object_segment_is_honoured()
+    {
+        var provider = Provider(new CustodexAuthorizationOptions { AnyObjectSegment = "some" });
+
+        var policy = await provider.GetPolicyAsync("custodex:some:thing:view");
+
+        policy.ShouldNotBeNull();
+        var requirement = policy.Requirements.OfType<CustodexRequirement>().ShouldHaveSingleItem();
+        requirement.ObjectType.ShouldBe("thing");
+        requirement.AnyObject.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Same_any_name_returns_the_cached_policy_instance()
+    {
+        var provider = Provider();
+
+        var first = await provider.GetPolicyAsync("custodex:any:thing:view");
+        var second = await provider.GetPolicyAsync("custodex:any:thing:view");
+
+        first.ShouldBeSameAs(second);
+    }
 }
