@@ -38,7 +38,8 @@ public class UsePostgresTests(PostgresFixture fx)
             .ShouldHaveSingleItem()
             .Lifetime.ShouldBe(ServiceLifetime.Scoped);
 
-        var provider = services.BuildServiceProvider();
+        var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
         scope.ServiceProvider.GetRequiredService<IAuthorizer>().ShouldBeOfType<ScopedCachingAuthorizer>();
         provider.GetRequiredService<NpgsqlCteAuthorizer>().ShouldNotBeNull();
