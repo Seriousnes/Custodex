@@ -1,7 +1,7 @@
 using Custodex.Abstractions;
 using Custodex.Core;
+using Custodex.Core.Caching;
 using Custodex.Core.Conditions;
-using Custodex.Core.Evaluation;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -44,12 +44,18 @@ public class UseMySqlTests(MySqlFixture fx)
     }
 
     [Fact]
-    public void UseMySql_authorizer_is_the_engine_driven_path()
+    public void UseMySql_authorizer_is_the_scoped_cache_over_the_engine_driven_path()
     {
         var services = new ServiceCollection();
         services.AddCustodex().UseMySql(fx.ConnectionString);
+
+        services.Where(d => d.ServiceType == typeof(IAuthorizer) && !d.IsKeyedService)
+            .ShouldHaveSingleItem()
+            .Lifetime.ShouldBe(ServiceLifetime.Scoped);
+
         var provider = services.BuildServiceProvider();
-        provider.GetRequiredService<IAuthorizer>().ShouldBeOfType<EngineDrivenAuthorizer>();
+        using var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IAuthorizer>().ShouldBeOfType<ScopedCachingAuthorizer>();
     }
 
     [Fact]

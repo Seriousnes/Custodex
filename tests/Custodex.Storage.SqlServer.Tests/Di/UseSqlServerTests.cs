@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Core;
+using Custodex.Core.Caching;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,11 +32,18 @@ public class UseSqlServerTests(SqlServerFixture fx)
     }
 
     [Fact]
-    public void UseSqlServer_authorizer_is_the_cte_primary_path()
+    public void UseSqlServer_authorizer_is_the_scoped_cache_over_the_cte_primary_path()
     {
         var services = new ServiceCollection();
         services.AddCustodex().UseSqlServer(fx.ConnectionString);
+
+        services.Where(d => d.ServiceType == typeof(IAuthorizer) && !d.IsKeyedService)
+            .ShouldHaveSingleItem()
+            .Lifetime.ShouldBe(ServiceLifetime.Scoped);
+
         var provider = services.BuildServiceProvider();
-        provider.GetRequiredService<IAuthorizer>().ShouldBeOfType<SqlServerCteAuthorizer>();
+        using var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IAuthorizer>().ShouldBeOfType<ScopedCachingAuthorizer>();
+        provider.GetRequiredService<SqlServerCteAuthorizer>().ShouldNotBeNull();
     }
 }

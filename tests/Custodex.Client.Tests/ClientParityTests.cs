@@ -13,8 +13,12 @@ using SchemaGrpcClient = Custodex.Api.Schema.SchemaClient;
 namespace Custodex.Client.Tests;
 
 [Collection("client-parity")]
-public sealed class ClientParityTests(ServiceFixture fx)
+public sealed class ClientParityTests(ServiceFixture fx) : IDisposable
 {
+    private IServiceScope? _scope;
+
+    public void Dispose() => _scope?.Dispose();
+
     private static RequestContext Ctx(SubjectRef subject) =>
         new(DateTimeOffset.UnixEpoch, subject, new Dictionary<string, object?>());
 
@@ -36,7 +40,8 @@ public sealed class ClientParityTests(ServiceFixture fx)
         if (tuples.Length > 0)
             await relationMgr.WriteTuplesAsync(tc, "test", tuples);
 
-        var inProcess = fx.Factory.Services.GetRequiredService<IAuthorizer>();
+        _scope = fx.Factory.Services.CreateScope();
+        var inProcess = _scope.ServiceProvider.GetRequiredService<IAuthorizer>();
         return (remote, inProcess, tc);
     }
 
