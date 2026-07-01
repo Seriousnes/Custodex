@@ -9,6 +9,7 @@ namespace Custodex.AspNetCore;
 
 internal sealed class CustodexAuthorizationHandler(
     IAuthorizer authorizer,
+    ICustodexDecisionCache decisionCache,
     ICustodexSubjectResolver subjectResolver,
     ICustodexTenantResolver tenantResolver,
     IEnumerable<ICustodexObjectResolver> objectResolvers,
@@ -69,7 +70,7 @@ internal sealed class CustodexAuthorizationHandler(
 
             var requestContext = requestContextFactory.Create(subject.Value, resolution);
 
-            var result = await authorizer.CheckAsync(
+            var result = await decisionCache.CheckAsync(
                 new CheckRequest(tenant.Value, entity.Value, requirement.Permission, subject.Value, requestContext), ct);
             if (result.Allowed)
                 context.Succeed(requirement);

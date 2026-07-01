@@ -1,6 +1,9 @@
+using Custodex.Abstractions;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Custodex.AspNetCore;
 
@@ -27,6 +30,13 @@ public static class CustodexAuthorizationServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<IAuthorizationPolicyProvider, CustodexPolicyProvider>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, CustodexAuthorizationHandler>());
+
+        services.TryAddScoped<ICustodexDecisionCache>(sp => new CustodexDecisionCache(
+            sp.GetRequiredService<IAuthorizer>(),
+            sp.GetService<ISchemaStore>(),
+            sp.GetService<ICacheStore>(),
+            sp.GetRequiredService<IOptions<CustodexAuthorizationOptions>>(),
+            sp.GetRequiredService<TimeProvider>()));
 
         services.TryAddSingleton<ICustodexSubjectResolver, ClaimsCustodexSubjectResolver>();
         services.TryAddSingleton<ICustodexTenantResolver, ClaimsHeaderCustodexTenantResolver>();
