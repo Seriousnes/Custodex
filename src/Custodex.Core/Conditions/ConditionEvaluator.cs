@@ -10,6 +10,8 @@ namespace Custodex.Core.Conditions;
 /// mismatch, a missing parameter, division by zero, or a non-boolean body yields a denial carrying a
 /// diagnostic. An attribute the body reads that is absent from both the object's attributes and the
 /// request context yields a missing-context result naming that key, since supplying it could change the outcome.
+/// When both carry the field, the object's value governs; a field whose stored value is <see langword="null"/>
+/// is treated as absent, so a null object value defers to the request context.
 /// </summary>
 public static class ConditionEvaluator
 {

@@ -57,6 +57,35 @@ public class ConditionMissingContextTests
     }
 
     [Fact]
+    public void Resource_attribute_wins_over_a_conflicting_request_context_value()
+    {
+        var attr = _world.ParamName();
+
+        var resourceTrue = ConditionEvaluator.Evaluate(Gate(attr),
+            new Dictionary<string, object?> { [attr] = true },
+            Context(new Dictionary<string, object?> { [attr] = false }), NoParams);
+
+        var resourceFalse = ConditionEvaluator.Evaluate(Gate(attr),
+            new Dictionary<string, object?> { [attr] = false },
+            Context(new Dictionary<string, object?> { [attr] = true }), NoParams);
+
+        resourceTrue.Resolution.ShouldBe(ConditionResolution.Satisfied);
+        resourceFalse.Resolution.ShouldBe(ConditionResolution.Unsatisfied);
+    }
+
+    [Fact]
+    public void Null_resource_attribute_defers_to_the_request_context()
+    {
+        var attr = _world.ParamName();
+
+        var r = ConditionEvaluator.Evaluate(Gate(attr),
+            new Dictionary<string, object?> { [attr] = null },
+            Context(new Dictionary<string, object?> { [attr] = true }), NoParams);
+
+        r.Resolution.ShouldBe(ConditionResolution.Satisfied);
+    }
+
+    [Fact]
     public void Absorbing_disjunction_ignores_a_missing_operand()
     {
         var attr = _world.ParamName();
