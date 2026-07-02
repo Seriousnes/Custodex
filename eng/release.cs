@@ -90,10 +90,12 @@ static class Releaser
         Directory.SetCurrentDirectory(repoRoot);
 
         var projects = TopoSort(Discover(repoRoot));
+        var byName = projects.ToDictionary(p => p.Name, StringComparer.Ordinal);
         Log($"Discovered {projects.Count} packable project(s): {string.Join(", ", projects.Select(p => $"{p.Name} [{p.TagPrefix}]"))}");
         if (opts.DryRun) Log("DRY RUN — no tags, packages, or releases will be created.");
 
         string head = Proc.RunOk("git", "rev-parse", "HEAD");
+        var effective = new Dictionary<string, SemVer>(StringComparer.Ordinal);
         var published = new List<string>();
         var skipped = new List<string>();
 
@@ -101,34 +103,42 @@ static class Releaser
         {
             var last = LatestTag(p.TagPrefix);
             SemVer next;
-            List<(string subject, string body)> changelog;
+            string notes;
 
             if (last is null)
             {
                 next = Initial;
-                changelog = [];
+                notes = "Initial release.";
                 Log($"PUBLISH {p.Name}: {p.TagPrefix}{next}  (initial release)");
             }
             else
             {
                 string sinceCommit = Proc.RunOk("git", "rev-list", "-n1", last.Value.tag);
-                if (!ChangedSince(sinceCommit, p))
-                {
-                    skipped.Add($"{p.Name}: no changes since {last.Value.tag}");
-                    continue;
-                }
-                var commits = CommitsTouching(sinceCommit, p);
-                var level = commits.Aggregate(BumpLevel.None, (acc, c) => Max(acc, Conventional.Level(c.subject, c.body)));
+                bool ownChanged = ChangedSince(sinceCommit, p);
+                List<(string subject, string body)> commits = ownChanged ? CommitsTouching(sinceCommit, p) : [];
+                var ownLevel = commits.Aggregate(BumpLevel.None, (acc, c) => Max(acc, Conventional.Level(c.subject, c.body)));
+
+                var staleDeps = StaleDependencies(p, byName, sinceCommit, effective);
+                var level = EffectiveLevel(ownLevel, staleDeps.Count > 0);
                 if (level == BumpLevel.None)
                 {
-                    skipped.Add($"{p.Name}: changed since {last.Value.tag} but no feat/fix/breaking commit");
+                    skipped.Add(ownChanged
+                        ? $"{p.Name}: changed since {last.Value.tag} but no feat/fix/breaking commit"
+                        : $"{p.Name}: no changes since {last.Value.tag}");
+                    effective[p.Name] = last.Value.version;
                     continue;
                 }
                 next = last.Value.version.Bump(level);
-                changelog = commits;
-                Log($"PUBLISH {p.Name}: {p.TagPrefix}{next}  ({level.ToString().ToLowerInvariant()} bump from {last.Value.version})");
+                notes = commits.Count > 0
+                    ? string.Join('\n', commits.Select(c => $"- {c.subject}"))
+                    : $"- Rebuilt against updated dependencies: {string.Join(", ", staleDeps)}";
+                string reason = ownLevel != BumpLevel.None
+                    ? $"{level.ToString().ToLowerInvariant()} bump from {last.Value.version}"
+                    : $"patch bump from {last.Value.version} (dependency update: {string.Join(", ", staleDeps)})";
+                Log($"PUBLISH {p.Name}: {p.TagPrefix}{next}  ({reason})");
             }
 
+            effective[p.Name] = next;
             published.Add($"{p.Name} {p.TagPrefix}{next}");
             if (opts.DryRun) continue;
 
@@ -142,7 +152,7 @@ static class Releaser
                 Proc.RunOk("dotnet", "nuget", "push", nupkg, "--source", "github", "--api-key", Env("GITHUB_TOKEN"), "--skip-duplicate");
 
             Proc.RunOk("git", "push", "origin", tag);
-            if (!opts.NoRelease) TryRelease(tag, changelog);
+            if (!opts.NoRelease) TryRelease(tag, notes);
         }
 
         Log("");
@@ -217,6 +227,35 @@ static class Releaser
         return best;
     }
 
+    static SemVer? LatestTagMerged(string prefix, string commit)
+    {
+        SemVer? best = null;
+        foreach (var line in Proc.RunOk("git", "tag", "--list", prefix + "*", "--merged", commit).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            SemVer v;
+            try { v = SemVer.Parse(line[prefix.Length..]); }
+            catch { continue; }
+            if (best is null || v.CompareTo(best.Value) > 0) best = v;
+        }
+        return best;
+    }
+
+    public static BumpLevel EffectiveLevel(BumpLevel own, bool dependencyStale) =>
+        Max(own, dependencyStale ? BumpLevel.Patch : BumpLevel.None);
+
+    static List<string> StaleDependencies(Project p, IReadOnlyDictionary<string, Project> byName, string sinceCommit, IReadOnlyDictionary<string, SemVer> effective)
+    {
+        var stale = new List<string>();
+        foreach (var depName in p.InternalDeps)
+        {
+            if (!byName.TryGetValue(depName, out var dep) || !effective.TryGetValue(depName, out var depNow)) continue;
+            var builtAgainst = LatestTagMerged(dep.TagPrefix, sinceCommit);
+            if (builtAgainst is null || depNow.CompareTo(builtAgainst.Value) > 0)
+                stale.Add($"{depName} {depNow}");
+        }
+        return stale;
+    }
+
     static string[] PathSpecs(Project p) => [p.DirRel + "/", "Directory.Build.props", "Directory.Packages.props", "*.slnx"];
 
     static bool ChangedSince(string sinceCommit, Project p)
@@ -238,9 +277,8 @@ static class Releaser
         return commits;
     }
 
-    static void TryRelease(string tag, List<(string subject, string body)> commits)
+    static void TryRelease(string tag, string notes)
     {
-        string notes = commits.Count == 0 ? "Initial release." : string.Join('\n', commits.Select(c => $"- {c.subject}"));
         var (code, _, err) = Proc.Run("gh", "release", "create", tag, "--title", tag, "--notes", notes);
         if (code != 0) Log($"  (warning: GitHub release for {tag} failed: {err.Trim()})");
     }
@@ -298,6 +336,11 @@ static class SelfTests
         Check(Conventional.Level("chore: thing", "") == BumpLevel.None, "chore -> none");
         Check(Conventional.Level("docs(x): thing", "") == BumpLevel.None, "docs -> none");
         Check(Conventional.Level("not a conventional subject", "") == BumpLevel.None, "non-conventional -> none");
+
+        Check(Releaser.EffectiveLevel(BumpLevel.None, true) == BumpLevel.Patch, "dependency-only republish -> patch");
+        Check(Releaser.EffectiveLevel(BumpLevel.None, false) == BumpLevel.None, "no own change, fresh deps -> none");
+        Check(Releaser.EffectiveLevel(BumpLevel.Minor, true) == BumpLevel.Minor, "own minor outranks dependency patch");
+        Check(Releaser.EffectiveLevel(BumpLevel.Major, false) == BumpLevel.Major, "own major preserved without stale deps");
 
         Console.WriteLine(failed == 0 ? "selftest: OK" : $"selftest: {failed} check(s) FAILED");
         return failed == 0 ? 0 : 1;
