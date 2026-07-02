@@ -10,7 +10,7 @@
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<NoWarn>$(NoWarn);1591</NoWarn>
 		<OpenApiGenerateDocumentsOnBuild>false</OpenApiGenerateDocumentsOnBuild>
-		<OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)\obj\openapi</OpenApiDocumentsDirectory>
+		<OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/obj/openapi</OpenApiDocumentsDirectory>
 	</PropertyGroup>
 
 	<ItemGroup>

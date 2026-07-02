@@ -81,6 +81,21 @@ public sealed class OpenApiTests
     }
 
     [Fact]
+    public async Task Document_contains_both_operations_sharing_a_path()
+    {
+        await using var factory = CreateFactory();
+        var client = factory.CreateClient();
+
+        using var doc = await FetchDocumentAsync(client);
+
+        var paths = doc.RootElement.GetProperty("paths");
+        paths.GetProperty("/api/tuples").TryGetProperty("post", out _).ShouldBeTrue();
+        paths.GetProperty("/api/tuples").TryGetProperty("delete", out _).ShouldBeTrue();
+        paths.GetProperty("/api/schema/{store}").TryGetProperty("put", out _).ShouldBeTrue();
+        paths.GetProperty("/api/schema/{store}").TryGetProperty("get", out _).ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Document_declares_apikey_and_bearer_security_schemes()
     {
         await using var factory = CreateFactory();
