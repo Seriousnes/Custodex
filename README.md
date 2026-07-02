@@ -133,6 +133,17 @@ One set of evaluation semantics drives two execution paths that produce identica
 
 Every store, schema, tuple, and attribute is scoped by `(store, tenant)`, so a single deployment serves many isolated tenants.
 
+## REST API and client generation
+
+`Custodex.Service` hosts the same engine behind a REST surface rooted at `/api`, guarded by an API key (`X-Custodex-Key` header) or a JWT bearer token. The service publishes a native OpenAPI document at `/openapi/v1.json` in every environment, with no authentication required to read it.
+
+Generate a typed client for any language Kiota supports directly from the running document:
+
+```bash
+dotnet tool install --global Microsoft.OpenApi.Kiota
+kiota generate --openapi https://localhost:7298/openapi/v1.json --language CSharp --class-name CustodexClient --namespace-name Custodex.Generated.Client --output client-sample
+```
+
 ## Packages
 
 | Package | Description |

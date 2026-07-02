@@ -4,6 +4,7 @@ using Custodex.Core;
 using Custodex.Service.Auth;
 using Custodex.Service.Health;
 using Custodex.Service.Metrics;
+using Custodex.Service.OpenApi;
 using Custodex.Service.Rest;
 using Custodex.Service.Services;
 using Custodex.Service.Tenancy;
@@ -16,7 +17,6 @@ using Custodex.Studio.Views;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
 
 using Npgsql;
 
@@ -28,10 +28,10 @@ builder.Services.AddOpenTelemetry()
     .WithMetrics(m => m.AddCustodexInstrumentation());
 builder.Services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
 builder.Services.AddSingleton<CustodexExceptionInterceptor>();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddOpenApi(o =>
 {
-    c.SwaggerDoc("api", new OpenApiInfo { Title = "Custodex Authorization API", Version = "1.0" });
+    o.AddDocumentTransformer<CustodexOpenApiDocumentTransformer>();
+    o.AddOperationTransformer<CustodexOpenApiOperationTransformer>();
 });
 
 var jwtSection = builder.Configuration.GetSection("Custodex:Jwt");
@@ -116,12 +116,6 @@ if (app.Configuration.GetValue("Custodex:ApplyMigrationsOnStartup", true))
     await MigrationRunner.ApplyAsync(conn);
 }
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/api/swagger.json", "Custodex Authorization API"));
-}
-
 app.UseCustodexProblemDetails();
 
 app.UseHttpsRedirection();
@@ -132,6 +126,7 @@ app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.MapStaticAssets();
 app.MapDefaultEndpoints();
+app.MapOpenApi();
 app.MapGrpcService<DecisionGrpcService>().RequireAuthorization("Custodex:decide");
 app.MapGrpcService<RelationsGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapGrpcService<SchemaGrpcService>().RequireAuthorization("Custodex:manage");

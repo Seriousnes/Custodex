@@ -10,7 +10,7 @@ namespace Custodex.Service.Services;
 
 /// <summary>
 /// gRPC service implementation for the <c>Decision</c> service.
-/// Delegates all four operations to <see cref="IAuthorizer"/> via <see cref="ProtoMap"/>.
+/// Delegates all four operations to <see cref="Contracts.IAuthorizer"/> via <see cref="ProtoMap"/>.
 /// </summary>
 public sealed class DecisionGrpcService(
     Contracts.IAuthorizer authorizer,

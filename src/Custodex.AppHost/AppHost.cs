@@ -12,8 +12,8 @@ var service = builder.AddProject<Projects.Custodex_Service>("custodex-service")
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
     .WithUrlForEndpoint("https", url =>
     {
-        url.Url = "/swagger/index.html";
-        url.DisplayText = "Swagger UI";
+        url.Url = "/openapi/v1.json";
+        url.DisplayText = "OpenAPI document";
     });
 
 var testKey = builder.Configuration["Custodex:TestAdminKey"];
