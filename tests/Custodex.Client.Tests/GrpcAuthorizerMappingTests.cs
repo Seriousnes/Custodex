@@ -80,6 +80,27 @@ public sealed class GrpcAuthorizerMappingTests
     }
 
     [Fact]
+    public async Task Check_forwards_the_at_least_as_fresh_consistency_selector()
+    {
+        var world = TestWorld.New();
+        var token = ConsistencyToken.Create(world.Tenant, epoch: 6, changeLogId: 2);
+        var fake = new FakeDecisionClient(allowed: true);
+        var authorizer = new GrpcAuthorizer(fake);
+        var subject = world.User(world.SubjectId());
+
+        await authorizer.CheckAsync(new CheckRequest(
+            world.Tenant,
+            new EntityRef(world.EntityType(), world.ObjectId()),
+            world.Permission(),
+            subject,
+            new RequestContext(DateTimeOffset.UnixEpoch, subject, new Dictionary<string, object?>(),
+                Consistency.AtLeastAsFresh(token))));
+
+        fake.LastCheckRequest!.Context.Consistency.Mode.ShouldBe(Custodex.Api.ConsistencyMode.AtLeastAsFresh);
+        fake.LastCheckRequest.Context.Consistency.Token.ShouldBe(token.Value);
+    }
+
+    [Fact]
     public async Task ListObjects_null_token_sends_empty_string_and_empty_response_decodes_to_null()
     {
         var fake = new FakeDecisionClient(objectIds: [], continuationToken: string.Empty);

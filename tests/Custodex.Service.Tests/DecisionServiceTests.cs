@@ -85,6 +85,51 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Check_with_at_least_as_fresh_token_from_the_write_sees_the_write()
+    {
+        await using var factory = CreateFactory();
+        using var scope = factory.Services.CreateScope();
+
+        var schema = new SchemaBuilder("v1")
+            .Type("widget", t => t
+                .Relation("owner", s => s.Type("user"))
+                .Permission("view", p => p.Relation("owner")))
+            .Build();
+
+        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
+
+        var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();
+        var token = await relMgr.WriteTuplesAsync(tc, "test",
+        [
+            new RelationTuple(new EntityRef("widget", "1"), "owner", new SubjectRef("user", "alice")),
+        ]);
+
+        token.Value.ShouldNotBeNullOrEmpty();
+
+        var channel = CreateChannel(factory);
+        var client = new Proto.Decision.DecisionClient(channel);
+        var req = new Proto.CheckRequest
+        {
+            Object = new Proto.EntityRef { Type = "widget", Id = "1" },
+            Permission = "view",
+            Subject = new Proto.SubjectRef { Type = "user", Id = "alice" },
+            Context = new Proto.RequestContext
+            {
+                Consistency = new Proto.Consistency
+                {
+                    Mode = Proto.ConsistencyMode.AtLeastAsFresh,
+                    Token = token.Value,
+                },
+            },
+        };
+
+        var resp = await client.CheckAsync(req, headers: TenantHeaders(tenant));
+
+        resp.Allowed.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Check_ungranted_subject_returns_allowed_false()
     {
         await using var factory = CreateFactory();

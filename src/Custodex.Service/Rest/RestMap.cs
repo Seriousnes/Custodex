@@ -24,7 +24,18 @@ public static class RestMap
     public static RequestContext FromDto(RequestContextDto dto) =>
         new(dto.Now ?? DateTimeOffset.UtcNow,
             FromDto(dto.Subject),
-            dto.Attributes ?? []);
+            dto.Attributes ?? [],
+            FromDto(dto.Consistency));
+
+    /// <summary>Converts a <see cref="ConsistencyDto"/> to the contract selector, or <see langword="null"/> when absent (equivalent to minimize-latency).</summary>
+    public static Consistency? FromDto(ConsistencyDto? dto) => dto is null
+        ? null
+        : dto.Mode switch
+        {
+            "at-least-as-fresh" => Consistency.AtLeastAsFresh(new ConsistencyToken(dto.Token ?? string.Empty)),
+            "fully-consistent" => Consistency.FullyConsistent,
+            _ => Consistency.MinimizeLatency,
+        };
 
     /// <summary>Converts a contract <see cref="ExplainNode"/> to its DTO, mapping children recursively.</summary>
     public static ExplainNodeDto ToDto(ExplainNode node) =>

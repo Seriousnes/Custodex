@@ -65,6 +65,8 @@ public sealed class ManagementRestTests(PostgresFixture pg)
         var writeTuples = await tenantClient.PostAsJsonAsync("/api/tuples",
             new WriteTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, "test", [tuple]));
         writeTuples.EnsureSuccessStatusCode();
+        var writeResult = await writeTuples.Content.ReadFromJsonAsync<WriteResultDto>();
+        writeResult!.ConsistencyToken.ShouldNotBeNullOrEmpty();
 
         var readTuples = await tenantClient.PostAsJsonAsync("/api/tuples/query",
             new ReadTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, ObjectType: "doc"));

@@ -86,6 +86,45 @@ public sealed class RestMapTests
     }
 
     [Fact]
+    public void RequestContextDto_maps_at_least_as_fresh_consistency()
+    {
+        var token = ConsistencyToken.Create(TestWorld.New().Tenant, epoch: 3, changeLogId: 4);
+        var dto = new RequestContextDto(
+            Subject: new SubjectRefDto("user", "u-3", null),
+            Now: null,
+            Attributes: null,
+            Consistency: new ConsistencyDto("at-least-as-fresh", token.Value));
+
+        var ctx = RestMap.FromDto(dto);
+
+        ctx.Consistency!.Mode.ShouldBe(ConsistencyMode.AtLeastAsFresh);
+        ctx.Consistency.Token!.Value.ShouldBe(token.Value);
+    }
+
+    [Fact]
+    public void RequestContextDto_maps_fully_consistent()
+    {
+        var dto = new RequestContextDto(
+            Subject: new SubjectRefDto("user", "u-4", null),
+            Now: null,
+            Attributes: null,
+            Consistency: new ConsistencyDto("fully-consistent"));
+
+        RestMap.FromDto(dto).Consistency!.Mode.ShouldBe(ConsistencyMode.FullyConsistent);
+    }
+
+    [Fact]
+    public void RequestContextDto_absent_consistency_is_null()
+    {
+        var dto = new RequestContextDto(
+            Subject: new SubjectRefDto("user", "u-5", null),
+            Now: null,
+            Attributes: null);
+
+        RestMap.FromDto(dto).Consistency.ShouldBeNull();
+    }
+
+    [Fact]
     public void ExplainNode_with_child_maps_recursively()
     {
         var node = new ExplainNode(

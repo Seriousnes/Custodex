@@ -65,21 +65,54 @@ public static class ProtoMap
             p.Condition is { Name.Length: > 0 } ? FromProto(p.Condition) : null);
 
     /// <summary>Converts a domain <see cref="Abstractions.RequestContext"/> to its proto form.</summary>
-    public static Api.RequestContext ToProto(Abstractions.RequestContext ctx) => new()
+    public static Api.RequestContext ToProto(Abstractions.RequestContext ctx)
     {
-        Now = Timestamp.FromDateTimeOffset(ctx.Now),
-        Subject = ToProto(ctx.Subject),
-        Attributes = ToStruct(ctx.Attributes),
-    };
+        var proto = new Api.RequestContext
+        {
+            Now = Timestamp.FromDateTimeOffset(ctx.Now),
+            Subject = ToProto(ctx.Subject),
+            Attributes = ToStruct(ctx.Attributes),
+        };
+        if (ctx.Consistency is not null)
+            proto.Consistency = ToProto(ctx.Consistency);
+        return proto;
+    }
 
     /// <summary>
     /// Converts a proto <see cref="Api.RequestContext"/> to its domain form. A missing <c>now</c> or
-    /// <c>subject</c> decodes to a default rather than throwing.
+    /// <c>subject</c> decodes to a default rather than throwing, and an absent <c>consistency</c> decodes
+    /// to <see langword="null"/>.
     /// </summary>
     public static Abstractions.RequestContext FromProto(Api.RequestContext p) => new(
         p.Now is null ? DateTimeOffset.UtcNow : p.Now.ToDateTimeOffset(),
         p.Subject is null ? new Abstractions.SubjectRef("*", "*") : FromProto(p.Subject),
-        FromStruct(p.Attributes));
+        FromStruct(p.Attributes),
+        FromProto(p.Consistency));
+
+    /// <summary>Converts a domain <see cref="Abstractions.Consistency"/> selector to its proto form.</summary>
+    public static Api.Consistency ToProto(Abstractions.Consistency c) => new()
+    {
+        Mode = ToProto(c.Mode),
+        Token = c.Token?.Value ?? string.Empty,
+    };
+
+    /// <summary>Converts a proto <see cref="Api.Consistency"/> selector to its domain form, or <see langword="null"/> when absent.</summary>
+    public static Abstractions.Consistency? FromProto(Api.Consistency? p) => p is null
+        ? null
+        : p.Mode switch
+        {
+            Api.ConsistencyMode.AtLeastAsFresh => Abstractions.Consistency.AtLeastAsFresh(new Abstractions.ConsistencyToken(p.Token)),
+            Api.ConsistencyMode.FullyConsistent => Abstractions.Consistency.FullyConsistent,
+            _ => Abstractions.Consistency.MinimizeLatency,
+        };
+
+    /// <summary>Converts a domain <see cref="Abstractions.ConsistencyMode"/> to its proto form.</summary>
+    public static Api.ConsistencyMode ToProto(Abstractions.ConsistencyMode m) => m switch
+    {
+        Abstractions.ConsistencyMode.AtLeastAsFresh => Api.ConsistencyMode.AtLeastAsFresh,
+        Abstractions.ConsistencyMode.FullyConsistent => Api.ConsistencyMode.FullyConsistent,
+        _ => Api.ConsistencyMode.MinimizeLatency,
+    };
 
     /// <summary>Converts a domain <see cref="Abstractions.ExplainNode"/> to its proto form.</summary>
     public static Api.ExplainNode ToProto(Abstractions.ExplainNode n)

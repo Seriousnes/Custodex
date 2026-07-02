@@ -130,6 +130,46 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task WriteTuples_returns_a_consistency_token_scoped_to_the_tenant()
+    {
+        await using var factory = CreateFactory();
+        var channel = CreateChannel(factory);
+        var pClient = new Proto.Provisioning.ProvisioningClient(channel);
+        var sClient = new Proto.Schema.SchemaClient(channel);
+        var rClient = new Proto.Relations.RelationsClient(channel);
+
+        var tenant = await ProvisionStoreAndTenantAsync(pClient);
+
+        var schema = new SchemaBuilder("v1")
+            .Type("widget", t => t.Relation("owner", s => s.Type("user")))
+            .Build();
+        await sClient.SetActiveAsync(new Proto.SetActiveSchemaRequest
+        {
+            Store = TestAuthHelper.AdminStore,
+            SchemaJson = SchemaJson.Serialize(schema),
+        });
+
+        var writeResp = await rClient.WriteTuplesAsync(new Proto.WriteTuplesRequest
+        {
+            Actor = "test",
+            Tuples =
+            {
+                new Proto.RelationTuple
+                {
+                    Object = new Proto.EntityRef { Type = "widget", Id = "1" },
+                    Relation = "owner",
+                    Subject = new Proto.SubjectRef { Type = "user", Id = "alice" },
+                },
+            },
+        }, headers: TenantHeaders(tenant));
+
+        writeResp.ConsistencyToken.ShouldNotBeNullOrEmpty();
+        var parts = new Abstractions.ConsistencyToken(writeResp.ConsistencyToken).Decode();
+        parts.Tenant.ShouldBe(tenant);
+        parts.Epoch.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
     public async Task ReadChangeLog_after_write_contains_entry_with_actor()
     {
         await using var factory = CreateFactory();
