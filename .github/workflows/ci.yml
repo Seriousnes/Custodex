@@ -104,7 +104,7 @@ jobs:
 
       - name: Generate OpenAPI document
         env:
-          Custodex__ConnectionString: Host=localhost;Database=custodex;Username=custodex;Password=custodex
+          Custodex__ConnectionString: "Host=localhost;Database=custodex;Username=custodex;Password=custodex"
           Custodex__ApplyMigrationsOnStartup: "false"
         run: |
           dotnet build src/Custodex.Service/Custodex.Service.csproj \
