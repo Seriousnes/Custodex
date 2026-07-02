@@ -38,14 +38,16 @@ public interface IRelationManager
     /// <param name="actor">The actor credited in the change log.</param>
     /// <param name="tuples">The tuples to write.</param>
     /// <param name="ct">A token to cancel the operation.</param>
-    Task WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default);
+    /// <returns>A <see cref="ConsistencyToken"/> a caller can replay on a later read to observe this write.</returns>
+    Task<ConsistencyToken> WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default);
 
     /// <summary>Deletes tuples, attributing the change to an actor.</summary>
     /// <param name="tenant">The tenant scope.</param>
     /// <param name="actor">The actor credited in the change log.</param>
     /// <param name="tuples">The tuples to delete.</param>
     /// <param name="ct">A token to cancel the operation.</param>
-    Task DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default);
+    /// <returns>A <see cref="ConsistencyToken"/> a caller can replay on a later read to observe this write.</returns>
+    Task<ConsistencyToken> DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default);
 
     /// <summary>Replaces an object's attributes, attributing the change to an actor.</summary>
     /// <param name="tenant">The tenant scope.</param>
@@ -53,7 +55,8 @@ public interface IRelationManager
     /// <param name="obj">The object whose attributes are written.</param>
     /// <param name="attributes">The attribute values to store.</param>
     /// <param name="ct">A token to cancel the operation.</param>
-    Task WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default);
+    /// <returns>A <see cref="ConsistencyToken"/> a caller can replay on a later read to observe this write.</returns>
+    Task<ConsistencyToken> WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default);
 
     /// <summary>
     /// Writes (inserts) tuples on a host-supplied unit of work, attributing the change to an actor.
@@ -65,10 +68,11 @@ public interface IRelationManager
     /// <param name="tuples">The tuples to write.</param>
     /// <param name="uow">The host-supplied unit of work the change enlists on.</param>
     /// <param name="ct">A token to cancel the operation.</param>
+    /// <returns>A <see cref="ConsistencyToken"/> a caller can replay on a later read to observe this write.</returns>
     /// <exception cref="NotSupportedException">
     /// Thrown by managers that cannot enlist in a host-supplied unit of work, such as an out-of-process client.
     /// </exception>
-    Task WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, IUnitOfWork uow, CancellationToken ct = default) =>
+    Task<ConsistencyToken> WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, IUnitOfWork uow, CancellationToken ct = default) =>
         throw new NotSupportedException("This relation manager cannot enlist writes in a host-supplied unit of work.");
 
     /// <summary>
@@ -81,10 +85,11 @@ public interface IRelationManager
     /// <param name="tuples">The tuples to delete.</param>
     /// <param name="uow">The host-supplied unit of work the change enlists on.</param>
     /// <param name="ct">A token to cancel the operation.</param>
+    /// <returns>A <see cref="ConsistencyToken"/> a caller can replay on a later read to observe this write.</returns>
     /// <exception cref="NotSupportedException">
     /// Thrown by managers that cannot enlist in a host-supplied unit of work, such as an out-of-process client.
     /// </exception>
-    Task DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, IUnitOfWork uow, CancellationToken ct = default) =>
+    Task<ConsistencyToken> DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, IUnitOfWork uow, CancellationToken ct = default) =>
         throw new NotSupportedException("This relation manager cannot enlist writes in a host-supplied unit of work.");
 
     /// <summary>
@@ -98,10 +103,11 @@ public interface IRelationManager
     /// <param name="attributes">The attribute values to store.</param>
     /// <param name="uow">The host-supplied unit of work the change enlists on.</param>
     /// <param name="ct">A token to cancel the operation.</param>
+    /// <returns>A <see cref="ConsistencyToken"/> a caller can replay on a later read to observe this write.</returns>
     /// <exception cref="NotSupportedException">
     /// Thrown by managers that cannot enlist in a host-supplied unit of work, such as an out-of-process client.
     /// </exception>
-    Task WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, IUnitOfWork uow, CancellationToken ct = default) =>
+    Task<ConsistencyToken> WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, IUnitOfWork uow, CancellationToken ct = default) =>
         throw new NotSupportedException("This relation manager cannot enlist writes in a host-supplied unit of work.");
 
     /// <summary>Reads tuples matching a filter.</summary>

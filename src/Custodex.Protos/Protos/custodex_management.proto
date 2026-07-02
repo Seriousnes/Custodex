@@ -60,6 +60,7 @@ message WriteTuplesRequest {
 
 message WriteTuplesResponse {
   int32 count = 1;
+  string consistency_token = 2;
 }
 
 message DeleteTuplesRequest {
@@ -70,6 +71,7 @@ message DeleteTuplesRequest {
 
 message DeleteTuplesResponse {
   int32 count = 1;
+  string consistency_token = 2;
 }
 
 message WriteAttributesRequest {
@@ -79,7 +81,9 @@ message WriteAttributesRequest {
   google.protobuf.Struct attributes = 4;
 }
 
-message WriteAttributesResponse {}
+message WriteAttributesResponse {
+  string consistency_token = 1;
+}
 
 message ReadTuplesRequest {
   TenantContext tenant = 1;

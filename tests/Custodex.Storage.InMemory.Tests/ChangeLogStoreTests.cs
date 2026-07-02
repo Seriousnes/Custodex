@@ -31,6 +31,19 @@ public class ChangeLogStoreTests
     }
 
     [Fact]
+    public async Task Append_returns_the_assigned_id()
+    {
+        var world = TestWorld.New();
+        var tenant = world.Tenant;
+        var target = $"{world.EntityType()}:{world.ObjectId()}#{world.Relation()}";
+        var actor = world.SubjectId();
+        var store = new InMemoryChangeLogStore();
+
+        (await store.AppendAsync(tenant, Entry(target, actor, DateTimeOffset.UnixEpoch), Uow)).ShouldBe(1);
+        (await store.AppendAsync(tenant, Entry(target, actor, DateTimeOffset.UnixEpoch.AddSeconds(1)), Uow)).ShouldBe(2);
+    }
+
+    [Fact]
     public async Task Read_filters_by_actor_and_since_and_limit()
     {
         var world = TestWorld.New();

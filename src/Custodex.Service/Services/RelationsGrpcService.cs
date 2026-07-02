@@ -21,28 +21,28 @@ public sealed class RelationsGrpcService(
     public override async Task<WriteTuplesResponse> WriteTuples(WriteTuplesRequest request, ServerCallContext context)
     {
         var tuples = request.Tuples.Select(FromProto).ToList();
-        await relations.WriteTuplesAsync(tc.Current, request.Actor, tuples, context.CancellationToken);
-        return new WriteTuplesResponse { Count = tuples.Count };
+        var token = await relations.WriteTuplesAsync(tc.Current, request.Actor, tuples, context.CancellationToken);
+        return new WriteTuplesResponse { Count = tuples.Count, ConsistencyToken = token.Value };
     }
 
     /// <inheritdoc />
     public override async Task<DeleteTuplesResponse> DeleteTuples(DeleteTuplesRequest request, ServerCallContext context)
     {
         var tuples = request.Tuples.Select(FromProto).ToList();
-        await relations.DeleteTuplesAsync(tc.Current, request.Actor, tuples, context.CancellationToken);
-        return new DeleteTuplesResponse { Count = tuples.Count };
+        var token = await relations.DeleteTuplesAsync(tc.Current, request.Actor, tuples, context.CancellationToken);
+        return new DeleteTuplesResponse { Count = tuples.Count, ConsistencyToken = token.Value };
     }
 
     /// <inheritdoc />
     public override async Task<WriteAttributesResponse> WriteAttributes(WriteAttributesRequest request, ServerCallContext context)
     {
-        await relations.WriteAttributesAsync(
+        var token = await relations.WriteAttributesAsync(
             tc.Current,
             request.Actor,
             ProtoMap.FromProto(request.Object),
             ProtoMap.FromStruct(request.Attributes),
             context.CancellationToken);
-        return new WriteAttributesResponse();
+        return new WriteAttributesResponse { ConsistencyToken = token.Value };
     }
 
     /// <inheritdoc />

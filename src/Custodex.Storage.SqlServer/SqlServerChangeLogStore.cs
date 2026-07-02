@@ -23,12 +23,13 @@ public sealed class SqlServerChangeLogStore(string connectionString) : IChangeLo
         string? Before, string? After, DateTime OccurredAt);
 
     /// <inheritdoc />
-    public async Task AppendAsync(
+    public async Task<long> AppendAsync(
         TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default)
     {
         var w = SqlServerUnitOfWork.From(uow);
         await using var cmd = new SqlCommand("""
             INSERT INTO custodex.change_log (store_id, tenant_id, actor, operation, target, before, after)
+            OUTPUT INSERTED.id
             VALUES (@store, @tenant, @actor, @operation, @target, @before, @after)
             """, w.Connection, w.Transaction);
         cmd.Parameters.AddWithValue("@store", t.Store);
@@ -38,7 +39,7 @@ public sealed class SqlServerChangeLogStore(string connectionString) : IChangeLo
         cmd.Parameters.AddWithValue("@target", entry.Target);
         cmd.Parameters.AddWithValue("@before", entry.Before is null ? DBNull.Value : Json.Serialize(entry.Before));
         cmd.Parameters.AddWithValue("@after", entry.After is null ? DBNull.Value : Json.Serialize(entry.After));
-        await cmd.ExecuteNonQueryAsync(ct);
+        return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 
     /// <inheritdoc />

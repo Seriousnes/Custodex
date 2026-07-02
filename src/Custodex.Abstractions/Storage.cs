@@ -185,7 +185,8 @@ public interface ICacheStore
     /// <param name="t">The tenant scope.</param>
     /// <param name="uow">The unit of work the bump commits with.</param>
     /// <param name="ct">A token to cancel the operation.</param>
-    Task BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default);
+    /// <returns>The epoch the tenant advanced to.</returns>
+    Task<long> BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default);
 }
 
 /// <summary>Append-only audit of data changes, queried for history and change feeds.</summary>
@@ -196,7 +197,8 @@ public interface IChangeLogStore
     /// <param name="entry">The change to record.</param>
     /// <param name="uow">The unit of work the append commits with.</param>
     /// <param name="ct">A token to cancel the operation.</param>
-    Task AppendAsync(TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default);
+    /// <returns>The identifier the store assigned to the appended entry.</returns>
+    Task<long> AppendAsync(TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default);
 
     /// <summary>Reads change-log entries matching a filter.</summary>
     /// <param name="t">The tenant scope.</param>

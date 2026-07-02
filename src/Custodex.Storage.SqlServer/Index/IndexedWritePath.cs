@@ -18,16 +18,17 @@ public sealed class IndexedWritePath(
     /// objects affected by <paramref name="add"/> and <paramref name="remove"/>,
     /// all within <paramref name="uow"/>.
     /// </summary>
-    public async Task WriteTuplesAsync(
+    public async Task<ConsistencyToken> WriteTuplesAsync(
         TenantContext t, string actor,
         IReadOnlyList<RelationTuple> add, IReadOnlyList<RelationTuple> remove,
         IUnitOfWork uow, CancellationToken ct = default)
     {
-        await inner.WriteTuplesAsync(t, actor, add, remove, uow, ct);
+        var token = await inner.WriteTuplesAsync(t, actor, add, remove, uow, ct);
         var changed = new List<RelationTuple>(add.Count + remove.Count);
         changed.AddRange(add);
         changed.AddRange(remove);
         await maintainer.MaintainAsync(t, changed, uow, ct);
+        return token;
     }
 
     /// <summary>
@@ -35,13 +36,14 @@ public sealed class IndexedWritePath(
     /// affected object so that conditioned index rows reflect the new attribute values,
     /// all within <paramref name="uow"/>.
     /// </summary>
-    public async Task WriteAttributesAsync(
+    public async Task<ConsistencyToken> WriteAttributesAsync(
         TenantContext t, string actor, EntityRef obj,
         IReadOnlyDictionary<string, object?> before, IReadOnlyDictionary<string, object?> after,
         IUnitOfWork uow, CancellationToken ct = default)
     {
-        await inner.WriteAttributesAsync(t, actor, obj, before, after, uow, ct);
+        var token = await inner.WriteAttributesAsync(t, actor, obj, before, after, uow, ct);
         await maintainer.MaintainAsync(t, [new RelationTuple(obj, "*attributes*", new SubjectRef(obj.Type, obj.Id))], uow, ct);
+        return token;
     }
 
     /// <summary>

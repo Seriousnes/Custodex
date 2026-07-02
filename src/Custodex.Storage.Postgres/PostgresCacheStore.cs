@@ -31,7 +31,7 @@ public sealed partial class PostgresCacheStore(string connectionString, TenantCo
     }
 
     /// <inheritdoc />
-    public async Task BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
+    public async Task<long> BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await using var cmd = new NpgsqlCommand("""
@@ -39,10 +39,11 @@ public sealed partial class PostgresCacheStore(string connectionString, TenantCo
             VALUES (@store, @tenant, 1)
             ON CONFLICT (store_id, tenant_id)
             DO UPDATE SET epoch = tenant_epochs.epoch + 1
+            RETURNING epoch
             """, w.Connection, w.Transaction);
         cmd.Parameters.AddWithValue("store", t.Store);
         cmd.Parameters.AddWithValue("tenant", t.Tenant);
-        await cmd.ExecuteNonQueryAsync(ct);
+        return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 
 }

@@ -47,29 +47,29 @@ public sealed class TupleExplorerTests
                 : Task.FromResult(_readResult);
         }
 
-        public Task WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
+        public Task<ConsistencyToken> WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
         {
             CapturedWriteTenant = tenant;
             CapturedWriteActor = actor;
             CapturedWriteTuples = tuples;
-            return Task.CompletedTask;
+            return Task.FromResult(ConsistencyToken.Create(tenant, 0, 0));
         }
 
-        public Task DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
+        public Task<ConsistencyToken> DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
         {
             CapturedDeleteTenant = tenant;
             CapturedDeleteActor = actor;
             CapturedDeleteTuples = tuples;
-            return Task.CompletedTask;
+            return Task.FromResult(ConsistencyToken.Create(tenant, 0, 0));
         }
 
-        public Task WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default)
+        public Task<ConsistencyToken> WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default)
         {
             CapturedAttrsTenant = tenant;
             CapturedAttrsActor = actor;
             CapturedAttrsObj = obj;
             CapturedAttrsDict = attributes;
-            return Task.CompletedTask;
+            return Task.FromResult(ConsistencyToken.Create(tenant, 0, 0));
         }
 
         public Task<IReadOnlyList<ChangeLogEntry>> ReadChangeLogAsync(TenantContext tenant, ChangeLogFilter filter, CancellationToken ct = default) =>

@@ -25,13 +25,14 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
         string? Before, string? After, DateTime OccurredAt);
 
     /// <inheritdoc />
-    public async Task AppendAsync(
+    public async Task<long> AppendAsync(
         TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default)
     {
         var w = NpgsqlUnitOfWork.From(uow);
         await using var cmd = new NpgsqlCommand("""
             INSERT INTO custodex.change_log (store_id, tenant_id, actor, operation, target, before, after)
             VALUES (@store, @tenant, @actor, @operation, @target, @before, @after)
+            RETURNING id
             """, w.Connection, w.Transaction);
         cmd.Parameters.AddWithValue("store", t.Store);
         cmd.Parameters.AddWithValue("tenant", t.Tenant);
@@ -42,7 +43,7 @@ public sealed class NpgsqlChangeLogStore(string connectionString) : IChangeLogSt
             { Value = entry.Before is null ? DBNull.Value : Json.Serialize(entry.Before) });
         cmd.Parameters.Add(new NpgsqlParameter("after", NpgsqlDbType.Jsonb)
             { Value = entry.After is null ? DBNull.Value : Json.Serialize(entry.After) });
-        await cmd.ExecuteNonQueryAsync(ct);
+        return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 
     /// <inheritdoc />

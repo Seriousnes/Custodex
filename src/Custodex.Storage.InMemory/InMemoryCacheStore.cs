@@ -46,13 +46,14 @@ public sealed class InMemoryCacheStore(TimeProvider? timeProvider = null) : ICac
     }
 
     /// <inheritdoc/>
-    public Task BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
+    public Task<long> BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
     {
         lock (_gate)
         {
             var key = new Key(t.Store, t.Tenant);
-            _epochs[key] = (_epochs.TryGetValue(key, out var e) ? e : 0) + 1;
+            var bumped = (_epochs.TryGetValue(key, out var e) ? e : 0) + 1;
+            _epochs[key] = bumped;
+            return Task.FromResult(bumped);
         }
-        return Task.CompletedTask;
     }
 }

@@ -14,7 +14,7 @@ public sealed class InMemoryChangeLogStore : IChangeLogStore
     private static Key KeyOf(TenantContext t) => new(t.Store, t.Tenant);
 
     /// <inheritdoc/>
-    public Task AppendAsync(TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default)
+    public Task<long> AppendAsync(TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default)
     {
         lock (_gate)
         {
@@ -26,8 +26,8 @@ public sealed class InMemoryChangeLogStore : IChangeLogStore
             }
             var id = _nextId[key]++;
             list.Add(entry with { Id = id });
+            return Task.FromResult(id);
         }
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
