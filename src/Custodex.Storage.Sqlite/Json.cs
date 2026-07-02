@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
+
+using Custodex.Abstractions;
 
 namespace Custodex.Storage.Sqlite;
 
@@ -19,7 +22,14 @@ public static class Json
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         options.Converters.Add(new PermExprJsonConverter());
         options.Converters.Add(new ObjectJsonConverter());
+        options.TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { SuppressAstPolymorphism } };
         return options;
+    }
+
+    private static void SuppressAstPolymorphism(JsonTypeInfo typeInfo)
+    {
+        if (typeInfo.Type == typeof(PermExpr) || typeInfo.Type == typeof(ConditionExpr))
+            typeInfo.PolymorphismOptions = null;
     }
 
     /// <summary>

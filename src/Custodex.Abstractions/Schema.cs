@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Custodex.Abstractions;
 
 /// <summary>
@@ -43,6 +45,13 @@ public sealed record PermissionDef(string Name, PermExpr Expression);
 /// union, intersection, exclusion, relation traversal (arrow), and conditions. The node set is closed:
 /// the engine switches over it exhaustively.
 /// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$kind")]
+[JsonDerivedType(typeof(RelationRef), "relation")]
+[JsonDerivedType(typeof(Union), "union")]
+[JsonDerivedType(typeof(Intersect), "intersect")]
+[JsonDerivedType(typeof(Exclude), "exclude")]
+[JsonDerivedType(typeof(Arrow), "arrow")]
+[JsonDerivedType(typeof(Conditioned), "conditioned")]
 public abstract record PermExpr;
 
 /// <summary>

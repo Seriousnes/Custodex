@@ -10,8 +10,8 @@ namespace Custodex.Storage.Sqlite;
 
 /// <summary>
 /// Polymorphic (de)serialization for the abstract <see cref="PermExpr"/> and
-/// <see cref="ConditionExpr"/> ASTs via a <c>$type</c> discriminator. Needed because the contract's
-/// records carry no System.Text.Json polymorphism attributes.
+/// <see cref="ConditionExpr"/> ASTs via a <c>$type</c> discriminator, kept distinct from the wire
+/// form's <c>$kind</c> so stored JSON retains its own discriminator independent of the contract.
 /// </summary>
 public sealed class PermExprJsonConverter : JsonConverterFactory
 {

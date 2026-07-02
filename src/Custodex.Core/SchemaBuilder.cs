@@ -2,9 +2,6 @@ using Custodex.Abstractions;
 
 namespace Custodex.Core;
 
-/// <summary>The body assigned to a condition declared with parameters only and no predicate expression.</summary>
-public sealed record EmptyConditionBody : ConditionExpr;
-
 /// <summary>
 /// Fluent builder for assembling a <see cref="Schema"/>: declare entity types with their relations and
 /// permissions, and the named conditions permissions may be gated on, then call <see cref="Build"/>.

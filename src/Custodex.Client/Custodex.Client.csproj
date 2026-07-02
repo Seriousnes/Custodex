@@ -4,6 +4,10 @@
 		<TargetFramework>net10.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<IsPackable>true</IsPackable>
+		<MinVerTagPrefix>client-v</MinVerTagPrefix>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Description>gRPC client for the Custodex authorization service: the same IAuthorizer and management interfaces as the embedded engine, over the wire.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -13,7 +17,6 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Custodex.Abstractions\Custodex.Abstractions.csproj" />
-		<ProjectReference Include="..\Custodex.Core\Custodex.Core.csproj" />
 		<ProjectReference Include="..\Custodex.Protos\Custodex.Protos.csproj" />
 	</ItemGroup>
 
