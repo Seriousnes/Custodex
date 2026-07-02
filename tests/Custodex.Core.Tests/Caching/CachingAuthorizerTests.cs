@@ -129,6 +129,30 @@ public class CachingAuthorizerTests
     }
 
     [Fact]
+    public async Task Conditional_results_are_never_cached_and_reproduce_on_reevaluation()
+    {
+        var missingKey = _world.ParamName();
+        var conditioned = new RelationTuple(
+            new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId),
+            new ConditionRef(_condition, new Dictionary<string, object?>()));
+        var (auth, counter, _, _) = await NewAsync(
+            ConditionedSchema(), new MissingContextConditionEvaluator(missingKey), conditioned);
+
+        var first = await auth.CheckAsync(Req(_subjectId));
+        first.Decision.ShouldBe(CheckDecision.Conditional);
+        first.Allowed.ShouldBeFalse();
+        first.UnmetConditions[0].Condition.ShouldBe(_condition);
+        first.UnmetConditions[0].MissingKeys.ShouldBe([missingKey]);
+        var afterFirst = counter.GetByObjectCalls;
+
+        var second = await auth.CheckAsync(Req(_subjectId));
+        second.Decision.ShouldBe(CheckDecision.Conditional);
+        second.UnmetConditions[0].Condition.ShouldBe(_condition);
+        second.UnmetConditions[0].MissingKeys.ShouldBe([missingKey]);
+        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);
+    }
+
+    [Fact]
     public async Task Explain_requests_bypass_the_cache()
     {
         var (auth, counter, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
@@ -175,5 +199,12 @@ public class CachingAuthorizerTests
     {
         public ConditionResult Evaluate(ConditionDef definition, ConditionRef invocation,
             IReadOnlyDictionary<string, object?> resourceAttributes, RequestContext context) => ConditionResult.Allow;
+    }
+
+    private sealed class MissingContextConditionEvaluator(string missingKey) : IConditionEvaluator
+    {
+        public ConditionResult Evaluate(ConditionDef definition, ConditionRef invocation,
+            IReadOnlyDictionary<string, object?> resourceAttributes, RequestContext context) =>
+            ConditionResult.Missing([missingKey], null);
     }
 }
