@@ -12,7 +12,7 @@ namespace Custodex.Service.Auth;
 /// Validates the <c>X-Custodex-Key</c> request header against the configured key map,
 /// emitting <c>Custodex:store</c>, <c>Custodex:role</c>, and <c>NameIdentifier</c> claims on success.
 /// Returns <see cref="AuthenticateResult.NoResult"/> when the header is absent so other schemes may run;
-/// returns <see cref="AuthenticateResult.Fail"/> for an unrecognized key value.
+/// returns <see cref="AuthenticateResult.Fail(string)"/> for an unrecognized key value.
 /// </summary>
 public sealed class ApiKeyAuthenticationHandler(
     IOptionsMonitor<ApiKeyOptions> options,
