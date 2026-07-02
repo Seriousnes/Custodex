@@ -4,6 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>true</IsPackable>
+    <MinVerTagPrefix>protos-v</MinVerTagPrefix>
+    <Description>Generated Protobuf messages and gRPC client stubs for the Custodex service API. A transitive dependency of Custodex.Client.</Description>
   </PropertyGroup>
 
   <ItemGroup>

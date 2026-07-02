@@ -1,8 +1,6 @@
 using System.Text.Json.Serialization;
 
-using Custodex.Abstractions;
-
-namespace Custodex.Core.Conditions;
+namespace Custodex.Abstractions;
 
 /// <summary>
 /// The comparison operator carried by a <see cref="Compare"/> node:
@@ -54,6 +52,9 @@ public enum ArithOp
     /// <summary>Division: the left operand divided by the right. Dividing by zero fails the condition (default-deny). The result is always a floating-point value, even when both operands are integers.</summary>
     Div,
 }
+
+/// <summary>The body assigned to a condition declared with parameters only and no predicate expression.</summary>
+public sealed record EmptyConditionBody : ConditionExpr;
 
 /// <summary>A constant boolean value.</summary>
 /// <param name="Value">The literal evaluated as-is.</param>
