@@ -85,3 +85,50 @@ jobs:
             echo "::error::No tests were executed for ${{ matrix.project }}"
             exit 1
           fi
+
+  openapi:
+    name: OpenAPI document and client sample
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Custodex.slnx
+
+      - name: Generate OpenAPI document
+        env:
+          Custodex__ConnectionString: Host=localhost;Database=custodex;Username=custodex;Password=custodex
+          Custodex__ApplyMigrationsOnStartup: "false"
+        run: |
+          dotnet build src/Custodex.Service/Custodex.Service.csproj \
+            --configuration Release --no-restore --no-incremental -p:OpenApiGenerateDocumentsOnBuild=true
+          cp src/Custodex.Service/obj/openapi/Custodex.Service.json openapi.json
+
+      - name: Upload OpenAPI document
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: openapi.json
+
+      - name: Install Kiota
+        run: dotnet tool install --global Microsoft.OpenApi.Kiota
+
+      - name: Generate client sample
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          kiota generate --openapi openapi.json --language CSharp \
+            --class-name CustodexClient --namespace-name Custodex.Generated.Client \
+            --output client-sample
+
+      - name: Upload client sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-sample
+          path: client-sample
