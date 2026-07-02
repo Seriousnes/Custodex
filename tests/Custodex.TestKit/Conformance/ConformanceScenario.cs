@@ -6,7 +6,9 @@ namespace Custodex.TestKit.Conformance;
 public sealed record AttributeSeed(EntityRef Object, IReadOnlyDictionary<string, object?> Attributes);
 
 /// <summary>One hand-asserted Check expectation: the expected <see cref="Expected"/> result of checking
-/// <see cref="Subject"/> for <see cref="Permission"/> on <see cref="Object"/>.</summary>
+/// <see cref="Subject"/> for <see cref="Permission"/> on <see cref="Object"/>. When <see cref="ExpectedDecision"/>
+/// is set, the three-valued decision is asserted too; when <see cref="ExpectedUnmetConditions"/> is set, the names
+/// of the conditions that blocked a definite answer are asserted as a set.</summary>
 public sealed record CheckExpectation(
     string Name,
     EntityRef Object,
@@ -14,7 +16,9 @@ public sealed record CheckExpectation(
     SubjectRef Subject,
     bool Expected,
     DateTimeOffset? Now = null,
-    IReadOnlyDictionary<string, object?>? Context = null);
+    IReadOnlyDictionary<string, object?>? Context = null,
+    CheckDecision? ExpectedDecision = null,
+    IReadOnlyList<string>? ExpectedUnmetConditions = null);
 
 /// <summary>One hand-asserted ListObjects expectation: the exact set of object ids of
 /// <see cref="ObjectType"/> on which <see cref="Subject"/> holds <see cref="Permission"/>.</summary>

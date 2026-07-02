@@ -30,6 +30,9 @@ public static class ConformanceCorpus
         StratifiedExclusionCyclicAncestry(),
         ConditionThroughArrow(),
         ConditionedExclusionTimestampWindow(),
+        ConditionalMissingContext(),
+        ConditionalUnionAllow(),
+        ConditionalExclusionFailClosed(),
     ];
 
     /// <summary>Resolves a scenario by its unique <see cref="ConformanceScenario.Name"/>.</summary>
@@ -491,6 +494,96 @@ public static class ConformanceCorpus
                 new ListSubjectsExpectation("active-editors", Obj("asset", "a1"), "edit", [U("u1")]),
                 new ListSubjectsExpectation("inactive-none", Obj("asset", "a2"), "edit", []),
             ]);
+    }
+
+    private static ConformanceScenario ConditionalMissingContext()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("doc", t => t
+                .Relation("viewer", s => s.User())
+                .Permission("view", p => p.Relation("viewer").Conditioned("active")))
+            .Condition("active", _ => { }, b => b.Eq(b.Attribute("flag"), b.Const(true)))
+            .Build();
+
+        return new ConformanceScenario("conditional-missing-context", schema,
+            [T("doc", "d1", "viewer", U("u1")), T("doc", "d2", "viewer", U("u1"))],
+            [new AttributeSeed(Obj("doc", "d2"), new Dictionary<string, object?> { ["flag"] = false })],
+            [
+                new CheckExpectation("missing-attribute-is-conditional", Obj("doc", "d1"), "view", U("u1"), false,
+                    ExpectedDecision: CheckDecision.Conditional, ExpectedUnmetConditions: ["active"]),
+                new CheckExpectation("false-with-complete-context-is-deny", Obj("doc", "d2"), "view", U("u1"), false,
+                    ExpectedDecision: CheckDecision.Deny),
+                new CheckExpectation("non-viewer-is-deny", Obj("doc", "d1"), "view", U("u2"), false,
+                    ExpectedDecision: CheckDecision.Deny),
+            ],
+            [new ListObjectsExpectation("u1-no-definite-grant", U("u1"), "doc", "view", [])],
+            [
+                new ListSubjectsExpectation("d1-no-definite-viewer", Obj("doc", "d1"), "view", []),
+                new ListSubjectsExpectation("d2-no-definite-viewer", Obj("doc", "d2"), "view", []),
+            ]);
+    }
+
+    private static ConformanceScenario ConditionalUnionAllow()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("doc", t => t
+                .Relation("grant", s => s.User())
+                .Relation("viewer", s => s.User())
+                .Permission("view", p => p.Relation("grant").Union(u => u.Relation("viewer").Conditioned("active"))))
+            .Condition("active", _ => { }, b => b.Eq(b.Attribute("flag"), b.Const(true)))
+            .Build();
+
+        return new ConformanceScenario("conditional-union-allow", schema,
+            [
+                T("doc", "d1", "grant", U("u1")),
+                T("doc", "d1", "viewer", U("u1")),
+                T("doc", "d1", "viewer", U("u2")),
+            ],
+            [],
+            [
+                new CheckExpectation("unconditioned-branch-allows", Obj("doc", "d1"), "view", U("u1"), true,
+                    ExpectedDecision: CheckDecision.Allow),
+                new CheckExpectation("sole-conditional-branch-is-conditional", Obj("doc", "d1"), "view", U("u2"), false,
+                    ExpectedDecision: CheckDecision.Conditional, ExpectedUnmetConditions: ["active"]),
+                new CheckExpectation("stranger-is-deny", Obj("doc", "d1"), "view", U("u3"), false,
+                    ExpectedDecision: CheckDecision.Deny),
+            ],
+            [
+                new ListObjectsExpectation("u1-allowed", U("u1"), "doc", "view", ["d1"]),
+                new ListObjectsExpectation("u2-conditional-not-listed", U("u2"), "doc", "view", []),
+            ],
+            [new ListSubjectsExpectation("d1-definite-viewers", Obj("doc", "d1"), "view", [U("u1")])]);
+    }
+
+    private static ConformanceScenario ConditionalExclusionFailClosed()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("doc", t => t
+                .Relation("viewer", s => s.User())
+                .Relation("blocked", s => s.User())
+                .Permission("view", p => p.Relation("viewer").Exclude(x => x.Relation("blocked").Conditioned("active"))))
+            .Condition("active", _ => { }, b => b.Eq(b.Attribute("flag"), b.Const(true)))
+            .Build();
+
+        return new ConformanceScenario("conditional-exclusion-fail-closed", schema,
+            [
+                T("doc", "d1", "viewer", U("u1")), T("doc", "d1", "blocked", U("u1")),
+                T("doc", "d1", "viewer", U("u2")),
+            ],
+            [],
+            [
+                new CheckExpectation("unresolved-block-is-conditional", Obj("doc", "d1"), "view", U("u1"), false,
+                    ExpectedDecision: CheckDecision.Conditional, ExpectedUnmetConditions: ["active"]),
+                new CheckExpectation("unblocked-viewer-allows", Obj("doc", "d1"), "view", U("u2"), true,
+                    ExpectedDecision: CheckDecision.Allow),
+                new CheckExpectation("stranger-is-deny", Obj("doc", "d1"), "view", U("u3"), false,
+                    ExpectedDecision: CheckDecision.Deny),
+            ],
+            [
+                new ListObjectsExpectation("u1-conditional-not-listed", U("u1"), "doc", "view", []),
+                new ListObjectsExpectation("u2-allowed", U("u2"), "doc", "view", ["d1"]),
+            ],
+            [new ListSubjectsExpectation("d1-definite-viewers", Obj("doc", "d1"), "view", [U("u2")])]);
     }
 
     private static ConformanceScenario ConditionedExclusionTimestampWindow()
