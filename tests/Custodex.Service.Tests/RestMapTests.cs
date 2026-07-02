@@ -1,5 +1,6 @@
 using Custodex.Abstractions;
 using Custodex.Service.Rest;
+using Custodex.TestKit;
 
 using Shouldly;
 
@@ -7,6 +8,37 @@ namespace Custodex.Service.Tests;
 
 public sealed class RestMapTests
 {
+    [Fact]
+    public void CheckResult_allow_and_deny_map_stable_decision_strings()
+    {
+        var allow = RestMap.ToDto(new CheckResult(true));
+        var deny = RestMap.ToDto(new CheckResult(false));
+
+        allow.Decision.ShouldBe("allow");
+        allow.Allowed.ShouldBeTrue();
+        allow.UnmetConditions.ShouldBeEmpty();
+        deny.Decision.ShouldBe("deny");
+        deny.Allowed.ShouldBeFalse();
+        deny.UnmetConditions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void CheckResult_conditional_maps_decision_and_unmet_payload()
+    {
+        var world = TestWorld.New();
+        var condition = world.ConditionName();
+        var key = world.ParamName();
+        var result = new CheckResult(CheckDecision.Conditional, [new UnmetCondition(condition, [key])]);
+
+        var dto = RestMap.ToDto(result);
+
+        dto.Allowed.ShouldBeFalse();
+        dto.Decision.ShouldBe("conditional");
+        dto.UnmetConditions.Count.ShouldBe(1);
+        dto.UnmetConditions[0].Condition.ShouldBe(condition);
+        dto.UnmetConditions[0].MissingKeys.ShouldBe([key]);
+    }
+
     [Fact]
     public void EntityRefDto_wildcard_round_trips()
     {

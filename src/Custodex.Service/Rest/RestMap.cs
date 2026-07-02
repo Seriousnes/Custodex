@@ -30,6 +30,24 @@ public static class RestMap
     public static ExplainNodeDto ToDto(ExplainNode node) =>
         new(node.Description, node.Allowed, [.. node.Children.Select(ToDto)]);
 
+    /// <summary>Converts a contract <see cref="CheckResult"/> to its response DTO, mapping the decision to its stable wire string and carrying the unmet conditions.</summary>
+    public static CheckResponseDto ToDto(CheckResult result) =>
+        new(result.Allowed,
+            result.Explain is not null ? ToDto(result.Explain) : null,
+            ToDto(result.Decision),
+            [.. result.UnmetConditions.Select(ToDto)]);
+
+    /// <summary>Converts a <see cref="CheckDecision"/> to its stable, human-readable wire string: <c>"allow"</c>, <c>"deny"</c>, or <c>"conditional"</c>.</summary>
+    public static string ToDto(CheckDecision decision) => decision switch
+    {
+        CheckDecision.Allow => "allow",
+        CheckDecision.Conditional => "conditional",
+        _ => "deny",
+    };
+
+    /// <summary>Converts a contract <see cref="UnmetCondition"/> to its DTO.</summary>
+    public static UnmetConditionDto ToDto(UnmetCondition unmet) => new(unmet.Condition, [.. unmet.MissingKeys]);
+
     /// <summary>Converts a <see cref="ConditionRefDto"/> to the contract record.</summary>
     public static ConditionRef FromDto(ConditionRefDto dto) => new(dto.Name, dto.Parameters);
 

@@ -126,6 +126,39 @@ public sealed class CheckPlaygroundTests
     }
 
     [Fact]
+    public void Conditional_check_shows_conditional_badge_with_unmet_condition_and_keys()
+    {
+        var world = TestWorld.New();
+        var condition = world.ConditionName();
+        var key = world.ParamName();
+        var fake = new FakeAuthorizer(new CheckResult(
+            CheckDecision.Conditional, [new UnmetCondition(condition, [key])]));
+
+        var state = new StudioConnectionState();
+        state.Connect(world.Tenant.Store, world.Tenant.Tenant);
+
+        using var ctx = CreateContext(state, fake);
+        var cut = ctx.Render<CheckPlayground>();
+
+        cut.Find("#obj-type").Change(world.EntityType());
+        cut.Find("#obj-id").Change(world.ObjectId());
+        cut.Find("#permission").Change(world.Permission());
+        cut.Find("#subj-type").Change(world.EntityType());
+        cut.Find("#subj-id").Change(world.SubjectId());
+        cut.Find("#eval-time").Change("2025-01-01T00:00:00+00:00");
+
+        cut.Find("#run-check").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find(".badge-conditional").TextContent.ShouldContain("Conditional");
+            cut.FindAll(".badge-allow").ShouldBeEmpty();
+            cut.Markup.ShouldContain(condition);
+            cut.Markup.ShouldContain(key);
+        });
+    }
+
+    [Fact]
     public void Engine_exception_renders_error_region_without_propagating()
     {
         var world = TestWorld.New();

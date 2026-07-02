@@ -26,9 +26,21 @@ public sealed class GrpcAuthorizer(Proto.Decision.DecisionClient client) : IAuth
         };
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.CheckAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
-        return new CheckResult(
-            response.Allowed,
-            response.Explain is { Description.Length: > 0 } ? ProtoMap.FromProto(response.Explain) : null);
+        return ToResult(response);
+    }
+
+    private static CheckResult ToResult(Proto.CheckResponse response)
+    {
+        var decision = response.Decision == Proto.CheckDecision.Deny && response.Allowed
+            ? CheckDecision.Allow
+            : ProtoMap.FromProto(response.Decision);
+        IReadOnlyList<UnmetCondition>? unmet = response.UnmetConditions.Count > 0
+            ? [.. response.UnmetConditions.Select(ProtoMap.FromProto)]
+            : null;
+        var explain = response.Explain is { Description.Length: > 0 }
+            ? ProtoMap.FromProto(response.Explain)
+            : null;
+        return new CheckResult(decision, unmet, explain);
     }
 
     /// <inheritdoc/>
@@ -49,10 +61,7 @@ public sealed class GrpcAuthorizer(Proto.Decision.DecisionClient client) : IAuth
         }
         var response = await RemoteStatus.UnwrapAsync(() =>
             client.BatchCheckAsync(proto, headers: ClientHeaders.TenantMeta(request.Tenant), cancellationToken: ct).ResponseAsync);
-        return [.. response.Results
-            .Select(r => new CheckResult(
-                r.Allowed,
-                r.Explain is { Description.Length: > 0 } ? ProtoMap.FromProto(r.Explain) : null))];
+        return [.. response.Results.Select(ToResult)];
     }
 
     /// <inheritdoc/>

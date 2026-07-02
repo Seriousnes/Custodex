@@ -21,8 +21,17 @@ public sealed record CheckRequestDto(
     RequestContextDto Context,
     bool Explain = false);
 
-/// <summary>Result of a single authorization check.</summary>
-public sealed record CheckResponseDto(bool Allowed, ExplainNodeDto? Explain);
+/// <summary>One condition that blocked a definite decision, naming the context keys required to resolve it.</summary>
+public sealed record UnmetConditionDto(string Condition, IReadOnlyList<string> MissingKeys);
+
+/// <summary>Result of a single authorization check. <c>Decision</c> is the stable wire form of the
+/// three-valued outcome: <c>"allow"</c>, <c>"deny"</c>, or <c>"conditional"</c>. A conditional decision
+/// reads as not allowed and carries the unmet conditions with their missing context keys.</summary>
+public sealed record CheckResponseDto(
+    bool Allowed,
+    ExplainNodeDto? Explain,
+    string Decision,
+    IReadOnlyList<UnmetConditionDto> UnmetConditions);
 
 /// <summary>One item in a batch-check request.</summary>
 public sealed record CheckItemDto(EntityRefDto Object, string Permission);

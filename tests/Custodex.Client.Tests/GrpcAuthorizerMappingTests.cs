@@ -1,4 +1,5 @@
 using Custodex.Abstractions;
+using Custodex.TestKit;
 
 using Grpc.Core;
 
@@ -8,6 +9,56 @@ namespace Custodex.Client.Tests;
 
 public sealed class GrpcAuthorizerMappingTests
 {
+    [Fact]
+    public async Task Conditional_response_round_trips_decision_and_unmet_conditions()
+    {
+        var world = TestWorld.New();
+        var condition = world.ConditionName();
+        var key = world.ParamName();
+        var canned = new Custodex.Api.CheckResponse
+        {
+            Allowed = false,
+            Decision = Custodex.Api.CheckDecision.Conditional,
+        };
+        var unmet = new Custodex.Api.UnmetCondition { Condition = condition };
+        unmet.MissingKeys.Add(key);
+        canned.UnmetConditions.Add(unmet);
+
+        var authorizer = new GrpcAuthorizer(new FakeDecisionClient(checkResponse: canned));
+        var result = await authorizer.CheckAsync(Request(world));
+
+        result.Decision.ShouldBe(CheckDecision.Conditional);
+        result.Allowed.ShouldBeFalse();
+        result.UnmetConditions.Count.ShouldBe(1);
+        result.UnmetConditions[0].Condition.ShouldBe(condition);
+        result.UnmetConditions[0].MissingKeys.ShouldBe([key]);
+    }
+
+    [Fact]
+    public async Task Legacy_response_without_a_decision_field_reconciles_from_allowed()
+    {
+        var world = TestWorld.New();
+        var canned = new Custodex.Api.CheckResponse { Allowed = true };
+
+        var authorizer = new GrpcAuthorizer(new FakeDecisionClient(checkResponse: canned));
+        var result = await authorizer.CheckAsync(Request(world));
+
+        result.Decision.ShouldBe(CheckDecision.Allow);
+        result.Allowed.ShouldBeTrue();
+        result.UnmetConditions.ShouldBeEmpty();
+    }
+
+    private static CheckRequest Request(TestWorld world)
+    {
+        var subject = world.User(world.SubjectId());
+        return new CheckRequest(
+            world.Tenant,
+            new EntityRef(world.EntityType(), world.ObjectId()),
+            world.Permission(),
+            subject,
+            new RequestContext(DateTimeOffset.UnixEpoch, subject, new Dictionary<string, object?>()));
+    }
+
     [Fact]
     public async Task Check_shapes_request_correctly_and_returns_allowed()
     {
@@ -47,11 +98,14 @@ public sealed class GrpcAuthorizerMappingTests
         fake.LastListObjectsRequest!.ContinuationToken.ShouldBe(string.Empty);
     }
 
-    private sealed class FakeDecisionClient(bool allowed = false, IEnumerable<string>? objectIds = null, string continuationToken = "") : Custodex.Api.Decision.DecisionClient
+    private sealed class FakeDecisionClient(
+        bool allowed = false, IEnumerable<string>? objectIds = null, string continuationToken = "",
+        Custodex.Api.CheckResponse? checkResponse = null) : Custodex.Api.Decision.DecisionClient
     {
         private readonly bool _allowed = allowed;
         private readonly IEnumerable<string> _objectIds = objectIds ?? [];
         private readonly string _continuationToken = continuationToken;
+        private readonly Custodex.Api.CheckResponse? _checkResponse = checkResponse;
 
         public Custodex.Api.CheckRequest? LastCheckRequest { get; private set; }
         public Custodex.Api.ListObjectsRequest? LastListObjectsRequest { get; private set; }
@@ -61,7 +115,7 @@ public sealed class GrpcAuthorizerMappingTests
             CallOptions options = default)
         {
             LastCheckRequest = request;
-            var response = new Custodex.Api.CheckResponse { Allowed = _allowed };
+            var response = _checkResponse ?? new Custodex.Api.CheckResponse { Allowed = _allowed };
             return new AsyncUnaryCall<Custodex.Api.CheckResponse>(
                 Task.FromResult(response),
                 Task.FromResult(new Metadata()),

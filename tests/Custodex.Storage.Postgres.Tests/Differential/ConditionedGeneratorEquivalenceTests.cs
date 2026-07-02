@@ -70,8 +70,8 @@ public class ConditionedGeneratorEquivalenceTests(PostgresFixture fx) : IAsyncLi
             {
                 var ctx = new RequestContext(DateTimeOffset.UnixEpoch, subject, new Dictionary<string, object?>());
                 var req = new CheckRequest(tenant, obj, perm, subject, ctx);
-                var o = (await oracle.CheckAsync(req)).Allowed;
-                var c = (await cte.CheckAsync(req)).Allowed;
+                var o = (await oracle.CheckAsync(req)).Decision;
+                var c = (await cte.CheckAsync(req)).Decision;
                 if (o != c) return false;
             }
             return true;

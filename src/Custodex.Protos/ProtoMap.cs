@@ -94,6 +94,34 @@ public static class ProtoMap
     public static Abstractions.ExplainNode FromProto(Api.ExplainNode p) =>
         new(p.Description, p.Allowed, [.. p.Children.Select(FromProto)]);
 
+    /// <summary>Converts a domain <see cref="Abstractions.CheckDecision"/> to its proto form.</summary>
+    public static Api.CheckDecision ToProto(Abstractions.CheckDecision d) => d switch
+    {
+        Abstractions.CheckDecision.Allow => Api.CheckDecision.Allow,
+        Abstractions.CheckDecision.Conditional => Api.CheckDecision.Conditional,
+        _ => Api.CheckDecision.Deny,
+    };
+
+    /// <summary>Converts a proto <see cref="Api.CheckDecision"/> to its domain form. An unrecognised value decodes to deny (fail closed).</summary>
+    public static Abstractions.CheckDecision FromProto(Api.CheckDecision p) => p switch
+    {
+        Api.CheckDecision.Allow => Abstractions.CheckDecision.Allow,
+        Api.CheckDecision.Conditional => Abstractions.CheckDecision.Conditional,
+        _ => Abstractions.CheckDecision.Deny,
+    };
+
+    /// <summary>Converts a domain <see cref="Abstractions.UnmetCondition"/> to its proto form.</summary>
+    public static Api.UnmetCondition ToProto(Abstractions.UnmetCondition u)
+    {
+        var proto = new Api.UnmetCondition { Condition = u.Condition };
+        proto.MissingKeys.AddRange(u.MissingKeys);
+        return proto;
+    }
+
+    /// <summary>Converts a proto <see cref="Api.UnmetCondition"/> to its domain form.</summary>
+    public static Abstractions.UnmetCondition FromProto(Api.UnmetCondition p) =>
+        new(p.Condition, [.. p.MissingKeys]);
+
     /// <summary>
     /// Converts a domain attribute dictionary to a <see cref="Struct"/>. Integers (<see cref="int"/>,
     /// <see cref="long"/>), floats, bools and strings map to their JSON value kinds;

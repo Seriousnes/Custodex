@@ -25,6 +25,19 @@ message CheckRequest {
 message CheckResponse {
   bool allowed = 1;
   ExplainNode explain = 2;
+  CheckDecision decision = 3;
+  repeated UnmetCondition unmet_conditions = 4;
+}
+
+enum CheckDecision {
+  CHECK_DECISION_DENY = 0;
+  CHECK_DECISION_ALLOW = 1;
+  CHECK_DECISION_CONDITIONAL = 2;
+}
+
+message UnmetCondition {
+  string condition = 1;
+  repeated string missing_keys = 2;
 }
 
 message CheckItem {

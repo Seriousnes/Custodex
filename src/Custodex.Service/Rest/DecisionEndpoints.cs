@@ -18,9 +18,7 @@ public static partial class RestEndpoints
                 ctx,
                 req.Explain), ct);
 
-            return Results.Ok(new CheckResponseDto(
-                result.Allowed,
-                result.Explain is not null ? RestMap.ToDto(result.Explain) : null));
+            return Results.Ok(RestMap.ToDto(result));
         })
         .WithName("Check")
         .WithSummary("Evaluate a single authorization check.");
@@ -33,10 +31,7 @@ public static partial class RestEndpoints
 
             var results = await auth.BatchCheckAsync(new BatchCheckRequest(tc.Current, items, ctx), ct);
 
-            return Results.Ok(new BatchCheckResponseDto(
-                [.. results.Select(r => new CheckResponseDto(
-                    r.Allowed,
-                    r.Explain is not null ? RestMap.ToDto(r.Explain) : null))]));
+            return Results.Ok(new BatchCheckResponseDto([.. results.Select(RestMap.ToDto)]));
         })
         .WithName("BatchCheck")
         .WithSummary("Evaluate multiple authorization checks sharing one request context.");
