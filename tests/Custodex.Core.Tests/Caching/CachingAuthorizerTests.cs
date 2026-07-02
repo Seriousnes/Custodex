@@ -173,7 +173,7 @@ public class CachingAuthorizerTests
 
     private sealed class AlwaysTrueConditionEvaluator : IConditionEvaluator
     {
-        public bool Evaluate(ConditionDef definition, ConditionRef invocation,
-            IReadOnlyDictionary<string, object?> resourceAttributes, RequestContext context) => true;
+        public ConditionResult Evaluate(ConditionDef definition, ConditionRef invocation,
+            IReadOnlyDictionary<string, object?> resourceAttributes, RequestContext context) => ConditionResult.Allow;
     }
 }

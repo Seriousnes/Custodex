@@ -145,6 +145,6 @@ public sealed partial class SqlServerCteAuthorizer(
         ctx.MarkConditionTouched();
         var def = index.Condition(tuple.Condition.Name);
         var attrs = await _attributes.GetAsync(tenant, obj, ct) ?? new Dictionary<string, object?>();
-        return _conditions.Evaluate(def, tuple.Condition, attrs, context);
+        return _conditions.Evaluate(def, tuple.Condition, attrs, context).Allowed;
     }
 }

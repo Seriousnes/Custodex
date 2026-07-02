@@ -37,11 +37,11 @@ public class CelConditionEvaluatorTests
 
         adapter.Evaluate(def, inv,
             new Dictionary<string, object?> { [_attribute] = creator },
-            Ctx(creator)).ShouldBeTrue();
+            Ctx(creator)).Allowed.ShouldBeTrue();
 
         adapter.Evaluate(def, inv,
             new Dictionary<string, object?> { [_attribute] = other },
-            Ctx(creator)).ShouldBeFalse();
+            Ctx(creator)).Allowed.ShouldBeFalse();
     }
 
     [Fact]

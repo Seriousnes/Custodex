@@ -15,9 +15,9 @@ public class UseMySqlTests(MySqlFixture fx)
 {
     private sealed class AllowAllConditionEvaluator : IConditionEvaluator
     {
-        public bool Evaluate(
+        public ConditionResult Evaluate(
             ConditionDef definition, ConditionRef invocation,
-            IReadOnlyDictionary<string, object?> resourceAttributes, RequestContext context) => true;
+            IReadOnlyDictionary<string, object?> resourceAttributes, RequestContext context) => ConditionResult.Allow;
     }
 
     [Fact]

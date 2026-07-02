@@ -107,7 +107,7 @@ public sealed partial class NpgsqlCteAuthorizer
         var def = index.Condition(conditionName);
         var invocation = new ConditionRef(conditionName, new Dictionary<string, object?>());
         var attrs = await _attributes.GetAsync(tenant, obj, ct) ?? new Dictionary<string, object?>();
-        return _conditions.Evaluate(def, invocation, attrs, context);
+        return _conditions.Evaluate(def, invocation, attrs, context).Allowed;
     }
 
 }

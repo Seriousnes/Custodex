@@ -14,9 +14,9 @@ public class UseSqliteTests(SqliteFixture fx) : IClassFixture<SqliteFixture>
 {
     private sealed class StubConditionEvaluator : IConditionEvaluator
     {
-        public bool Evaluate(
+        public ConditionResult Evaluate(
             ConditionDef definition, ConditionRef invocation,
-            IReadOnlyDictionary<string, object?> resourceAttributes, RequestContext context) => true;
+            IReadOnlyDictionary<string, object?> resourceAttributes, RequestContext context) => ConditionResult.Allow;
     }
 
     [Fact]
