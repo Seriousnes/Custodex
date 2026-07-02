@@ -8,7 +8,9 @@ namespace Custodex.Abstractions;
 /// <param name="Now">The instant the decision is evaluated at; the only source of time a condition may read.</param>
 /// <param name="Subject">The subject the decision concerns.</param>
 /// <param name="Attributes">Request-scoped attribute values exposed to condition (ABAC) evaluation.</param>
+/// <param name="Consistency">The consistency level the read requests; <see langword="null"/> is equivalent to <see cref="Consistency.MinimizeLatency"/>.</param>
 public sealed record RequestContext(
     DateTimeOffset Now,
     SubjectRef Subject,
-    IReadOnlyDictionary<string, object?> Attributes);
+    IReadOnlyDictionary<string, object?> Attributes,
+    Consistency? Consistency = null);
