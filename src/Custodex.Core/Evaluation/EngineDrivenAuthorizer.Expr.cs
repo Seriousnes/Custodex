@@ -4,7 +4,7 @@ namespace Custodex.Core.Evaluation;
 
 public sealed partial class EngineDrivenAuthorizer
 {
-    private async Task<bool> EvalExprAsync(
+    private async Task<EvalOutcome> EvalExprAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, PermExpr expr,
         SubjectRef subject, RequestContext context, EvalContext ctx,
         List<ExplainNode>? explain, CancellationToken ct)
@@ -16,7 +16,7 @@ public sealed partial class EngineDrivenAuthorizer
                 if (index.TryRelation(obj.Type, r.Relation, out _))
                 {
                     var ok = await ResolveRelationAsync(index, tenant, obj, r.Relation, subject, context, ctx, ct);
-                    explain?.Add(new ExplainNode($"relation {r.Relation}", ok, []));
+                    explain?.Add(new ExplainNode($"relation {r.Relation}", ok.IsTrue, []));
                     return ok;
                 }
 
@@ -27,10 +27,10 @@ public sealed partial class EngineDrivenAuthorizer
             {
                 var children = explain is null ? null : new List<ExplainNode>();
                 var left = await EvalExprAsync(index, tenant, obj, u.Left, subject, context, ctx, children, ct);
-                if (left && explain is null) return true;
+                if (left.IsTrue && explain is null) return EvalOutcome.True;
                 var right = await EvalExprAsync(index, tenant, obj, u.Right, subject, context, ctx, children, ct);
-                var result = left || right;
-                explain?.Add(new ExplainNode("union (+)", result, children!));
+                var result = EvalOutcome.Or(left, right);
+                explain?.Add(new ExplainNode("union (+)", result.IsTrue, children!));
                 return result;
             }
 
@@ -38,10 +38,10 @@ public sealed partial class EngineDrivenAuthorizer
             {
                 var children = explain is null ? null : new List<ExplainNode>();
                 var left = await EvalExprAsync(index, tenant, obj, i.Left, subject, context, ctx, children, ct);
-                if (!left && explain is null) { return false; }
+                if (left.Truth == EvalTruth.False && explain is null) return EvalOutcome.False;
                 var right = await EvalExprAsync(index, tenant, obj, i.Right, subject, context, ctx, children, ct);
-                var result = left && right;
-                explain?.Add(new ExplainNode("intersect (&)", result, children!));
+                var result = EvalOutcome.And(left, right);
+                explain?.Add(new ExplainNode("intersect (&)", result.IsTrue, children!));
                 return result;
             }
 
@@ -49,23 +49,23 @@ public sealed partial class EngineDrivenAuthorizer
             {
                 var children = explain is null ? null : new List<ExplainNode>();
                 var left = await EvalExprAsync(index, tenant, obj, e.Left, subject, context, ctx, children, ct);
-                if (!left && explain is null) { return false; }
-                bool right;
+                if (left.Truth == EvalTruth.False && explain is null) return EvalOutcome.False;
+                EvalOutcome right;
                 using (ctx.EnterNegation())
                     right = await EvalExprAsync(index, tenant, obj, e.Right, subject, context, ctx, children, ct);
 
-                bool result;
+                EvalOutcome result;
                 if (ctx.StructuralMarking && index.HasConditions)
                 {
-                    if (right) ctx.MarkConditionTouched();
+                    if (right.IsTrue) ctx.MarkConditionTouched();
                     result = left;
                 }
                 else
                 {
-                    result = left && !right;
+                    result = EvalOutcome.Exclude(left, right);
                 }
 
-                explain?.Add(new ExplainNode("exclude (-)", result, children!));
+                explain?.Add(new ExplainNode("exclude (-)", result.IsTrue, children!));
                 return result;
             }
 
@@ -73,7 +73,7 @@ public sealed partial class EngineDrivenAuthorizer
             {
                 var children = explain is null ? null : new List<ExplainNode>();
                 var result = await EvalArrowAsync(index, tenant, obj, a, subject, context, ctx, children, ct);
-                explain?.Add(new ExplainNode($"arrow {a.Relation}->{a.Permission}", result, children!));
+                explain?.Add(new ExplainNode($"arrow {a.Relation}->{a.Permission}", result.IsTrue, children!));
                 return result;
             }
 
@@ -81,9 +81,16 @@ public sealed partial class EngineDrivenAuthorizer
             {
                 var children = explain is null ? null : new List<ExplainNode>();
                 var inner = await EvalExprAsync(index, tenant, obj, c.Inner, subject, context, ctx, children, ct);
-                var passed = inner && await BranchConditionSatisfiedAsync(index, tenant, obj, c.ConditionName, context, ctx, ct);
-                explain?.Add(new ExplainNode($"conditioned [{c.ConditionName}]", passed, children!));
-                return passed;
+                EvalOutcome result;
+                if (inner.Truth == EvalTruth.False)
+                    result = EvalOutcome.False;
+                else
+                {
+                    var cond = await BranchConditionOutcomeAsync(index, tenant, obj, c.ConditionName, context, ctx, ct);
+                    result = EvalOutcome.And(inner, cond);
+                }
+                explain?.Add(new ExplainNode($"conditioned [{c.ConditionName}]", result.IsTrue, children!));
+                return result;
             }
 
             default:
@@ -91,31 +98,34 @@ public sealed partial class EngineDrivenAuthorizer
         }
     }
 
-    private async Task<bool> EvalArrowAsync(
+    private async Task<EvalOutcome> EvalArrowAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, Arrow arrow,
         SubjectRef subject, RequestContext context, EvalContext ctx,
         List<ExplainNode>? explain, CancellationToken ct)
     {
         var edges = await _relations.GetByObjectAsync(tenant, obj, arrow.Relation, ct);
+        var acc = EvalOutcome.False;
         foreach (var edge in edges)
         {
-            if (!await ConditionSatisfiedAsync(index, tenant, obj, edge, context, ctx, ct))
-                continue;
+            var cond = await ConditionOutcomeAsync(index, tenant, obj, edge, context, ctx, ct);
+            if (cond.Truth == EvalTruth.False) continue;
 
             var related = new EntityRef(edge.Subject.Type, edge.Subject.Id);
 
-            bool hit;
+            EvalOutcome hit;
             if (index.TryPermission(related.Type, arrow.Permission, out _))
                 hit = await CheckPermissionAsync(index, tenant, related, arrow.Permission, subject, context, ctx, explain, ct);
             else
                 hit = await ResolveRelationAsync(index, tenant, related, arrow.Permission, subject, context, ctx, ct);
 
-            if (hit) return true;
+            var contribution = EvalOutcome.And(cond, hit);
+            if (contribution.IsTrue) return EvalOutcome.True;
+            if (contribution.IsUnknown) acc = EvalOutcome.Or(acc, contribution);
         }
-        return false;
+        return acc;
     }
 
-    private async Task<bool> BranchConditionSatisfiedAsync(
+    private async Task<EvalOutcome> BranchConditionOutcomeAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string conditionName,
         RequestContext context, EvalContext ctx, CancellationToken ct)
     {
@@ -123,6 +133,7 @@ public sealed partial class EngineDrivenAuthorizer
         var def = index.Condition(conditionName);
         var invocation = new ConditionRef(conditionName, new Dictionary<string, object?>());
         var attrs = await _attributes.GetAsync(tenant, obj, ct) ?? new Dictionary<string, object?>();
-        return _conditions.Evaluate(def, invocation, attrs, context).Allowed;
+        var result = _conditions.Evaluate(def, invocation, attrs, context);
+        return EvalOutcome.FromCondition(conditionName, result);
     }
 }

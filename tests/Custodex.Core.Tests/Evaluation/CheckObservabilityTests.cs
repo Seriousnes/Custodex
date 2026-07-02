@@ -102,8 +102,8 @@ public class CheckObservabilityTests
     public async Task Internal_check_reports_condition_touched_flag()
     {
         var auth = await NewAsync();
-        var (allowed, conditionTouched) = await auth.CheckInternalAsync(Req(explain: false));
-        allowed.ShouldBeTrue();
+        var (result, conditionTouched) = await auth.CheckInternalAsync(Req(explain: false));
+        result.Allowed.ShouldBeTrue();
         conditionTouched.ShouldBeFalse();
     }
 }

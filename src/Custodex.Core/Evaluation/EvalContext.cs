@@ -23,7 +23,7 @@ public readonly record struct EvalFrame(EntityRef Object, string Permission, Sub
 public sealed class EvalContext(EvaluationOptions options)
 {
     private readonly EvaluationOptions _options = options;
-    private readonly Dictionary<EvalFrame, bool> _memo = [];
+    private readonly Dictionary<EvalFrame, EvalOutcome> _memo = [];
     private readonly Dictionary<EvalFrame, int> _onPath = [];
     private readonly HashSet<EvalFrame> _relationOnPath = [];
     private int _depth;
@@ -37,16 +37,16 @@ public sealed class EvalContext(EvaluationOptions options)
     /// <summary>Latches <see cref="ConditionTouched"/> to indicate a condition was evaluated.</summary>
     public void MarkConditionTouched() => ConditionTouched = true;
 
-    /// <summary>Looks up a previously memoized result for a sub-check.</summary>
+    /// <summary>Looks up a previously memoized outcome for a sub-check.</summary>
     /// <param name="frame">The sub-check to look up.</param>
-    /// <param name="result">The cached decision when present.</param>
-    /// <returns><c>true</c> if a result was memoized; otherwise <c>false</c>.</returns>
-    public bool TryGetMemo(EvalFrame frame, out bool result) => _memo.TryGetValue(frame, out result);
+    /// <param name="result">The memoized three-valued outcome when present.</param>
+    /// <returns><c>true</c> if an outcome was memoized; otherwise <c>false</c>.</returns>
+    public bool TryGetMemo(EvalFrame frame, out EvalOutcome result) => _memo.TryGetValue(frame, out result);
 
-    /// <summary>Records the result of a completed sub-check for reuse.</summary>
+    /// <summary>Records the three-valued outcome of a completed sub-check for reuse, so a memo hit reproduces the same decision and unmet conditions.</summary>
     /// <param name="frame">The sub-check that completed.</param>
-    /// <param name="result">Its decision.</param>
-    public void SetMemo(EvalFrame frame, bool result) => _memo[frame] = result;
+    /// <param name="result">Its outcome.</param>
+    public void SetMemo(EvalFrame frame, EvalOutcome result) => _memo[frame] = result;
 
     /// <summary>
     /// Enters <paramref name="frame"/> on the current path. Returns false (without

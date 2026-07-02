@@ -32,9 +32,9 @@ public class EvalContextTests
     {
         var ctx = new EvalContext(new EvaluationOptions());
         ctx.TryGetMemo(Frame(), out _).ShouldBeFalse();
-        ctx.SetMemo(Frame(), true);
+        ctx.SetMemo(Frame(), EvalOutcome.True);
         ctx.TryGetMemo(Frame(), out var hit).ShouldBeTrue();
-        hit.ShouldBeTrue();
+        hit.IsTrue.ShouldBeTrue();
     }
 
     [Fact]

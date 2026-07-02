@@ -40,7 +40,7 @@ public sealed partial class SqlServerCteAuthorizer
                 var ctx = new EvalContext(_options);
                 var ok = await CheckPermissionAsync(
                     conn, index, request.Tenant, request.Object, request.Permission, subject, request.Context, ctx, explain: null, ct);
-                if (!ok) continue;
+                if (!ok.IsTrue) continue;
 
                 confirmed.Add(subject);
                 lastKey = key;
@@ -67,7 +67,7 @@ public sealed partial class SqlServerCteAuthorizer
             var ok = await CheckPermissionAsync(
                 conn, index, request.Tenant, request.Object, request.Permission,
                 subject, request.Context, ctx, explain: null, ct);
-            if (ok) return true;
+            if (ok.IsTrue) return true;
         }
         return false;
     }

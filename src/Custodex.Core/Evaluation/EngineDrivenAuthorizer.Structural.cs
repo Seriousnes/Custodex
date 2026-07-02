@@ -28,7 +28,8 @@ public sealed partial class EngineDrivenAuthorizer
         RequestContext context, CancellationToken ct)
     {
         var ctx = new EvalContext(_options) { StructuralMarking = true };
-        var granted = await CheckPermissionAsync(index, tenant, obj, permission, subject, context, ctx, explain: null, ct);
+        var outcome = await CheckPermissionAsync(index, tenant, obj, permission, subject, context, ctx, explain: null, ct);
+        var granted = outcome.IsTrue;
         return new StructuralGrant(granted, granted && ctx.ConditionTouched);
     }
 }

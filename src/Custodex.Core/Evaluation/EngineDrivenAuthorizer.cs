@@ -40,22 +40,22 @@ public sealed partial class EngineDrivenAuthorizer(
     /// <inheritdoc/>
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
-        var (allowed, _, explain) = await RunCheckAsync(request, ct);
-        return new CheckResult(allowed, explain);
+        var (outcome, _, explain) = await RunCheckAsync(request, ct);
+        return outcome.ToCheckResult(explain);
     }
 
-    internal async Task<(bool Allowed, bool ConditionTouched)> CheckInternalAsync(
+    internal async Task<(CheckResult Result, bool ConditionTouched)> CheckInternalAsync(
         CheckRequest request, CancellationToken ct = default)
     {
-        var (allowed, conditionTouched, _) = await RunCheckAsync(
+        var (outcome, conditionTouched, _) = await RunCheckAsync(
             request with { Explain = false }, ct);
-        return (allowed, conditionTouched);
+        return (outcome.ToCheckResult(), conditionTouched);
     }
 
-    Task<(bool Allowed, bool ConditionTouched)> ICacheableAuthorizer.CheckInternalAsync(
+    Task<(CheckResult Result, bool ConditionTouched)> ICacheableAuthorizer.CheckInternalAsync(
         CheckRequest request, CancellationToken ct) => CheckInternalAsync(request, ct);
 
-    private async Task<(bool Allowed, bool ConditionTouched, ExplainNode? Explain)> RunCheckAsync(
+    private async Task<(EvalOutcome Outcome, bool ConditionTouched, ExplainNode? Explain)> RunCheckAsync(
         CheckRequest request, CancellationToken ct)
     {
         using var activity = CustodexDiagnostics.ActivitySource.StartActivity("Custodex.check");
@@ -69,13 +69,13 @@ public sealed partial class EngineDrivenAuthorizer(
             var index = await LoadSchemaAsync(request.Tenant.Store, ct);
             var ctx = new EvalContext(_options);
             var roots = request.Explain ? new List<ExplainNode>() : null;
-            var allowed = await CheckPermissionAsync(
+            var outcome = await CheckPermissionAsync(
                 index, request.Tenant, request.Object, request.Permission, request.Subject,
                 request.Context, ctx, roots, ct);
 
-            activity?.SetTag("Custodex.allowed", allowed);
+            activity?.SetTag("Custodex.decision", outcome.Truth.ToString());
             activity?.SetTag("Custodex.condition_touched", ctx.ConditionTouched);
-            return (allowed, ctx.ConditionTouched, roots is { Count: > 0 } ? roots[0] : null);
+            return (outcome, ctx.ConditionTouched, roots is { Count: > 0 } ? roots[0] : null);
         }
         finally
         {
@@ -84,7 +84,7 @@ public sealed partial class EngineDrivenAuthorizer(
         }
     }
 
-    private async Task<bool> CheckPermissionAsync(
+    private async Task<EvalOutcome> CheckPermissionAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string permission,
         SubjectRef subject, RequestContext context, EvalContext ctx,
         List<ExplainNode>? explain, CancellationToken ct)
@@ -94,62 +94,72 @@ public sealed partial class EngineDrivenAuthorizer(
             return memoized;
 
         if (!ctx.TryEnter(frame, out var scope))
-            return false;
+            return EvalOutcome.False;
 
         using (scope)
         {
             var def = index.Permission(obj.Type, permission);
             var children = explain is null ? null : new List<ExplainNode>();
             var result = await EvalExprAsync(index, tenant, obj, def.Expression, subject, context, ctx, children, ct);
-            explain?.Add(new ExplainNode($"{obj}#{permission}", result, children!));
+            explain?.Add(new ExplainNode($"{obj}#{permission}", result.IsTrue, children!));
             if (explain is null) ctx.SetMemo(frame, result);
             return result;
         }
     }
 
-    private async Task<bool> ResolveRelationAsync(
+    private async Task<EvalOutcome> ResolveRelationAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, string relation,
         SubjectRef subject, RequestContext context, EvalContext ctx, CancellationToken ct)
     {
         if (!ctx.TryEnterRelation(new EvalFrame(obj, relation, subject), out var scope))
-            return false;
+            return EvalOutcome.False;
         using (scope)
         {
             var tuples = await _relations.GetByObjectAsync(tenant, obj, relation, ct);
+            var acc = EvalOutcome.False;
             foreach (var tuple in tuples)
             {
-                if (!await ConditionSatisfiedAsync(index, tenant, obj, tuple, context, ctx, ct))
-                    continue;
+                var cond = await ConditionOutcomeAsync(index, tenant, obj, tuple, context, ctx, ct);
+                if (cond.Truth == EvalTruth.False) continue;
 
-                var s = tuple.Subject;
-
-                if (s.IsWildcard && string.Equals(s.Type, subject.Type, StringComparison.Ordinal))
-                    return true;
-
-                if (!s.IsSubjectSet && !s.IsWildcard
-                    && string.Equals(s.Type, subject.Type, StringComparison.Ordinal)
-                    && string.Equals(s.Id, subject.Id, StringComparison.Ordinal))
-                    return true;
-
-                if (s.IsSubjectSet)
-                {
-                    var nestedObj = new EntityRef(s.Type, s.Id);
-                    if (await ResolveRelationAsync(index, tenant, nestedObj, s.Relation!, subject, context, ctx, ct))
-                        return true;
-                }
+                var structural = await MatchTupleAsync(index, tenant, tuple, subject, context, ctx, ct);
+                var contribution = EvalOutcome.And(cond, structural);
+                if (contribution.IsTrue) return EvalOutcome.True;
+                if (contribution.IsUnknown) acc = EvalOutcome.Or(acc, contribution);
             }
-            return false;
+            return acc;
         }
     }
 
-    private async Task<bool> ConditionSatisfiedAsync(
+    private async Task<EvalOutcome> MatchTupleAsync(
+        SchemaIndex index, TenantContext tenant, RelationTuple tuple, SubjectRef subject,
+        RequestContext context, EvalContext ctx, CancellationToken ct)
+    {
+        var s = tuple.Subject;
+
+        if (s.IsWildcard && string.Equals(s.Type, subject.Type, StringComparison.Ordinal))
+            return EvalOutcome.True;
+
+        if (!s.IsSubjectSet && !s.IsWildcard
+            && string.Equals(s.Type, subject.Type, StringComparison.Ordinal)
+            && string.Equals(s.Id, subject.Id, StringComparison.Ordinal))
+            return EvalOutcome.True;
+
+        if (s.IsSubjectSet)
+            return await ResolveRelationAsync(index, tenant, new EntityRef(s.Type, s.Id), s.Relation!, subject, context, ctx, ct);
+
+        return EvalOutcome.False;
+    }
+
+    private async Task<EvalOutcome> ConditionOutcomeAsync(
         SchemaIndex index, TenantContext tenant, EntityRef obj, RelationTuple tuple,
         RequestContext context, EvalContext ctx, CancellationToken ct)
     {
-        if (tuple.Condition is null) return true;
+        if (tuple.Condition is null) return EvalOutcome.True;
         ctx.MarkConditionTouched();
         var def = index.Condition(tuple.Condition.Name);
         var attrs = await _attributes.GetAsync(tenant, obj, ct) ?? new Dictionary<string, object?>();
-        return _conditions.Evaluate(def, tuple.Condition, attrs, context).Allowed;
+        var result = _conditions.Evaluate(def, tuple.Condition, attrs, context);
+        return EvalOutcome.FromCondition(tuple.Condition.Name, result);
     }
 }
