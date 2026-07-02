@@ -21,13 +21,13 @@ public sealed class ChangeLogViewerTests
 
         public ChangeLogFilter? CapturedFilter { get; private set; }
 
-        public Task WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default) =>
+        public Task<ConsistencyToken> WriteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default) =>
+        public Task<ConsistencyToken> DeleteTuplesAsync(TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default) =>
+        public Task<ConsistencyToken> WriteAttributesAsync(TenantContext tenant, string actor, EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<RelationTuple>> ReadTuplesAsync(TenantContext tenant, TupleFilter filter, CancellationToken ct = default) =>

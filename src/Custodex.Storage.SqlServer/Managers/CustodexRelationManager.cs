@@ -16,50 +16,53 @@ public sealed class CustodexRelationManager(
     AuditedWritePath audited) : IRelationManager
 {
     /// <inheritdoc />
-    public async Task WriteTuplesAsync(
+    public async Task<ConsistencyToken> WriteTuplesAsync(
         TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
     {
         await using var uow = await uowFactory.BeginAsync(ct);
-        await WriteTuplesAsync(tenant, actor, tuples, uow, ct);
+        var token = await WriteTuplesAsync(tenant, actor, tuples, uow, ct);
         await uow.CommitAsync(ct);
+        return token;
     }
 
     /// <inheritdoc />
-    public Task WriteTuplesAsync(
+    public Task<ConsistencyToken> WriteTuplesAsync(
         TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, IUnitOfWork uow, CancellationToken ct = default)
         => audited.WriteTuplesAsync(tenant, actor, tuples, [], uow, ct);
 
     /// <inheritdoc />
-    public async Task DeleteTuplesAsync(
+    public async Task<ConsistencyToken> DeleteTuplesAsync(
         TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
     {
         await using var uow = await uowFactory.BeginAsync(ct);
-        await DeleteTuplesAsync(tenant, actor, tuples, uow, ct);
+        var token = await DeleteTuplesAsync(tenant, actor, tuples, uow, ct);
         await uow.CommitAsync(ct);
+        return token;
     }
 
     /// <inheritdoc />
-    public Task DeleteTuplesAsync(
+    public Task<ConsistencyToken> DeleteTuplesAsync(
         TenantContext tenant, string actor, IReadOnlyList<RelationTuple> tuples, IUnitOfWork uow, CancellationToken ct = default)
         => audited.WriteTuplesAsync(tenant, actor, [], tuples, uow, ct);
 
     /// <inheritdoc />
-    public async Task WriteAttributesAsync(
+    public async Task<ConsistencyToken> WriteAttributesAsync(
         TenantContext tenant, string actor, EntityRef obj,
         IReadOnlyDictionary<string, object?> attrs, CancellationToken ct = default)
     {
         await using var uow = await uowFactory.BeginAsync(ct);
-        await WriteAttributesAsync(tenant, actor, obj, attrs, uow, ct);
+        var token = await WriteAttributesAsync(tenant, actor, obj, attrs, uow, ct);
         await uow.CommitAsync(ct);
+        return token;
     }
 
     /// <inheritdoc />
-    public async Task WriteAttributesAsync(
+    public async Task<ConsistencyToken> WriteAttributesAsync(
         TenantContext tenant, string actor, EntityRef obj,
         IReadOnlyDictionary<string, object?> attrs, IUnitOfWork uow, CancellationToken ct = default)
     {
         var before = await attributes.GetAsync(tenant, obj, ct) ?? new Dictionary<string, object?>();
-        await audited.WriteAttributesAsync(tenant, actor, obj, before, attrs, uow, ct);
+        return await audited.WriteAttributesAsync(tenant, actor, obj, before, attrs, uow, ct);
     }
 
     /// <inheritdoc />

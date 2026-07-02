@@ -22,6 +22,8 @@ internal sealed class CachingAuthorizer : IAuthorizer
 
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
+        var (bypassCache, floorEpoch) = ConsistencyPolicy.Resolve(request.Context.Consistency, request.Tenant);
+
         if (request.Explain)
             return await _inner.CheckAsync(request, ct);
 
@@ -30,11 +32,14 @@ internal sealed class CachingAuthorizer : IAuthorizer
         var epoch = await _cache.GetEpochAsync(request.Tenant, ct);
         var key = CheckCacheKey.Build(request.Tenant, schema.Version, request.Object, request.Permission, request.Subject);
 
-        var entry = await _cache.GetAsync(key, ct);
-        if (entry is not null && entry.Epoch == epoch)
+        if (!bypassCache)
         {
-            CustodexDiagnostics.CacheHits.Add(1);
-            return new CheckResult(CacheValueCodec.Decode(entry.Value));
+            var entry = await _cache.GetAsync(key, ct);
+            if (entry is not null && entry.Epoch == epoch && (floorEpoch is null || entry.Epoch >= floorEpoch))
+            {
+                CustodexDiagnostics.CacheHits.Add(1);
+                return new CheckResult(CacheValueCodec.Decode(entry.Value));
+            }
         }
 
         CustodexDiagnostics.CacheMisses.Add(1);
@@ -47,11 +52,20 @@ internal sealed class CachingAuthorizer : IAuthorizer
     }
 
     public Task<IReadOnlyList<CheckResult>> BatchCheckAsync(BatchCheckRequest request, CancellationToken ct = default)
-        => _inner.BatchCheckAsync(request, ct);
+    {
+        ConsistencyPolicy.Validate(request.Context.Consistency, request.Tenant);
+        return _inner.BatchCheckAsync(request, ct);
+    }
 
     public Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
-        => _inner.ListObjectsAsync(request, ct);
+    {
+        ConsistencyPolicy.Validate(request.Context.Consistency, request.Tenant);
+        return _inner.ListObjectsAsync(request, ct);
+    }
 
     public Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
-        => _inner.ListSubjectsAsync(request, ct);
+    {
+        ConsistencyPolicy.Validate(request.Context.Consistency, request.Tenant);
+        return _inner.ListSubjectsAsync(request, ct);
+    }
 }

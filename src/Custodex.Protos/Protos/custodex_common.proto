@@ -32,6 +32,18 @@ message RequestContext {
   google.protobuf.Timestamp now = 1;
   SubjectRef subject = 2;
   google.protobuf.Struct attributes = 3;
+  Consistency consistency = 4;
+}
+
+enum ConsistencyMode {
+  CONSISTENCY_MODE_MINIMIZE_LATENCY = 0;
+  CONSISTENCY_MODE_AT_LEAST_AS_FRESH = 1;
+  CONSISTENCY_MODE_FULLY_CONSISTENT = 2;
+}
+
+message Consistency {
+  ConsistencyMode mode = 1;
+  string token = 2;
 }
 
 message ExplainNode {

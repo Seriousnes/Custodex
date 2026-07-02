@@ -15,27 +15,29 @@ namespace Custodex.Client;
 public sealed class GrpcRelationManager(Proto.Relations.RelationsClient client) : IRelationManager
 {
     /// <inheritdoc/>
-    public async Task WriteTuplesAsync(TenantContext tenant, string actor,
+    public async Task<ConsistencyToken> WriteTuplesAsync(TenantContext tenant, string actor,
         IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
     {
         var proto = new Proto.WriteTuplesRequest { Actor = actor };
         foreach (var t in tuples) proto.Tuples.Add(ProtoMap.ToProto(t));
-        await RemoteStatus.UnwrapAsync(() =>
+        var response = await RemoteStatus.UnwrapAsync(() =>
             client.WriteTuplesAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
+        return new ConsistencyToken(response.ConsistencyToken);
     }
 
     /// <inheritdoc/>
-    public async Task DeleteTuplesAsync(TenantContext tenant, string actor,
+    public async Task<ConsistencyToken> DeleteTuplesAsync(TenantContext tenant, string actor,
         IReadOnlyList<RelationTuple> tuples, CancellationToken ct = default)
     {
         var proto = new Proto.DeleteTuplesRequest { Actor = actor };
         foreach (var t in tuples) proto.Tuples.Add(ProtoMap.ToProto(t));
-        await RemoteStatus.UnwrapAsync(() =>
+        var response = await RemoteStatus.UnwrapAsync(() =>
             client.DeleteTuplesAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
+        return new ConsistencyToken(response.ConsistencyToken);
     }
 
     /// <inheritdoc/>
-    public async Task WriteAttributesAsync(TenantContext tenant, string actor,
+    public async Task<ConsistencyToken> WriteAttributesAsync(TenantContext tenant, string actor,
         EntityRef obj, IReadOnlyDictionary<string, object?> attributes, CancellationToken ct = default)
     {
         var proto = new Proto.WriteAttributesRequest
@@ -44,8 +46,9 @@ public sealed class GrpcRelationManager(Proto.Relations.RelationsClient client) 
             Object = ProtoMap.ToProto(obj),
             Attributes = ProtoMap.ToStruct(attributes),
         };
-        await RemoteStatus.UnwrapAsync(() =>
+        var response = await RemoteStatus.UnwrapAsync(() =>
             client.WriteAttributesAsync(proto, headers: ClientHeaders.TenantMeta(tenant), cancellationToken: ct).ResponseAsync);
+        return new ConsistencyToken(response.ConsistencyToken);
     }
 
     /// <inheritdoc/>

@@ -23,7 +23,7 @@ public sealed class MySqlChangeLogStore(string connectionString) : IChangeLogSto
         string? Before, string? After, DateTime OccurredAt);
 
     /// <inheritdoc />
-    public async Task AppendAsync(
+    public async Task<long> AppendAsync(
         TenantContext t, ChangeLogEntry entry, IUnitOfWork uow, CancellationToken ct = default)
     {
         var w = MySqlUnitOfWork.From(uow);
@@ -39,6 +39,7 @@ public sealed class MySqlChangeLogStore(string connectionString) : IChangeLogSto
         cmd.Parameters.AddWithValue("before", entry.Before is null ? DBNull.Value : Json.Serialize(entry.Before));
         cmd.Parameters.AddWithValue("after", entry.After is null ? DBNull.Value : Json.Serialize(entry.After));
         await cmd.ExecuteNonQueryAsync(ct);
+        return cmd.LastInsertedId;
     }
 
     /// <inheritdoc />

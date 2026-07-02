@@ -1,4 +1,5 @@
 using Custodex.Protos;
+using Custodex.TestKit;
 
 using Shouldly;
 
@@ -6,6 +7,46 @@ namespace Custodex.Service.Tests;
 
 public sealed class ProtoMapTests
 {
+    [Fact]
+    public void Consistency_at_least_as_fresh_round_trips_through_request_context()
+    {
+        var world = TestWorld.New();
+        var token = Abstractions.ConsistencyToken.Create(world.Tenant, epoch: 5, changeLogId: 9);
+        var ctx = new Abstractions.RequestContext(
+            DateTimeOffset.UnixEpoch, world.User(world.SubjectId()), new Dictionary<string, object?>(),
+            Abstractions.Consistency.AtLeastAsFresh(token));
+
+        var back = ProtoMap.FromProto(ProtoMap.ToProto(ctx));
+
+        back.Consistency!.Mode.ShouldBe(Abstractions.ConsistencyMode.AtLeastAsFresh);
+        back.Consistency.Token!.Value.ShouldBe(token.Value);
+    }
+
+    [Fact]
+    public void Consistency_fully_consistent_round_trips_through_request_context()
+    {
+        var world = TestWorld.New();
+        var ctx = new Abstractions.RequestContext(
+            DateTimeOffset.UnixEpoch, world.User(world.SubjectId()), new Dictionary<string, object?>(),
+            Abstractions.Consistency.FullyConsistent);
+
+        var back = ProtoMap.FromProto(ProtoMap.ToProto(ctx));
+
+        back.Consistency!.Mode.ShouldBe(Abstractions.ConsistencyMode.FullyConsistent);
+    }
+
+    [Fact]
+    public void Absent_consistency_maps_to_null()
+    {
+        var world = TestWorld.New();
+        var ctx = new Abstractions.RequestContext(
+            DateTimeOffset.UnixEpoch, world.User(world.SubjectId()), new Dictionary<string, object?>());
+
+        var back = ProtoMap.FromProto(ProtoMap.ToProto(ctx));
+
+        back.Consistency.ShouldBeNull();
+    }
+
     [Fact]
     public void EntityRef_wildcard_round_trips()
     {

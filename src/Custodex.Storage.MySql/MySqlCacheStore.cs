@@ -32,17 +32,26 @@ public sealed class MySqlCacheStore(string connectionString, TenantContext scope
     }
 
     /// <inheritdoc />
-    public async Task BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
+    public async Task<long> BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
     {
         var w = MySqlUnitOfWork.From(uow);
-        await using var cmd = new MySqlCommand("""
+        await using (var cmd = new MySqlCommand("""
             INSERT INTO tenant_epochs (store_id, tenant_id, epoch)
             VALUES (@store, @tenant, 1)
             ON DUPLICATE KEY UPDATE epoch = epoch + 1
+            """, w.Connection, w.Transaction))
+        {
+            cmd.Parameters.AddWithValue("store", t.Store);
+            cmd.Parameters.AddWithValue("tenant", t.Tenant);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await using var read = new MySqlCommand("""
+            SELECT epoch FROM tenant_epochs WHERE store_id = @store AND tenant_id = @tenant
             """, w.Connection, w.Transaction);
-        cmd.Parameters.AddWithValue("store", t.Store);
-        cmd.Parameters.AddWithValue("tenant", t.Tenant);
-        await cmd.ExecuteNonQueryAsync(ct);
+        read.Parameters.AddWithValue("store", t.Store);
+        read.Parameters.AddWithValue("tenant", t.Tenant);
+        return Convert.ToInt64(await read.ExecuteScalarAsync(ct));
     }
 
     /// <inheritdoc />

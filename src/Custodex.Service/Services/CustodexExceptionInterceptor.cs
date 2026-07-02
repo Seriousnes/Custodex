@@ -64,6 +64,15 @@ public sealed class CustodexExceptionInterceptor : Interceptor
                 trailers.Add("custodex-error-message", error);
             throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message), trailers);
         }
+        catch (InvalidConsistencyTokenException ex)
+        {
+            var trailers = new Metadata
+            {
+                { "custodex-error-kind", "invalid_consistency_token" },
+                { "custodex-error-detail", ex.Message },
+            };
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message), trailers);
+        }
         catch (EvaluationLimitException ex)
         {
             var trailers = new Metadata

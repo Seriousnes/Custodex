@@ -31,7 +31,7 @@ public sealed partial class SqlServerCacheStore(string connectionString, TenantC
     }
 
     /// <inheritdoc />
-    public async Task BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
+    public async Task<long> BumpEpochAsync(TenantContext t, IUnitOfWork uow, CancellationToken ct = default)
     {
         var w = SqlServerUnitOfWork.From(uow);
         await using var cmd = new SqlCommand("""
@@ -40,9 +40,10 @@ public sealed partial class SqlServerCacheStore(string connectionString, TenantC
             IF @@ROWCOUNT = 0
                 INSERT INTO custodex.tenant_epochs (store_id, tenant_id, epoch)
                 VALUES (@store, @tenant, 1);
+            SELECT epoch FROM custodex.tenant_epochs WHERE store_id = @store AND tenant_id = @tenant;
             """, w.Connection, w.Transaction);
         cmd.Parameters.AddWithValue("@store", t.Store);
         cmd.Parameters.AddWithValue("@tenant", t.Tenant);
-        await cmd.ExecuteNonQueryAsync(ct);
+        return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 }

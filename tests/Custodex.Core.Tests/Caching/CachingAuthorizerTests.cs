@@ -82,6 +82,11 @@ public class CachingAuthorizerTests
         new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef(_world.UserType, user),
             new Dictionary<string, object?>()), Explain: explain);
 
+    private CheckRequest Req(string user, Consistency consistency) => new(
+        T, new EntityRef(_objType, _objId), _view, new SubjectRef(_world.UserType, user),
+        new RequestContext(DateTimeOffset.UnixEpoch, new SubjectRef(_world.UserType, user),
+            new Dictionary<string, object?>(), consistency));
+
     [Fact]
     public async Task Second_identical_check_is_served_from_cache()
     {
@@ -193,6 +198,87 @@ public class CachingAuthorizerTests
 
         misses.ShouldBeGreaterThanOrEqualTo(1);
         hits.ShouldBeGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task MinimizeLatency_serves_the_second_check_from_cache()
+    {
+        var (auth, counter, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
+
+        await auth.CheckAsync(Req(_subjectId, Consistency.MinimizeLatency));
+        var afterFirst = counter.GetByObjectCalls;
+
+        await auth.CheckAsync(Req(_subjectId, Consistency.MinimizeLatency));
+        counter.GetByObjectCalls.ShouldBe(afterFirst);
+    }
+
+    [Fact]
+    public async Task FullyConsistent_never_serves_from_cache()
+    {
+        var (auth, counter, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
+
+        await auth.CheckAsync(Req(_subjectId));
+        var afterFirst = counter.GetByObjectCalls;
+
+        await auth.CheckAsync(Req(_subjectId, Consistency.FullyConsistent));
+        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);
+    }
+
+    [Fact]
+    public async Task AtLeastAsFresh_with_a_satisfied_token_serves_from_cache()
+    {
+        var (auth, counter, cache, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
+
+        await auth.CheckAsync(Req(_subjectId));
+        var afterFirst = counter.GetByObjectCalls;
+
+        var epoch = await cache.GetEpochAsync(T);
+        var token = ConsistencyToken.Create(T, epoch, changeLogId: 0);
+
+        await auth.CheckAsync(Req(_subjectId, Consistency.AtLeastAsFresh(token)));
+        counter.GetByObjectCalls.ShouldBe(afterFirst);
+    }
+
+    [Fact]
+    public async Task AtLeastAsFresh_with_a_future_epoch_token_recomputes()
+    {
+        var (auth, counter, cache, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
+
+        await auth.CheckAsync(Req(_subjectId));
+        var afterFirst = counter.GetByObjectCalls;
+
+        var aheadEpoch = await cache.GetEpochAsync(T) + 1;
+        var token = ConsistencyToken.Create(T, aheadEpoch, changeLogId: 0);
+
+        await auth.CheckAsync(Req(_subjectId, Consistency.AtLeastAsFresh(token)));
+        counter.GetByObjectCalls.ShouldBeGreaterThan(afterFirst);
+    }
+
+    [Fact]
+    public async Task AtLeastAsFresh_with_a_garbage_token_throws()
+    {
+        var (auth, _, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
+
+        var garbage = Consistency.AtLeastAsFresh(new ConsistencyToken("not-a-token"));
+
+        await Should.ThrowAsync<InvalidConsistencyTokenException>(() => auth.CheckAsync(Req(_subjectId, garbage)));
+    }
+
+    [Fact]
+    public async Task AtLeastAsFresh_with_a_foreign_tenant_token_throws()
+    {
+        var (auth, _, _, _) = await NewAsync(UnconditionedSchema(), new NullConditionEvaluator(),
+            new RelationTuple(new EntityRef(_objType, _objId), _viewer, _world.User(_subjectId)));
+
+        var foreign = ConsistencyToken.Create(new TenantContext(T.Store, T.Tenant + "-x"), 0, 0);
+
+        await Should.ThrowAsync<InvalidConsistencyTokenException>(
+            () => auth.CheckAsync(Req(_subjectId, Consistency.AtLeastAsFresh(foreign))));
     }
 
     private sealed class AlwaysTrueConditionEvaluator : IConditionEvaluator

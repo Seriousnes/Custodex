@@ -14,8 +14,8 @@ public static partial class RestEndpoints
             WriteTuplesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var tuples = req.Tuples.Select(RestMap.FromDto).ToList();
-            await relations.WriteTuplesAsync(tc.Current, req.Actor, tuples, ct);
-            return Results.Ok();
+            var token = await relations.WriteTuplesAsync(tc.Current, req.Actor, tuples, ct);
+            return Results.Ok(new WriteResultDto(token.Value));
         })
         .WithName("WriteTuples")
         .WithSummary("Write relation tuples (audited).");
@@ -24,8 +24,8 @@ public static partial class RestEndpoints
             [FromBody] DeleteTuplesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var tuples = req.Tuples.Select(RestMap.FromDto).ToList();
-            await relations.DeleteTuplesAsync(tc.Current, req.Actor, tuples, ct);
-            return Results.Ok();
+            var token = await relations.DeleteTuplesAsync(tc.Current, req.Actor, tuples, ct);
+            return Results.Ok(new WriteResultDto(token.Value));
         })
         .WithName("DeleteTuples")
         .WithSummary("Delete relation tuples (audited).");
@@ -33,13 +33,13 @@ public static partial class RestEndpoints
         group.MapPut("/attributes", async (
             WriteAttributesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
-            await relations.WriteAttributesAsync(
+            var token = await relations.WriteAttributesAsync(
                 tc.Current,
                 req.Actor,
                 RestMap.FromDto(req.Object),
                 req.Attributes,
                 ct);
-            return Results.Ok();
+            return Results.Ok(new WriteResultDto(token.Value));
         })
         .WithName("WriteAttributes")
         .WithSummary("Write resource attributes used in condition evaluation.");

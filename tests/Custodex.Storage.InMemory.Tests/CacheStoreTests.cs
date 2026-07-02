@@ -60,4 +60,14 @@ public class CacheStoreTests
         await store.BumpEpochAsync(tenant, Uow);
         (await store.GetEpochAsync(tenant)).ShouldBe(2);
     }
+
+    [Fact]
+    public async Task Bump_returns_the_post_bump_epoch()
+    {
+        var tenant = TestWorld.New().Tenant;
+        var store = new InMemoryCacheStore();
+
+        (await store.BumpEpochAsync(tenant, Uow)).ShouldBe(1);
+        (await store.BumpEpochAsync(tenant, Uow)).ShouldBe(2);
+    }
 }

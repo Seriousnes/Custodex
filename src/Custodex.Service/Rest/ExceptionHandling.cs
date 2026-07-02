@@ -30,6 +30,7 @@ public static partial class RestEndpoints
                     UnknownRelationException => (400, "Unknown relation."),
                     UnknownPermissionException => (400, "Unknown permission."),
                     SchemaValidationException => (400, "Schema validation failed."),
+                    InvalidConsistencyTokenException => (400, "Invalid consistency token."),
                     System.Text.Json.JsonException => (400, "Malformed JSON in request body."),
                     EvaluationLimitException => (422, "Evaluation limit exceeded."),
                     ExclusionCycleException => (422, "Permission cycle through an exclusion."),

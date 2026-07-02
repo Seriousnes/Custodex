@@ -6,11 +6,20 @@ public sealed record EntityRefDto(string Type, string Id);
 /// <summary>Identifies a subject, optionally scoped to a subject-set via a relation.</summary>
 public sealed record SubjectRefDto(string Type, string Id, string? Relation);
 
-/// <summary>Per-request context: the acting subject, optional point-in-time, and condition attributes.</summary>
+/// <summary>The consistency level a read requests. <c>Mode</c> is <c>"minimize-latency"</c> (the default),
+/// <c>"at-least-as-fresh"</c>, or <c>"fully-consistent"</c>; <c>Token</c> carries the freshness floor from a
+/// prior write for <c>"at-least-as-fresh"</c>.</summary>
+public sealed record ConsistencyDto(string Mode, string? Token = null);
+
+/// <summary>Per-request context: the acting subject, optional point-in-time, condition attributes, and optional consistency level.</summary>
 public sealed record RequestContextDto(
     SubjectRefDto Subject,
     DateTimeOffset? Now,
-    Dictionary<string, object?>? Attributes);
+    Dictionary<string, object?>? Attributes,
+    ConsistencyDto? Consistency = null);
+
+/// <summary>The result of a write: an opaque consistency token to replay on a later read for read-your-writes.</summary>
+public sealed record WriteResultDto(string ConsistencyToken);
 
 /// <summary>Request body for a single authorization check.</summary>
 public sealed record CheckRequestDto(

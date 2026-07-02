@@ -48,6 +48,14 @@ public sealed class UnknownPermissionException(string type, string permission)
 public sealed class EvaluationLimitException(string detail) : Exception(detail);
 
 /// <summary>
+/// Thrown when a supplied <see cref="ConsistencyToken"/> is malformed, carries an unsupported version,
+/// or names a tenant other than the one the operation runs in. A consistency-token problem is an error,
+/// never a silent deny.
+/// </summary>
+/// <param name="detail">A description of what made the token invalid.</param>
+public sealed class InvalidConsistencyTokenException(string detail) : Exception(detail);
+
+/// <summary>
 /// Thrown when evaluation re-enters a permission it is already deciding after crossing an
 /// exclusion (<c>-</c>). Such a cycle has no sound answer, so evaluation refuses to decide
 /// rather than fail open; schema validation rejects schemas that can reach this state.

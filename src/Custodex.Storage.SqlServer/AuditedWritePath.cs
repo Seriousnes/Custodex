@@ -18,33 +18,36 @@ public sealed class AuditedWritePath(
     /// Writes the given tuples, appends a <c>change_log</c> entry per affected tuple, and bumps
     /// the cache epoch — all on <paramref name="uow"/>.
     /// </summary>
-    public async Task WriteTuplesAsync(
+    public async Task<ConsistencyToken> WriteTuplesAsync(
         TenantContext t, string actor,
         IReadOnlyList<RelationTuple> add, IReadOnlyList<RelationTuple> remove,
         IUnitOfWork uow, CancellationToken ct = default)
     {
         await relations.WriteAsync(t, add, remove, uow, ct);
 
+        long changeLogId = 0;
         foreach (var tuple in add)
-            await changeLog.AppendAsync(t, AuditEntry(actor, "write", Target(tuple), before: null, after: tuple), uow, ct);
+            changeLogId = await changeLog.AppendAsync(t, AuditEntry(actor, "write", Target(tuple), before: null, after: tuple), uow, ct);
         foreach (var tuple in remove)
-            await changeLog.AppendAsync(t, AuditEntry(actor, "delete", Target(tuple), before: tuple, after: null), uow, ct);
+            changeLogId = await changeLog.AppendAsync(t, AuditEntry(actor, "delete", Target(tuple), before: tuple, after: null), uow, ct);
 
-        await cache.BumpEpochAsync(t, uow, ct);
+        var epoch = await cache.BumpEpochAsync(t, uow, ct);
+        return ConsistencyToken.Create(t, epoch, changeLogId);
     }
 
     /// <summary>
     /// Writes the given attributes, appends a <c>change_log</c> entry, and bumps the cache epoch
     /// — all on <paramref name="uow"/>.
     /// </summary>
-    public async Task WriteAttributesAsync(
+    public async Task<ConsistencyToken> WriteAttributesAsync(
         TenantContext t, string actor, EntityRef obj,
         IReadOnlyDictionary<string, object?> before, IReadOnlyDictionary<string, object?> after,
         IUnitOfWork uow, CancellationToken ct = default)
     {
         await attributes.SetAsync(t, obj, after, uow, ct);
-        await changeLog.AppendAsync(t, AuditEntry(actor, "write", obj.ToString(), before, after), uow, ct);
-        await cache.BumpEpochAsync(t, uow, ct);
+        var changeLogId = await changeLog.AppendAsync(t, AuditEntry(actor, "write", obj.ToString(), before, after), uow, ct);
+        var epoch = await cache.BumpEpochAsync(t, uow, ct);
+        return ConsistencyToken.Create(t, epoch, changeLogId);
     }
 
     /// <summary>
