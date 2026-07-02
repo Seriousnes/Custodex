@@ -252,6 +252,55 @@ public class ScopedCachingAuthorizerTests
     }
 
     [Fact]
+    public async Task Conditioned_skip_never_serves_a_conditional_from_cache()
+    {
+        var world = TestWorld.New();
+        var condition = world.ConditionName();
+        var key = world.ParamName();
+        var conditional = new CheckResult(CheckDecision.Conditional, [new UnmetCondition(condition, [key])]);
+        var h = await BuildAsync(Conditioned(),
+            configure: o => o.Conditioned = ConditionedCaching.Skip,
+            decide: _ => conditional);
+        var cache = h.NewCache();
+
+        var first = await cache.CheckAsync(h.Request());
+        var second = await cache.CheckAsync(h.Request());
+
+        first.Decision.ShouldBe(CheckDecision.Conditional);
+        second.Decision.ShouldBe(CheckDecision.Conditional);
+        h.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Conditional_under_context_in_key_is_never_served_for_a_context_that_would_resolve_it()
+    {
+        var world = TestWorld.New();
+        var condition = world.ConditionName();
+        var key = world.ParamName();
+        var h = await BuildAsync(Conditioned(),
+            configure: o => o.Conditioned = ConditionedCaching.ContextInKey,
+            decide: req => req.Context.Attributes.ContainsKey(key)
+                ? new CheckResult(true)
+                : new CheckResult(CheckDecision.Conditional, [new UnmetCondition(condition, [key])]));
+        var cache = h.NewCache();
+        var now = h.Time.GetUtcNow();
+
+        var withoutKey = await cache.CheckAsync(h.Request(now));
+        withoutKey.Decision.ShouldBe(CheckDecision.Conditional);
+        h.Authorizer.CheckCalls.ShouldBe(1);
+
+        var resolving = new Dictionary<string, object?>(StringComparer.Ordinal) { [key] = true };
+        var withKey = await cache.CheckAsync(h.Request(now, resolving));
+        withKey.Decision.ShouldBe(CheckDecision.Allow);
+        h.Authorizer.CheckCalls.ShouldBe(2);
+
+        var repeat = await cache.CheckAsync(h.Request(now));
+        repeat.Decision.ShouldBe(CheckDecision.Conditional);
+        repeat.UnmetConditions[0].MissingKeys.ShouldBe([key]);
+        h.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task Ttl_expiry_forces_reevaluation()
     {
         var h = await BuildAsync(Unconditioned(), configure: o => o.Ttl = TimeSpan.FromMinutes(2));

@@ -6,21 +6,25 @@ namespace Custodex.Core.Conditions;
 
 /// <summary>
 /// Evaluates a condition's expression tree over its bound parameters, the object's attribute bag,
-/// and the request context. The body must reduce to a boolean; anything else — a type mismatch,
-/// a missing parameter or attribute, division by zero — yields a denial carrying a diagnostic.
+/// and the request context, in three-valued (Kleene) logic. The body must reduce to a boolean; a type
+/// mismatch, a missing parameter, division by zero, or a non-boolean body yields a denial carrying a
+/// diagnostic. An attribute the body reads that is absent from both the object's attributes and the
+/// request context yields a missing-context result naming that key, since supplying it could change the outcome.
+/// When both carry the field, the object's value governs; a field whose stored value is <see langword="null"/>
+/// is treated as absent, so a null object value defers to the request context.
 /// </summary>
 public static class ConditionEvaluator
 {
     private sealed class EvalException(string message) : Exception(message);
 
     /// <summary>
-    /// Evaluates <paramref name="definition"/>'s body and reports whether it held.
+    /// Evaluates <paramref name="definition"/>'s body and reports how it resolved.
     /// </summary>
     /// <param name="definition">The condition's declared parameters and body.</param>
-    /// <param name="attributes">The object's attribute bag the body may read.</param>
-    /// <param name="context">The request context, supplying ambient values such as the time and subject.</param>
+    /// <param name="attributes">The object's attribute bag the body may read; the request context's attributes are consulted as a fallback.</param>
+    /// <param name="context">The request context, supplying ambient values such as the time and subject and caller-provided attributes.</param>
     /// <param name="parameters">The values bound to the condition's declared parameters.</param>
-    /// <returns>An allow if the body evaluated to <see langword="true"/>; otherwise a deny, with a diagnostic when evaluation failed.</returns>
+    /// <returns>Satisfied when the body evaluated to <see langword="true"/>; unsatisfied on a definite failure; missing-context when a read attribute was absent.</returns>
     public static ConditionResult Evaluate(
         ConditionDef definition,
         IReadOnlyDictionary<string, object?> attributes,
@@ -32,6 +36,9 @@ public static class ConditionEvaluator
         try
         {
             var value = Eval(definition.Body, attributes, context, parameters, paramTypes);
+            if (value.IsUnknown)
+                return ConditionResult.Missing(value.MissingKeys,
+                    $"Condition '{definition.Name}': attribute(s) [{string.Join(", ", value.MissingKeys)}] were not available.");
             if (value.Kind != CelKind.Bool)
                 return ConditionResult.Error(
                     $"Condition '{definition.Name}' body did not evaluate to a boolean.");
@@ -56,12 +63,12 @@ public static class ConditionEvaluator
         LiteralString l => CelValue.String(l.Value),
 
         ParamRef p => ResolveParam(p.Name, parameters, paramTypes),
-        AttributeRef a => ResolveAttribute(a.Field, a.Type, attributes),
+        AttributeRef a => ResolveAttribute(a.Field, a.Type, attributes, context),
         ContextNow => CelValue.Timestamp(context.Now),
         ContextSubject => CelValue.String(context.Subject.Id),
 
         HourOf h => EvalHour(h, attributes, context, parameters, paramTypes),
-        Not n => CelValue.Bool(!ExpectBool(Eval(n.Inner, attributes, context, parameters, paramTypes))),
+        Not n => EvalNot(n, attributes, context, parameters, paramTypes),
         BoolOp b => EvalBool(b, attributes, context, parameters, paramTypes),
         Compare c => EvalCompare(c, attributes, context, parameters, paramTypes),
         Arithmetic ar => EvalArith(ar, attributes, context, parameters, paramTypes),
@@ -93,10 +100,11 @@ public static class ConditionEvaluator
     }
 
     private static CelValue ResolveAttribute(
-        string field, ConditionType? declaredType, IReadOnlyDictionary<string, object?> attributes)
+        string field, ConditionType? declaredType,
+        IReadOnlyDictionary<string, object?> attributes, RequestContext context)
     {
-        if (!attributes.TryGetValue(field, out var raw) || raw is null)
-            throw new EvalException($"attribute '{field}' is missing.");
+        if (!TryResolveAttributeValue(field, attributes, context, out var raw))
+            return CelValue.Unknown([field]);
         if (declaredType == ConditionType.Timestamp)
             return raw switch
             {
@@ -118,15 +126,42 @@ public static class ConditionEvaluator
         };
     }
 
+    private static bool TryResolveAttributeValue(
+        string field, IReadOnlyDictionary<string, object?> attributes, RequestContext context, out object raw)
+    {
+        if (attributes.TryGetValue(field, out var fromResource) && fromResource is not null)
+        {
+            raw = fromResource;
+            return true;
+        }
+        if (context.Attributes.TryGetValue(field, out var fromContext) && fromContext is not null)
+        {
+            raw = fromContext;
+            return true;
+        }
+        raw = null!;
+        return false;
+    }
+
     private static CelValue EvalHour(
         HourOf h, IReadOnlyDictionary<string, object?> attributes, RequestContext context,
         IReadOnlyDictionary<string, object?> parameters,
         IReadOnlyDictionary<string, ConditionType> paramTypes)
     {
         var ts = CoerceToTimestamp(Eval(h.Timestamp, attributes, context, parameters, paramTypes));
+        if (ts.IsUnknown) return ts;
         if (ts.Kind != CelKind.Timestamp)
             throw new EvalException("hour() requires a timestamp operand.");
         return CelValue.Int(ts.AsTimestamp().Hour);
+    }
+
+    private static CelValue EvalNot(
+        Not n, IReadOnlyDictionary<string, object?> attributes, RequestContext context,
+        IReadOnlyDictionary<string, object?> parameters,
+        IReadOnlyDictionary<string, ConditionType> paramTypes)
+    {
+        var inner = Eval(n.Inner, attributes, context, parameters, paramTypes);
+        return inner.IsUnknown ? inner : CelValue.Bool(!ExpectBool(inner));
     }
 
     private static CelValue EvalBool(
@@ -134,11 +169,25 @@ public static class ConditionEvaluator
         IReadOnlyDictionary<string, object?> parameters,
         IReadOnlyDictionary<string, ConditionType> paramTypes)
     {
-        var left = ExpectBool(Eval(b.Left, attributes, context, parameters, paramTypes));
-        if (b.Op == BoolConnective.And && !left) return CelValue.Bool(false);
-        if (b.Op == BoolConnective.Or && left) return CelValue.Bool(true);
-        var right = ExpectBool(Eval(b.Right, attributes, context, parameters, paramTypes));
-        return CelValue.Bool(right);
+        var left = Eval(b.Left, attributes, context, parameters, paramTypes);
+        if (IsAbsorbing(left, b.Op, out var leftDecides)) return CelValue.Bool(leftDecides);
+
+        var right = Eval(b.Right, attributes, context, parameters, paramTypes);
+        if (IsAbsorbing(right, b.Op, out var rightDecides)) return CelValue.Bool(rightDecides);
+
+        if (left.IsUnknown || right.IsUnknown)
+            return CelValue.Unknown(Merge(left.MissingKeys, right.MissingKeys));
+
+        var l = ExpectBool(left);
+        var r = ExpectBool(right);
+        return CelValue.Bool(b.Op == BoolConnective.And ? l && r : l || r);
+    }
+
+    private static bool IsAbsorbing(CelValue value, BoolConnective op, out bool decidedValue)
+    {
+        decidedValue = op == BoolConnective.Or;
+        if (value.Kind != CelKind.Bool) return false;
+        return op == BoolConnective.And ? !value.AsBool() : value.AsBool();
     }
 
     private static CelValue EvalCompare(
@@ -148,6 +197,8 @@ public static class ConditionEvaluator
     {
         var l = Eval(c.Left, attributes, context, parameters, paramTypes);
         var r = Eval(c.Right, attributes, context, parameters, paramTypes);
+        if (l.IsUnknown || r.IsUnknown)
+            return CelValue.Unknown(Merge(l.MissingKeys, r.MissingKeys));
         return CelValue.Bool(CompareValues(l, r, c.Op));
     }
 
@@ -200,6 +251,8 @@ public static class ConditionEvaluator
     {
         var l = Eval(ar.Left, attributes, context, parameters, paramTypes);
         var r = Eval(ar.Right, attributes, context, parameters, paramTypes);
+        if (l.IsUnknown || r.IsUnknown)
+            return CelValue.Unknown(Merge(l.MissingKeys, r.MissingKeys));
         if (!l.IsNumeric || !r.IsNumeric)
             throw new EvalException("arithmetic requires numeric operands.");
         var useInt = l.Kind == CelKind.Int && r.Kind == CelKind.Int;
@@ -221,16 +274,28 @@ public static class ConditionEvaluator
         IReadOnlyDictionary<string, ConditionType> paramTypes)
     {
         var item = Eval(il.Item, attributes, context, parameters, paramTypes);
+        if (item.IsUnknown) return item;
+        IReadOnlyList<string> unknownKeys = [];
         foreach (var element in il.Items)
         {
             var e = Eval(element, attributes, context, parameters, paramTypes);
+            if (e.IsUnknown) { unknownKeys = Merge(unknownKeys, e.MissingKeys); continue; }
             if (CompareValues(item, e, CompareOp.Eq))
                 return CelValue.Bool(true);
         }
-        return CelValue.Bool(false);
+        return unknownKeys.Count > 0 ? CelValue.Unknown(unknownKeys) : CelValue.Bool(false);
     }
 
     private static bool ExpectBool(CelValue value) =>
         value.Kind == CelKind.Bool ? value.AsBool()
             : throw new EvalException("expected a boolean operand.");
+
+    private static IReadOnlyList<string> Merge(IReadOnlyList<string> a, IReadOnlyList<string> b)
+    {
+        if (a.Count == 0) return b;
+        if (b.Count == 0) return a;
+        var set = new SortedSet<string>(a, StringComparer.Ordinal);
+        foreach (var key in b) set.Add(key);
+        return [.. set];
+    }
 }

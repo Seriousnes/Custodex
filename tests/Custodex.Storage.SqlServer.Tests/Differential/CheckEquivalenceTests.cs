@@ -5,14 +5,14 @@ using Custodex.Abstractions;
 namespace Custodex.Storage.SqlServer.Tests.Differential;
 
 /// <summary>Property test asserting that <c>SqlServerCteAuthorizer</c> and <c>EngineDrivenAuthorizer</c>
-/// return identical <see cref="CheckResult.Allowed"/> values over randomly generated valid models.
+/// return identical <see cref="CheckResult.Decision"/> values over randomly generated valid models.
 /// A divergence indicates a bug in the CTE path — the in-memory oracle is the spec.</summary>
 [Collection("sqlserver")]
 public class CheckEquivalenceTests(SqlServerFixture fx)
 {
     /// <summary>Samples random valid models and asserts that for every
     /// <c>(probeObject, permission, probeSubject)</c> triple the CTE authorizer's
-    /// <see cref="CheckResult.Allowed"/> matches the oracle's.</summary>
+    /// <see cref="CheckResult.Decision"/> matches the oracle's.</summary>
     [Fact]
     public async Task Cte_check_equals_oracle_check_over_random_models()
     {
@@ -29,8 +29,8 @@ public class CheckEquivalenceTests(SqlServerFixture fx)
             {
                 var ctx = new RequestContext(DateTimeOffset.UnixEpoch, subject, new Dictionary<string, object?>());
                 var req = new CheckRequest(tenant, obj, perm, subject, ctx);
-                var o = (await oracle.CheckAsync(req)).Allowed;
-                var c = (await cte.CheckAsync(req)).Allowed;
+                var o = (await oracle.CheckAsync(req)).Decision;
+                var c = (await cte.CheckAsync(req)).Decision;
                 if (o != c) return false;
             }
             return true;

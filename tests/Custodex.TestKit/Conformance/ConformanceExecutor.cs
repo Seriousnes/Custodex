@@ -30,6 +30,18 @@ public static class ConformanceExecutor
             if (result.Allowed != c.Expected)
                 throw new ConformanceException(scenario.Name, c.Name,
                     $"Check {c.Subject} on {c.Object}#{c.Permission}: expected Allowed={c.Expected}, got {result.Allowed}.");
+            if (c.ExpectedDecision is { } decision && result.Decision != decision)
+                throw new ConformanceException(scenario.Name, c.Name,
+                    $"Check {c.Subject} on {c.Object}#{c.Permission}: expected Decision={decision}, got {result.Decision}.");
+            if (c.ExpectedUnmetConditions is { } expectedUnmet)
+            {
+                var actual = result.UnmetConditions.Select(u => u.Condition).OrderBy(x => x, StringComparer.Ordinal);
+                var expected = expectedUnmet.OrderBy(x => x, StringComparer.Ordinal);
+                if (!actual.SequenceEqual(expected, StringComparer.Ordinal))
+                    throw new ConformanceException(scenario.Name, c.Name,
+                        $"Check {c.Subject} on {c.Object}#{c.Permission}: expected unmet conditions " +
+                        $"[{Render(expectedUnmet)}], got [{Render(result.UnmetConditions.Select(u => u.Condition))}].");
+            }
         }
 
         foreach (var l in scenario.ListObjects)

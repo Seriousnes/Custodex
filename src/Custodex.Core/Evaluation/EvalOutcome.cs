@@ -1,0 +1,126 @@
+using Custodex.Abstractions;
+using Custodex.Core.Conditions;
+
+namespace Custodex.Core.Evaluation;
+
+/// <summary>The Kleene three-valued truth of a sub-decision during evaluation.</summary>
+public enum EvalTruth
+{
+    /// <summary>Definitely does not hold.</summary>
+    False,
+
+    /// <summary>Definitely holds.</summary>
+    True,
+
+    /// <summary>Cannot be decided because a condition on the path could not be resolved for want of context.</summary>
+    Unknown,
+}
+
+/// <summary>
+/// The outcome of evaluating a permission sub-expression: its three-valued truth and, when
+/// <see cref="EvalTruth.Unknown"/>, the conditions that blocked a definite answer. Sub-outcomes combine through
+/// the permission algebra with Kleene logic, so a definite branch can absorb an <see cref="EvalTruth.Unknown"/> one
+/// (a satisfied union branch is a grant regardless of an unresolved sibling; a false intersection branch is a deny).
+/// </summary>
+/// <param name="Truth">The three-valued truth of the sub-decision.</param>
+/// <param name="Unmet">The conditions that made the outcome <see cref="EvalTruth.Unknown"/>, deterministically ordered and de-duplicated; empty otherwise.</param>
+public readonly record struct EvalOutcome(EvalTruth Truth, IReadOnlyList<UnmetCondition> Unmet)
+{
+    /// <summary>A definite false with no unmet conditions.</summary>
+    public static readonly EvalOutcome False = new(EvalTruth.False, []);
+
+    /// <summary>A definite true with no unmet conditions.</summary>
+    public static readonly EvalOutcome True = new(EvalTruth.True, []);
+
+    /// <summary>An undecided outcome carrying the conditions that blocked it.</summary>
+    /// <param name="unmet">The conditions that made the outcome undecided.</param>
+    /// <returns>An <see cref="EvalTruth.Unknown"/> outcome.</returns>
+    public static EvalOutcome Unknown(IReadOnlyList<UnmetCondition> unmet) => new(EvalTruth.Unknown, unmet);
+
+    /// <summary>Whether the sub-decision definitely holds.</summary>
+    public bool IsTrue => Truth == EvalTruth.True;
+
+    /// <summary>Whether the sub-decision could not be decided.</summary>
+    public bool IsUnknown => Truth == EvalTruth.Unknown;
+
+    /// <summary>Kleene disjunction, used for unions and existential traversals: true if either holds; else unknown if either is unknown; else false.</summary>
+    /// <param name="a">The left outcome.</param>
+    /// <param name="b">The right outcome.</param>
+    /// <returns>The combined outcome.</returns>
+    public static EvalOutcome Or(EvalOutcome a, EvalOutcome b)
+    {
+        if (a.Truth == EvalTruth.True || b.Truth == EvalTruth.True) return True;
+        if (a.Truth == EvalTruth.Unknown || b.Truth == EvalTruth.Unknown) return Unknown(Merge(a, b));
+        return False;
+    }
+
+    /// <summary>Kleene conjunction, used for intersections and gating a branch by a condition: false if either fails; else unknown if either is unknown; else true.</summary>
+    /// <param name="a">The left outcome.</param>
+    /// <param name="b">The right outcome.</param>
+    /// <returns>The combined outcome.</returns>
+    public static EvalOutcome And(EvalOutcome a, EvalOutcome b)
+    {
+        if (a.Truth == EvalTruth.False || b.Truth == EvalTruth.False) return False;
+        if (a.Truth == EvalTruth.Unknown || b.Truth == EvalTruth.Unknown) return Unknown(Merge(a, b));
+        return True;
+    }
+
+    /// <summary>Kleene negation: true becomes false, false becomes true, unknown stays unknown carrying its unmet conditions.</summary>
+    /// <param name="a">The outcome to negate.</param>
+    /// <returns>The negated outcome.</returns>
+    public static EvalOutcome Not(EvalOutcome a) => a.Truth switch
+    {
+        EvalTruth.True => False,
+        EvalTruth.False => True,
+        _ => a,
+    };
+
+    /// <summary>Exclusion <c>a - b</c>: false if <paramref name="a"/> fails or <paramref name="b"/> holds; true if <paramref name="a"/> holds and <paramref name="b"/> fails; otherwise unknown.</summary>
+    /// <param name="a">The included outcome.</param>
+    /// <param name="b">The excluded outcome.</param>
+    /// <returns>The combined outcome.</returns>
+    public static EvalOutcome Exclude(EvalOutcome a, EvalOutcome b) => And(a, Not(b));
+
+    /// <summary>Maps a resolved condition to a sub-outcome: satisfied is true, missing-context is unknown naming the condition, anything else is false.</summary>
+    /// <param name="conditionName">The condition's name, reported when the outcome is undecided.</param>
+    /// <param name="result">The resolved condition.</param>
+    /// <returns>The condition's contribution as a sub-outcome.</returns>
+    public static EvalOutcome FromCondition(string conditionName, ConditionResult result) => result.Resolution switch
+    {
+        ConditionResolution.Satisfied => True,
+        ConditionResolution.MissingContext => Unknown([new UnmetCondition(conditionName, result.MissingKeys)]),
+        _ => False,
+    };
+
+    /// <summary>Projects this outcome to the boundary <see cref="CheckResult"/>: true is allow, unknown is conditional carrying the unmet conditions, false is deny.</summary>
+    /// <param name="explain">The explain trace to attach, or <see langword="null"/>.</param>
+    /// <returns>The check result.</returns>
+    public CheckResult ToCheckResult(ExplainNode? explain = null) => Truth switch
+    {
+        EvalTruth.True => new CheckResult(CheckDecision.Allow, null, explain),
+        EvalTruth.Unknown => new CheckResult(CheckDecision.Conditional, Unmet, explain),
+        _ => new CheckResult(CheckDecision.Deny, null, explain),
+    };
+
+    private static IReadOnlyList<UnmetCondition> Merge(EvalOutcome a, EvalOutcome b)
+    {
+        if (a.Unmet.Count == 0) return b.Unmet;
+        if (b.Unmet.Count == 0) return a.Unmet;
+        return Dedupe([.. a.Unmet, .. b.Unmet]);
+    }
+
+    private static IReadOnlyList<UnmetCondition> Dedupe(IReadOnlyList<UnmetCondition> items)
+    {
+        var seen = new HashSet<(string Condition, string JoinedKeys)>();
+        var result = new List<UnmetCondition>(items.Count);
+        foreach (var (unmet, joinedKeys) in items
+            .Select(u => (Unmet: u, JoinedKeys: string.Join('\x1F', u.MissingKeys)))
+            .OrderBy(p => p.Unmet.Condition, StringComparer.Ordinal)
+            .ThenBy(p => p.JoinedKeys, StringComparer.Ordinal))
+        {
+            if (seen.Add((unmet.Condition, joinedKeys)))
+                result.Add(unmet);
+        }
+        return result;
+    }
+}

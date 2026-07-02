@@ -34,7 +34,7 @@ public sealed partial class NpgsqlCteAuthorizer
                 var ctx = new EvalContext(_options);
                 var ok = await CheckPermissionAsync(
                     conn, index, request.Tenant, obj, request.Permission, request.Subject, request.Context, ctx, explain: null, ct);
-                if (!ok) continue;
+                if (!ok.IsTrue) continue;
 
                 confirmed.Add(id);
                 lastConfirmed = id;
@@ -61,7 +61,7 @@ public sealed partial class NpgsqlCteAuthorizer
             var ok = await CheckPermissionAsync(
                 conn, index, request.Tenant, new EntityRef(request.ObjectType, id),
                 request.Permission, request.Subject, request.Context, ctx, explain: null, ct);
-            if (ok) return true;
+            if (ok.IsTrue) return true;
         }
         return false;
     }

@@ -22,7 +22,7 @@ public class NullConditionEvaluatorTests
         var ctx = new RequestContext(DateTimeOffset.UnixEpoch, world.User(world.SubjectId()),
             new Dictionary<string, object?>());
 
-        eval.Evaluate(def, inv, new Dictionary<string, object?>(), ctx).ShouldBeTrue();
+        eval.Evaluate(def, inv, new Dictionary<string, object?>(), ctx).Allowed.ShouldBeTrue();
     }
 
     private sealed record TrueBody : ConditionExpr;

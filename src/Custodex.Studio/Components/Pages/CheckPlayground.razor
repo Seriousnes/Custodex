@@ -73,9 +73,24 @@ else
     @if (_result is not null)
     {
         <div class="playground-result">
-            <span class="@(_result.Allowed ? "badge-allow" : "badge-deny")">
-                @(_result.Allowed ? "Allowed" : "Denied")
+            <span class="@ResultBadgeClass">
+                @ResultBadgeText
             </span>
+            @if (_result.UnmetConditions.Count > 0)
+            {
+                <ul class="playground-unmet">
+                    @foreach (var unmet in _result.UnmetConditions)
+                    {
+                        <li>
+                            <span class="playground-unmet-condition">@unmet.Condition</span>
+                            @if (unmet.MissingKeys.Count > 0)
+                            {
+                                <span class="playground-unmet-keys">missing: @string.Join(", ", unmet.MissingKeys)</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
             @if (_result.Explain is not null)
             {
                 <div class="playground-explain">
@@ -98,6 +113,20 @@ else
     private List<string> _attrValues = [];
     private CheckResult? _result;
     private string? _errorMessage;
+
+    private string ResultBadgeClass => _result!.Decision switch
+    {
+        CheckDecision.Allow => "badge-allow",
+        CheckDecision.Conditional => "badge-conditional",
+        _ => "badge-deny",
+    };
+
+    private string ResultBadgeText => _result!.Decision switch
+    {
+        CheckDecision.Allow => "Allowed",
+        CheckDecision.Conditional => "Conditional",
+        _ => "Denied",
+    };
 
     protected override void OnInitialized() => State.Changed += OnConnectionChanged;
 

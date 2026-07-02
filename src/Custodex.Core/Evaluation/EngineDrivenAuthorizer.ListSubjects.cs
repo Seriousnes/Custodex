@@ -40,7 +40,7 @@ public sealed partial class EngineDrivenAuthorizer
             var ctx = new EvalContext(_options);
             var ok = await CheckPermissionAsync(
                 index, request.Tenant, request.Object, request.Permission, subject, request.Context, ctx, explain: null, ct);
-            if (!ok) continue;
+            if (!ok.IsTrue) continue;
 
             confirmed.Add(subject);
             lastKey = key;
@@ -65,7 +65,7 @@ public sealed partial class EngineDrivenAuthorizer
             var ok = await CheckPermissionAsync(
                 index, request.Tenant, request.Object, request.Permission,
                 subject, request.Context, ctx, explain: null, ct);
-            if (ok) return true;
+            if (ok.IsTrue) return true;
         }
         return false;
     }

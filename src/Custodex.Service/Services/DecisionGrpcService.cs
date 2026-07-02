@@ -27,9 +27,21 @@ public sealed class DecisionGrpcService(
             ProtoMap.FromProto(request.Context),
             request.Explain), context.CancellationToken);
 
-        var response = new CheckResponse { Allowed = result.Allowed };
+        var response = ToResponse(result);
         if (request.Explain && result.Explain is not null)
             response.Explain = ProtoMap.ToProto(result.Explain);
+        return response;
+    }
+
+    private static CheckResponse ToResponse(Contracts.CheckResult result)
+    {
+        var response = new CheckResponse
+        {
+            Allowed = result.Allowed,
+            Decision = ProtoMap.ToProto(result.Decision),
+        };
+        foreach (var unmet in result.UnmetConditions)
+            response.UnmetConditions.Add(ProtoMap.ToProto(unmet));
         return response;
     }
 
@@ -50,7 +62,7 @@ public sealed class DecisionGrpcService(
 
         var response = new BatchCheckResponse();
         foreach (var r in results)
-            response.Results.Add(new CheckResponse { Allowed = r.Allowed });
+            response.Results.Add(ToResponse(r));
         return response;
     }
 

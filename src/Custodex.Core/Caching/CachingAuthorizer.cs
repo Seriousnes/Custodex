@@ -38,12 +38,12 @@ internal sealed class CachingAuthorizer : IAuthorizer
         }
 
         CustodexDiagnostics.CacheMisses.Add(1);
-        var (allowed, conditionTouched) = await _inner.CheckInternalAsync(request, ct);
+        var (result, conditionTouched) = await _inner.CheckInternalAsync(request, ct);
 
         if (!conditionTouched)
-            await _cache.SetAsync(key, new CacheEntry(CacheValueCodec.Encode(allowed), epoch), _ttl, ct);
+            await _cache.SetAsync(key, new CacheEntry(CacheValueCodec.Encode(result.Allowed), epoch), _ttl, ct);
 
-        return new CheckResult(allowed);
+        return result;
     }
 
     public Task<IReadOnlyList<CheckResult>> BatchCheckAsync(BatchCheckRequest request, CancellationToken ct = default)

@@ -20,10 +20,10 @@ public sealed partial class SqlServerCteAuthorizer
             var results = new List<CheckResult>(request.Items.Count);
             foreach (var item in request.Items)
             {
-                var allowed = await CheckPermissionAsync(
+                var outcome = await CheckPermissionAsync(
                     conn, index, request.Tenant, item.Object, item.Permission, item.Subject,
                     request.Context, ctx, explain: null, ct);
-                results.Add(new CheckResult(allowed));
+                results.Add(outcome.ToCheckResult());
             }
             return (IReadOnlyList<CheckResult>)results;
         }, ct);

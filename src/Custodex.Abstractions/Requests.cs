@@ -17,10 +17,74 @@ public sealed record CheckRequest(
 /// <param name="Children">The nested sub-decisions that produced this node's result.</param>
 public sealed record ExplainNode(string Description, bool Allowed, IReadOnlyList<ExplainNode> Children);
 
-/// <summary>The outcome of a Check: the allow/deny decision, with an optional explain trace.</summary>
-/// <param name="Allowed">Whether the permission is granted.</param>
-/// <param name="Explain">The root of the explain trace when one was requested; otherwise <see langword="null"/>.</param>
-public sealed record CheckResult(bool Allowed, ExplainNode? Explain = null);
+/// <summary>
+/// The three-valued outcome of a Check. <see cref="Allow"/> and <see cref="Deny"/> are definite decisions;
+/// <see cref="Conditional"/> means the structural relationship holds but a condition could not be resolved
+/// because required, caller-suppliable context was absent — supplying it could still flip the answer either way.
+/// </summary>
+public enum CheckDecision
+{
+    /// <summary>The permission is denied. This is the default-deny outcome, including for unresolved definite failures.</summary>
+    Deny = 0,
+
+    /// <summary>The permission is granted.</summary>
+    Allow = 1,
+
+    /// <summary>
+    /// The decision cannot be made definitely: a relationship reaches the subject, but a condition on that path
+    /// could not be evaluated because required context keys were missing. The caveat and the missing keys are
+    /// reported on <see cref="CheckResult.UnmetConditions"/>. A conditional decision is not a grant —
+    /// <see cref="CheckResult.Allowed"/> is <see langword="false"/> — so default-deny is preserved for callers
+    /// that cannot supply the missing context.
+    /// </summary>
+    Conditional = 2,
+}
+
+/// <summary>
+/// A condition that stood between a <see cref="CheckRequest"/> and a definite decision: the engine reached a
+/// relationship gated by this condition but could not evaluate it because context it reads was absent. Supplying
+/// the named keys (through <see cref="RequestContext.Attributes"/> or the object's attributes) could change the outcome.
+/// </summary>
+/// <param name="Condition">The name of the schema condition that could not be resolved.</param>
+/// <param name="MissingKeys">The attribute keys the condition read that were absent, in ordinal order.</param>
+public sealed record UnmetCondition(string Condition, IReadOnlyList<string> MissingKeys);
+
+/// <summary>The outcome of a Check: a three-valued decision, the conditions that blocked a definite answer, and an optional explain trace.</summary>
+public sealed record CheckResult
+{
+    /// <summary>The three-valued decision: allow, deny, or conditional.</summary>
+    public CheckDecision Decision { get; init; }
+
+    /// <summary>Whether the permission is granted. <see langword="true"/> only when <see cref="Decision"/> is <see cref="CheckDecision.Allow"/>; a conditional decision reads as not granted.</summary>
+    public bool Allowed => Decision == CheckDecision.Allow;
+
+    /// <summary>
+    /// The conditions that prevented a definite decision, each naming the condition and the missing context keys.
+    /// Empty for <see cref="CheckDecision.Allow"/> and <see cref="CheckDecision.Deny"/>; deterministically ordered
+    /// and de-duplicated for <see cref="CheckDecision.Conditional"/>.
+    /// </summary>
+    public IReadOnlyList<UnmetCondition> UnmetConditions { get; init; }
+
+    /// <summary>The root of the explain trace when one was requested; otherwise <see langword="null"/>.</summary>
+    public ExplainNode? Explain { get; init; }
+
+    /// <summary>Creates a result from a three-valued decision.</summary>
+    /// <param name="decision">The decision reached.</param>
+    /// <param name="unmetConditions">The conditions that blocked a definite answer; <see langword="null"/> is treated as none.</param>
+    /// <param name="explain">The explain trace when one was requested; otherwise <see langword="null"/>.</param>
+    public CheckResult(CheckDecision decision, IReadOnlyList<UnmetCondition>? unmetConditions = null, ExplainNode? explain = null)
+    {
+        Decision = decision;
+        UnmetConditions = unmetConditions ?? [];
+        Explain = explain;
+    }
+
+    /// <summary>Creates a definite allow or deny result. A shorthand for the two-valued outcome.</summary>
+    /// <param name="allowed"><see langword="true"/> for <see cref="CheckDecision.Allow"/>; otherwise <see cref="CheckDecision.Deny"/>.</param>
+    /// <param name="explain">The explain trace when one was requested; otherwise <see langword="null"/>.</param>
+    public CheckResult(bool allowed, ExplainNode? explain = null)
+        : this(allowed ? CheckDecision.Allow : CheckDecision.Deny, null, explain) { }
+}
 
 /// <summary>One object/permission/subject triple within a <see cref="BatchCheckRequest"/>.</summary>
 /// <param name="Object">The object whose permission is tested.</param>

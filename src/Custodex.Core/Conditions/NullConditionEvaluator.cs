@@ -9,9 +9,9 @@ namespace Custodex.Core.Conditions;
 public sealed class NullConditionEvaluator : IConditionEvaluator
 {
     /// <inheritdoc/>
-    public bool Evaluate(
+    public ConditionResult Evaluate(
         ConditionDef definition,
         ConditionRef invocation,
         IReadOnlyDictionary<string, object?> resourceAttributes,
-        RequestContext context) => true;
+        RequestContext context) => ConditionResult.Allow;
 }
