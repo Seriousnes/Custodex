@@ -55,12 +55,17 @@ public sealed class ScopedCachingAuthorizer : IAuthorizer, ICustodexScopedCache
     /// <inheritdoc />
     public async Task<CheckResult> CheckAsync(CheckRequest request, CancellationToken ct = default)
     {
-        if (!_enabled || request.Explain)
+        var (bypassCache, floorEpoch) = ConsistencyPolicy.Resolve(request.Context.Consistency, request.Tenant);
+
+        if (!_enabled || request.Explain || bypassCache)
             return await _inner.CheckAsync(request, ct);
 
         var now = _time.GetTimestamp();
-        var snapshot = await GetSnapshotAsync(request.Tenant, now, ct);
+        var snapshot = await GetSnapshotAsync(request.Tenant, now, floorEpoch, ct);
         if (snapshot is null)
+            return await _inner.CheckAsync(request, ct);
+
+        if (floorEpoch is { } floor && snapshot.Epoch < floor)
             return await _inner.CheckAsync(request, ct);
 
         string? contextFingerprint = null;
@@ -105,15 +110,24 @@ public sealed class ScopedCachingAuthorizer : IAuthorizer, ICustodexScopedCache
 
     /// <inheritdoc />
     public Task<IReadOnlyList<CheckResult>> BatchCheckAsync(BatchCheckRequest request, CancellationToken ct = default)
-        => _inner.BatchCheckAsync(request, ct);
+    {
+        ConsistencyPolicy.Validate(request.Context.Consistency, request.Tenant);
+        return _inner.BatchCheckAsync(request, ct);
+    }
 
     /// <inheritdoc />
     public Task<ListObjectsResult> ListObjectsAsync(ListObjectsRequest request, CancellationToken ct = default)
-        => _inner.ListObjectsAsync(request, ct);
+    {
+        ConsistencyPolicy.Validate(request.Context.Consistency, request.Tenant);
+        return _inner.ListObjectsAsync(request, ct);
+    }
 
     /// <inheritdoc />
     public Task<ListSubjectsResult> ListSubjectsAsync(ListSubjectsRequest request, CancellationToken ct = default)
-        => _inner.ListSubjectsAsync(request, ct);
+    {
+        ConsistencyPolicy.Validate(request.Context.Consistency, request.Tenant);
+        return _inner.ListSubjectsAsync(request, ct);
+    }
 
     /// <inheritdoc />
     public void Clear() => _entries.Clear();
@@ -166,12 +180,13 @@ public sealed class ScopedCachingAuthorizer : IAuthorizer, ICustodexScopedCache
             && slot.Epoch >= snapshot.Epoch
             && _time.GetElapsedTime(slot.CreatedTimestamp, now) < _options.Ttl;
 
-    private async Task<Snapshot?> GetSnapshotAsync(TenantContext tenant, long now, CancellationToken ct)
+    private async Task<Snapshot?> GetSnapshotAsync(TenantContext tenant, long now, long? floorEpoch, CancellationToken ct)
     {
         lock (_snapshotGate)
         {
             if (_snapshots.TryGetValue(tenant, out var cached)
-                && _time.GetElapsedTime(cached.RefreshedTimestamp, now) < _options.EpochRefreshInterval)
+                && _time.GetElapsedTime(cached.RefreshedTimestamp, now) < _options.EpochRefreshInterval
+                && (floorEpoch is not { } floor || cached.Epoch >= floor))
                 return cached;
         }
 

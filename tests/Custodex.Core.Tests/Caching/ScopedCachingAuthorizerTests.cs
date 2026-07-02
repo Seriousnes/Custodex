@@ -41,6 +41,12 @@ public class ScopedCachingAuthorizerTests
             return new CheckRequest(Tenant, Object, Permission, Subject, context, explain);
         }
 
+        public CheckRequest Request(Consistency consistency)
+        {
+            var context = new RequestContext(Time.GetUtcNow(), Subject, EmptyAttrs, consistency);
+            return new CheckRequest(Tenant, Object, Permission, Subject, context);
+        }
+
         public async Task BumpEpochAsync()
         {
             var uow = new NoOpUnitOfWork();
@@ -547,6 +553,98 @@ public class ScopedCachingAuthorizerTests
 
         await cache.CheckAsync(h.Request());
         h.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task MinimizeLatency_serves_the_second_check_from_the_scope()
+    {
+        var h = await BuildAsync(Unconditioned());
+        var cache = h.NewCache();
+
+        await cache.CheckAsync(h.Request(Consistency.MinimizeLatency));
+        await cache.CheckAsync(h.Request(Consistency.MinimizeLatency));
+
+        h.Authorizer.CheckCalls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task FullyConsistent_never_serves_from_the_scope()
+    {
+        var h = await BuildAsync(Unconditioned());
+        var cache = h.NewCache();
+
+        await cache.CheckAsync(h.Request());
+        await cache.CheckAsync(h.Request(Consistency.FullyConsistent));
+
+        h.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task AtLeastAsFresh_with_a_satisfied_token_serves_from_the_scope()
+    {
+        var h = await BuildAsync(Unconditioned());
+        var cache = h.NewCache();
+
+        await cache.CheckAsync(h.Request());
+        var epoch = await h.CacheStore.GetEpochAsync(h.Tenant);
+        var token = ConsistencyToken.Create(h.Tenant, epoch, changeLogId: 0);
+
+        await cache.CheckAsync(h.Request(Consistency.AtLeastAsFresh(token)));
+
+        h.Authorizer.CheckCalls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task AtLeastAsFresh_with_a_stale_snapshot_recomputes_and_refreshes()
+    {
+        var allow = true;
+        var h = await BuildAsync(
+            Unconditioned(),
+            decide: _ => new CheckResult(allow),
+            configure: o => o.EpochRefreshInterval = TimeSpan.FromSeconds(5));
+        var cache = h.NewCache();
+
+        (await cache.CheckAsync(h.Request())).Allowed.ShouldBeTrue();
+        h.Authorizer.CheckCalls.ShouldBe(1);
+
+        allow = false;
+        await h.BumpEpochAsync();
+        h.Time.Advance(TimeSpan.FromSeconds(2));
+
+        var epoch = await h.CacheStore.GetEpochAsync(h.Tenant);
+        var token = ConsistencyToken.Create(h.Tenant, epoch, changeLogId: 0);
+
+        var result = await cache.CheckAsync(h.Request(Consistency.AtLeastAsFresh(token)));
+
+        h.Authorizer.CheckCalls.ShouldBe(2);
+        result.Allowed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AtLeastAsFresh_with_a_future_epoch_token_recomputes_without_looping()
+    {
+        var h = await BuildAsync(Unconditioned());
+        var cache = h.NewCache();
+
+        await cache.CheckAsync(h.Request());
+
+        var aheadEpoch = await h.CacheStore.GetEpochAsync(h.Tenant) + 1;
+        var token = ConsistencyToken.Create(h.Tenant, aheadEpoch, changeLogId: 0);
+
+        await cache.CheckAsync(h.Request(Consistency.AtLeastAsFresh(token)));
+
+        h.Authorizer.CheckCalls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task AtLeastAsFresh_with_a_garbage_token_throws()
+    {
+        var h = await BuildAsync(Unconditioned());
+        var cache = h.NewCache();
+
+        var garbage = Consistency.AtLeastAsFresh(new ConsistencyToken("not-a-token"));
+
+        await Should.ThrowAsync<InvalidConsistencyTokenException>(() => cache.CheckAsync(h.Request(garbage)));
     }
 
     private static readonly IReadOnlyDictionary<string, object?> EmptyAttrs =
