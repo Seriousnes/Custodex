@@ -59,6 +59,21 @@ public sealed class RemoteStatusTests
     }
 
     [Fact]
+    public async Task Invalid_consistency_token_trailer_throws_InvalidConsistencyTokenException()
+    {
+        var meta = new Metadata
+        {
+            { "custodex-error-kind", "invalid_consistency_token" },
+            { "custodex-error-detail", "The token belongs to a different tenant." },
+        };
+        var rpc = new RpcException(new Status(StatusCode.InvalidArgument, "msg"), meta);
+
+        var ex = await Should.ThrowAsync<InvalidConsistencyTokenException>(() =>
+            RemoteStatus.UnwrapAsync(() => Task.FromException<bool>(rpc)));
+        ex.Message.ShouldBe("The token belongs to a different tenant.");
+    }
+
+    [Fact]
     public async Task Unavailable_with_no_custodex_trailer_rethrows_RpcException()
     {
         var rpc = new RpcException(new Status(StatusCode.Unavailable, "service down"));

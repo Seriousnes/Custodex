@@ -53,8 +53,7 @@ public sealed class EvaluationLimitException(string detail) : Exception(detail);
 /// never a silent deny.
 /// </summary>
 /// <param name="detail">A description of what made the token invalid.</param>
-public sealed class InvalidConsistencyTokenException(string detail)
-    : Exception($"Invalid consistency token: {detail}");
+public sealed class InvalidConsistencyTokenException(string detail) : Exception(detail);
 
 /// <summary>
 /// Thrown when evaluation re-enters a permission it is already deciding after crossing an

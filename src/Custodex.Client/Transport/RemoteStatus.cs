@@ -49,6 +49,8 @@ public static class RemoteStatus
                 new EvaluationLimitException(ex.Trailers.GetValue("custodex-error-detail") ?? ex.Message),
             "exclusion_cycle" =>
                 new ExclusionCycleException(ex.Trailers.GetValue("custodex-error-detail") ?? ex.Message),
+            "invalid_consistency_token" =>
+                new InvalidConsistencyTokenException(ex.Trailers.GetValue("custodex-error-detail") ?? ex.Message),
             _ => ex,
         };
     }

@@ -93,7 +93,7 @@ public sealed record ConsistencyToken(string Value)
         {
             throw new InvalidConsistencyTokenException("The token value is truncated.");
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or FormatException)
         {
             throw new InvalidConsistencyTokenException("The token value is not well-formed.");
         }

@@ -93,6 +93,14 @@ public class ConsistencyTokenTests
     }
 
     [Fact]
+    public void Decode_throws_on_a_valid_version_with_a_corrupt_length_prefix()
+    {
+        var corrupt = new ConsistencyToken(Base64Url.Encode([1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]));
+
+        Should.Throw<InvalidConsistencyTokenException>(() => corrupt.Decode());
+    }
+
+    [Fact]
     public void Encoded_value_begins_with_the_version_marker()
     {
         var tenant = TestWorld.New().Tenant;

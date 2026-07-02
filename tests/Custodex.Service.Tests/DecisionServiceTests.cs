@@ -159,6 +159,42 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Check_with_a_malformed_consistency_token_returns_invalid_argument()
+    {
+        await using var factory = CreateFactory();
+        using var scope = factory.Services.CreateScope();
+
+        var schema = new SchemaBuilder("v1")
+            .Type("widget", t => t
+                .Relation("owner", s => s.Type("user"))
+                .Permission("view", p => p.Relation("owner")))
+            .Build();
+
+        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+
+        var channel = CreateChannel(factory);
+        var client = new Proto.Decision.DecisionClient(channel);
+        var req = new Proto.CheckRequest
+        {
+            Object = new Proto.EntityRef { Type = "widget", Id = "1" },
+            Permission = "view",
+            Subject = new Proto.SubjectRef { Type = "user", Id = "alice" },
+            Context = new Proto.RequestContext
+            {
+                Consistency = new Proto.Consistency
+                {
+                    Mode = Proto.ConsistencyMode.AtLeastAsFresh,
+                    Token = "not-a-real-token",
+                },
+            },
+        };
+
+        var ex = await Should.ThrowAsync<RpcException>(
+            () => client.CheckAsync(req, headers: TenantHeaders(tenant)).ResponseAsync);
+        ex.StatusCode.ShouldBe(StatusCode.InvalidArgument);
+    }
+
+    [Fact]
     public async Task ListObjects_returns_both_granted_object_ids_sorted()
     {
         await using var factory = CreateFactory();

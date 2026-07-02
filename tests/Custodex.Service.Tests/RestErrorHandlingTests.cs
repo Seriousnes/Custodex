@@ -61,6 +61,45 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Check_with_a_malformed_consistency_token_returns_400()
+    {
+        await using var factory = CreateFactory();
+        var tenantId = $"tenant-{Guid.NewGuid():N}";
+
+        var adminClient = factory.CreateAuthenticatedClient();
+
+        var schema = new SchemaBuilder("v1")
+            .Type("doc", t => t
+                .Relation("owner", s => s.Type("user"))
+                .Permission("view", p => p.Relation("owner")))
+            .Build();
+        var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
+
+        await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
+        await adminClient.PostAsJsonAsync("/api/tenants",
+            new CreateTenantRequestDto(TestAuthHelper.AdminStore, tenantId));
+        await adminClient.PutAsJsonAsync($"/api/schema/{TestAuthHelper.AdminStore}",
+            new SetActiveSchemaRequestDto(schemaJson));
+
+        var tenantClient = factory.CreateAuthenticatedClient();
+        tenantClient.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenantId);
+
+        var req = new CheckRequestDto(
+            Store: TestAuthHelper.AdminStore,
+            Tenant: tenantId,
+            Object: new EntityRefDto("doc", "d-1"),
+            Permission: "view",
+            Context: new RequestContextDto(
+                Subject: new SubjectRefDto("user", "u-1", null),
+                Now: null,
+                Attributes: null,
+                Consistency: new ConsistencyDto("at-least-as-fresh", "not-a-real-token")));
+
+        var resp = await tenantClient.PostAsJsonAsync("/api/check", req);
+        resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Internal_error_does_not_leak_exception_detail_in_500_response()
     {
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
