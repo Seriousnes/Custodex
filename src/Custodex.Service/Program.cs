@@ -81,6 +81,30 @@ builder.Services
                 RoleClaimType = roleClaim,
             };
         }
+
+        jwt.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = ctx =>
+            {
+                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Custodex.Service.Auth.JwtBearer")
+                    .LogWarning(
+                        ctx.Exception,
+                        "JWT authentication failed from {RemoteIp}.",
+                        ctx.HttpContext.Connection.RemoteIpAddress);
+                return Task.CompletedTask;
+            },
+            OnChallenge = ctx =>
+            {
+                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Custodex.Service.Auth.JwtBearer")
+                    .LogWarning(
+                        "JWT authentication challenge issued from {RemoteIp}: {Reason}.",
+                        ctx.HttpContext.Connection.RemoteIpAddress,
+                        ctx.AuthenticateFailure?.Message ?? ctx.ErrorDescription ?? "no token presented");
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddOptions<ApiKeyOptions>("ApiKey")

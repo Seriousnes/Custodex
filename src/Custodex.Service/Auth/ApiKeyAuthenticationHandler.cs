@@ -39,7 +39,14 @@ public sealed class ApiKeyAuthenticationHandler(
         }
 
         if (entry is null)
+        {
+            var fingerprint = Convert.ToHexString(presented.AsSpan(0, 4));
+            Logger.LogWarning(
+                "API key authentication failed for fingerprint {KeyFingerprint} from {RemoteIp}.",
+                fingerprint,
+                Context.Connection.RemoteIpAddress);
             return Task.FromResult(AuthenticateResult.Fail("Unrecognized API key."));
+        }
 
         var claims = new List<Claim>
         {
