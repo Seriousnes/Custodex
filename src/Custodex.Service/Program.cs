@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 
 using Custodex.Core;
 using Custodex.Service;
@@ -16,6 +17,7 @@ using Custodex.Studio.Metrics;
 using Custodex.Studio.Views;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 
@@ -91,6 +93,29 @@ builder.Services.Configure<PageSizeOptions>(o =>
 builder.Services.Configure<BatchCheckOptions>(o =>
     o.MaxItems = builder.Configuration.GetValue("Custodex:MaxBatchItems", BatchCheckOptions.DefaultMaxItems));
 
+var rateLimitPermitLimit = builder.Configuration.GetValue("Custodex:RateLimit:PermitLimit", RateLimitOptions.DefaultPermitLimit);
+var rateLimitWindowSeconds = builder.Configuration.GetValue("Custodex:RateLimit:WindowSeconds", RateLimitOptions.DefaultWindowSeconds);
+
+builder.Services.Configure<RateLimitOptions>(o =>
+{
+    o.PermitLimit = rateLimitPermitLimit;
+    o.WindowSeconds = rateLimitWindowSeconds;
+});
+
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(RateLimitCallerKey(httpContext), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = rateLimitPermitLimit,
+            Window = TimeSpan.FromSeconds(rateLimitWindowSeconds),
+        }));
+});
+
+builder.WebHost.ConfigureKestrel(o =>
+    o.Limits.MaxRequestBodySize = builder.Configuration.GetValue("Custodex:MaxRequestBodyBytes", 10_000_000L));
+
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()
         .RequireClaim("Custodex:role", "reader", "admin"))
@@ -139,6 +164,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.UseAntiforgery();
 app.UseMiddleware<TenantResolutionMiddleware>();
 
@@ -153,6 +179,15 @@ app.MapCustodexRest();
 app.MapCustodexStudio("Custodex:manage");
 
 app.Run();
+
+static string RateLimitCallerKey(HttpContext context)
+{
+    var store = context.User.FindFirst("Custodex:store")?.Value;
+    var subject = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (store is not null && subject is not null)
+        return $"{store}:{subject}";
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
 
 static Task SecurityHeadersMiddleware(HttpContext context, RequestDelegate next)
 {
