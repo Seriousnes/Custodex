@@ -28,7 +28,7 @@ public sealed partial class EngineDrivenAuthorizer
             candidates, visited, ct);
 
         var after = ContinuationCursor.DecodeAfter(request.ContinuationToken);
-        var confirmed = new List<SubjectRef>(request.PageSize);
+        var confirmed = new List<SubjectRef>(Math.Min(request.PageSize, 256));
         string? lastKey = null;
         var exhausted = true;
 

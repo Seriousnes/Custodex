@@ -1,6 +1,7 @@
 using System.Security.Claims;
 
 using Custodex.Core;
+using Custodex.Service;
 using Custodex.Service.Auth;
 using Custodex.Service.Health;
 using Custodex.Service.Metrics;
@@ -83,6 +84,9 @@ builder.Services
 builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
     .Configure<IConfiguration>((opts, config) =>
         config.GetSection("Custodex:ApiKeys").Bind(opts.Keys));
+
+builder.Services.Configure<PageSizeOptions>(o =>
+    o.Max = builder.Configuration.GetValue("Custodex:MaxPageSize", PageSizeOptions.DefaultMax));
 
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()

@@ -1,6 +1,8 @@
 using Custodex.Abstractions;
 using Custodex.Service.Tenancy;
 
+using Microsoft.Extensions.Options;
+
 namespace Custodex.Service.Rest;
 
 public static partial class RestEndpoints
@@ -36,7 +38,7 @@ public static partial class RestEndpoints
         .WithName("BatchCheck")
         .WithSummary("Evaluate multiple authorization checks sharing one request context.");
 
-        group.MapPost("/list-objects", async (ListObjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
+        group.MapPost("/list-objects", async (ListObjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, IOptions<PageSizeOptions> pageOptions, CancellationToken ct) =>
         {
             var ctx = RestMap.FromDto(req.Context);
             var result = await auth.ListObjectsAsync(new ListObjectsRequest(
@@ -45,7 +47,7 @@ public static partial class RestEndpoints
                 req.ObjectType,
                 req.Permission,
                 ctx,
-                req.PageSize > 0 ? req.PageSize : 50,
+                ClampPageSize(req.PageSize, 50, pageOptions.Value.Max),
                 req.ContinuationToken), ct);
 
             return Results.Ok(new ListObjectsResponseDto(result.ObjectIds, result.ContinuationToken));
@@ -53,7 +55,7 @@ public static partial class RestEndpoints
         .WithName("ListObjects")
         .WithSummary("List objects of a given type that a subject may access via a permission.");
 
-        group.MapPost("/list-subjects", async (ListSubjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
+        group.MapPost("/list-subjects", async (ListSubjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, IOptions<PageSizeOptions> pageOptions, CancellationToken ct) =>
         {
             var ctx = RestMap.FromDto(req.Context);
             var result = await auth.ListSubjectsAsync(new ListSubjectsRequest(
@@ -61,7 +63,7 @@ public static partial class RestEndpoints
                 RestMap.FromDto(req.Object),
                 req.Permission,
                 ctx,
-                req.PageSize > 0 ? req.PageSize : 50,
+                ClampPageSize(req.PageSize, 50, pageOptions.Value.Max),
                 req.ContinuationToken), ct);
 
             return Results.Ok(new ListSubjectsResponseDto(
@@ -71,4 +73,7 @@ public static partial class RestEndpoints
         .WithName("ListSubjects")
         .WithSummary("List subjects who may access an object via a permission.");
     }
+
+    private static int ClampPageSize(int requested, int fallback, int max) =>
+        Math.Min(requested > 0 ? requested : fallback, max);
 }
