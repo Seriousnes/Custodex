@@ -132,6 +132,6 @@ app.MapGrpcService<RelationsGrpcService>().RequireAuthorization("Custodex:manage
 app.MapGrpcService<SchemaGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapCustodexRest();
-app.MapCustodexStudio();
+app.MapCustodexStudio("Custodex:manage");
 
 app.Run();

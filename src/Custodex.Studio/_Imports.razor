@@ -1,5 +1,7 @@
 @using System
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Web
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
@@ -11,3 +13,4 @@
 @using Custodex.Studio.Components.ChangeLog
 @using Custodex.Studio.Components.Views
 @using Custodex.Studio.Views
+@attribute [Authorize]
