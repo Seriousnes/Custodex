@@ -171,7 +171,7 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
     }
 
     [Fact]
-    public async Task ReadChangeLog_after_write_contains_entry_with_actor()
+    public async Task ReadChangeLog_records_authenticated_caller_ignoring_spoofed_actor()
     {
         var tenant = $"t-{Guid.NewGuid():N}";
         await using var factory = CreateFactory(tenant);
@@ -191,10 +191,13 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
             SchemaJson = SchemaJson.Serialize(schema),
         });
 
+        const string spoofed = "attacker-chosen-victim";
+        var authenticated = $"apikey:{TestAuthHelper.AdminStore}";
+
         var tenantMeta = TenantHeaders(tenant);
         await rClient.WriteTuplesAsync(new Proto.WriteTuplesRequest
         {
-            Actor = "audit-actor",
+            Actor = spoofed,
             Tuples =
             {
                 new Proto.RelationTuple
@@ -212,7 +215,8 @@ public sealed class ManagementServiceTests(PostgresFixture pg)
         }, headers: tenantMeta);
 
         logResp.Entries.ShouldNotBeEmpty();
-        logResp.Entries.Any(e => e.Actor == "audit-actor").ShouldBeTrue();
+        logResp.Entries.ShouldContain(e => e.Actor == authenticated);
+        logResp.Entries.ShouldAllBe(e => e.Actor != spoofed);
     }
 
     [Fact]

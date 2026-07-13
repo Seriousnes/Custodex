@@ -1,4 +1,7 @@
+using System.Security.Claims;
+
 using Custodex.Abstractions;
+using Custodex.Service.Auth;
 using Custodex.Service.Mapping;
 using Custodex.Service.Tenancy;
 
@@ -11,31 +14,31 @@ public static partial class RestEndpoints
     static partial void MapManagementEndpoints(RouteGroupBuilder group)
     {
         group.MapPost("/tuples", async (
-            WriteTuplesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
+            WriteTuplesRequestDto req, ClaimsPrincipal user, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var tuples = req.Tuples.Select(RestMap.FromDto).ToList();
-            var token = await relations.WriteTuplesAsync(tc.Current, req.Actor, tuples, ct);
+            var token = await relations.WriteTuplesAsync(tc.Current, AuditActor.From(user), tuples, ct);
             return Results.Ok(new WriteResultDto(token.Value));
         })
         .WithName("WriteTuples")
         .WithSummary("Write relation tuples (audited).");
 
         group.MapDelete("/tuples", async (
-            [FromBody] DeleteTuplesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
+            [FromBody] DeleteTuplesRequestDto req, ClaimsPrincipal user, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var tuples = req.Tuples.Select(RestMap.FromDto).ToList();
-            var token = await relations.DeleteTuplesAsync(tc.Current, req.Actor, tuples, ct);
+            var token = await relations.DeleteTuplesAsync(tc.Current, AuditActor.From(user), tuples, ct);
             return Results.Ok(new WriteResultDto(token.Value));
         })
         .WithName("DeleteTuples")
         .WithSummary("Delete relation tuples (audited).");
 
         group.MapPut("/attributes", async (
-            WriteAttributesRequestDto req, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
+            WriteAttributesRequestDto req, ClaimsPrincipal user, IRelationManager relations, ITenantContextAccessor tc, CancellationToken ct) =>
         {
             var token = await relations.WriteAttributesAsync(
                 tc.Current,
-                req.Actor,
+                AuditActor.From(user),
                 RestMap.FromDto(req.Object),
                 req.Attributes,
                 ct);

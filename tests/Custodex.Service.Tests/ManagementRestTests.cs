@@ -120,6 +120,51 @@ public sealed class ManagementRestTests(PostgresFixture pg)
     }
 
     [Fact]
+    public async Task Change_log_records_authenticated_caller_ignoring_spoofed_actor()
+    {
+        var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
+        var adminClient = factory.CreateAuthenticatedClient();
+        var tenantClient = CreateTenantClient(factory, tenantId);
+
+        var schema = new SchemaBuilder("v1")
+            .Type("doc", t => t
+                .Relation("owner", s => s.Type("user"))
+                .Permission("edit", p => p.Relation("owner")))
+            .Build();
+        var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
+
+        await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
+        await adminClient.PostAsJsonAsync("/api/tenants",
+            new CreateTenantRequestDto(TestAuthHelper.AdminStore, tenantId));
+        await adminClient.PutAsJsonAsync($"/api/schema/{TestAuthHelper.AdminStore}",
+            new SetActiveSchemaRequestDto(schemaJson));
+
+        const string spoofed = "attacker-chosen-victim";
+        var authenticated = $"apikey:{TestAuthHelper.AdminStore}";
+
+        var objId = $"obj-{Guid.NewGuid():N}";
+        var tuple = new RelationTupleDto(
+            Object: new EntityRefDto("doc", objId),
+            Relation: "owner",
+            Subject: new SubjectRefDto("user", "u-3", null),
+            Condition: null);
+
+        var writeTuples = await tenantClient.PostAsJsonAsync("/api/tuples",
+            new WriteTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, spoofed, [tuple]));
+        writeTuples.EnsureSuccessStatusCode();
+
+        var readLog = await tenantClient.PostAsJsonAsync("/api/change-log/query",
+            new ReadChangeLogRequestDto(TestAuthHelper.AdminStore, tenantId, Limit: 50));
+        readLog.EnsureSuccessStatusCode();
+        var logResult = await readLog.Content.ReadFromJsonAsync<ReadChangeLogResponseDto>();
+
+        logResult!.Entries.ShouldNotBeEmpty();
+        logResult.Entries.ShouldContain(e => e.Actor == authenticated);
+        logResult.Entries.ShouldAllBe(e => e.Actor != spoofed);
+    }
+
+    [Fact]
     public async Task Write_then_delete_tuple_leaves_query_empty()
     {
         var tenantId = $"tenant-{Guid.NewGuid():N}";
