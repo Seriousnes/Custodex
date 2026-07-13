@@ -31,6 +31,7 @@ builder.Services.AddOpenTelemetry()
     .WithMetrics(m => m.AddCustodexInstrumentation());
 builder.Services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
 builder.Services.AddSingleton<CustodexExceptionInterceptor>();
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ObjectJsonConverter()));
 builder.Services.AddOpenApi(o =>
 {
     o.AddDocumentTransformer<CustodexOpenApiDocumentTransformer>();
