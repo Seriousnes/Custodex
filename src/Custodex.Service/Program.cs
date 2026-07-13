@@ -110,6 +110,12 @@ builder.Services.AddSingleton<IMetricsSnapshotProvider>(sp => sp.GetRequiredServ
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CustodexMeterAggregator>());
 builder.Services.AddHealthChecks()
     .AddCheck<PostgresReadyHealthCheck>("postgres", tags: ["ready"]);
+builder.Services.AddHsts(o =>
+{
+    o.Preload = true;
+    o.IncludeSubDomains = true;
+    o.MaxAge = TimeSpan.FromDays(365);
+});
 
 var app = builder.Build();
 
@@ -121,6 +127,11 @@ if (app.Configuration.GetValue("Custodex:ApplyMigrationsOnStartup", true))
 }
 
 app.UseCustodexProblemDetails();
+
+app.Use(SecurityHeadersMiddleware);
+
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
@@ -139,3 +150,13 @@ app.MapCustodexRest();
 app.MapCustodexStudio("Custodex:manage");
 
 app.Run();
+
+static Task SecurityHeadersMiddleware(HttpContext context, RequestDelegate next)
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    context.Response.Headers["Content-Security-Policy"] =
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+    return next(context);
+}
