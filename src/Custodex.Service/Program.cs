@@ -119,7 +119,12 @@ builder.Services
 
 builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
     .Configure<IConfiguration>((opts, config) =>
-        config.GetSection("Custodex:ApiKeys").Bind(opts.Keys));
+        config.GetSection("Custodex:ApiKeys").Bind(opts.Keys))
+    .Validate(
+        opts => opts.Keys.All(k =>
+            !string.IsNullOrWhiteSpace(k.Key) && !string.IsNullOrWhiteSpace(k.Store) && !string.IsNullOrWhiteSpace(k.Role)),
+        "Custodex:ApiKeys entries must have non-empty Key, Store, and Role values.")
+    .ValidateOnStart();
 
 builder.Services.Configure<PageSizeOptions>(o =>
     o.Max = builder.Configuration.GetValue("Custodex:MaxPageSize", PageSizeOptions.DefaultMax));

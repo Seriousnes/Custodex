@@ -29,7 +29,11 @@ public sealed class ApiKeyAuthenticationHandler(
         if (!Request.Headers.TryGetValue(Options.HeaderName, out var headerValues))
             return Task.FromResult(AuthenticateResult.NoResult());
 
-        var presented = SHA256.HashData(Encoding.UTF8.GetBytes(headerValues.ToString()));
+        var presentedValue = headerValues.ToString();
+        if (string.IsNullOrWhiteSpace(presentedValue))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
+        var presented = SHA256.HashData(Encoding.UTF8.GetBytes(presentedValue));
         ApiKeyEntry? entry = null;
         foreach (var candidate in Options.Keys)
         {
