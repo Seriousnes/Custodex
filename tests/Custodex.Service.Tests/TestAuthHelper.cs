@@ -10,10 +10,15 @@ internal static class TestAuthHelper
     internal const string AdminKey = "test-admin-key";
     internal const string AdminStore = "test-admin-store";
 
-    internal static IWebHostBuilder UseAdminApiKey(this IWebHostBuilder b) =>
+    internal static IWebHostBuilder UseAdminApiKey(this IWebHostBuilder b, params string[] tenants)
+    {
         b.UseSetting("Custodex:ApiKeys:0:Key", AdminKey)
          .UseSetting("Custodex:ApiKeys:0:Store", AdminStore)
          .UseSetting("Custodex:ApiKeys:0:Role", "admin");
+        for (var i = 0; i < tenants.Length; i++)
+            b.UseSetting($"Custodex:ApiKeys:0:Tenants:{i}", tenants[i]);
+        return b;
+    }
 
     internal static HttpClient CreateAuthenticatedClient(this WebApplicationFactory<Program> factory)
     {

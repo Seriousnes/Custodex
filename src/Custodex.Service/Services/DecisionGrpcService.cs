@@ -4,6 +4,8 @@ using Custodex.Api;
 
 using Grpc.Core;
 
+using Microsoft.Extensions.Options;
+
 using Contracts = Custodex.Abstractions;
 
 namespace Custodex.Service.Services;
@@ -14,7 +16,9 @@ namespace Custodex.Service.Services;
 /// </summary>
 public sealed class DecisionGrpcService(
     Contracts.IAuthorizer authorizer,
-    ITenantContextAccessor tc) : Decision.DecisionBase
+    ITenantContextAccessor tc,
+    IOptions<PageSizeOptions> pageOptions,
+    IOptions<BatchCheckOptions> batchOptions) : Decision.DecisionBase
 {
     /// <inheritdoc />
     public override async Task<CheckResponse> Check(CheckRequest request, ServerCallContext context)
@@ -48,6 +52,10 @@ public sealed class DecisionGrpcService(
     /// <inheritdoc />
     public override async Task<BatchCheckResponse> BatchCheck(BatchCheckRequest request, ServerCallContext context)
     {
+        var maxItems = batchOptions.Value.MaxItems;
+        if (request.Items.Count > maxItems)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Batch exceeds the maximum of {maxItems} items."));
+
         var items = request.Items
             .Select(i => new Contracts.CheckItem(
                 ProtoMap.FromProto(i.Object),
@@ -69,7 +77,7 @@ public sealed class DecisionGrpcService(
     /// <inheritdoc />
     public override async Task<ListObjectsResponse> ListObjects(ListObjectsRequest request, ServerCallContext context)
     {
-        var pageSize = request.PageSize > 0 ? request.PageSize : 100;
+        var pageSize = ClampPageSize(request.PageSize, 100, pageOptions.Value.Max);
         var token = string.IsNullOrEmpty(request.ContinuationToken) ? null : request.ContinuationToken;
 
         var result = await authorizer.ListObjectsAsync(new Contracts.ListObjectsRequest(
@@ -91,7 +99,7 @@ public sealed class DecisionGrpcService(
     /// <inheritdoc />
     public override async Task<ListSubjectsResponse> ListSubjects(ListSubjectsRequest request, ServerCallContext context)
     {
-        var pageSize = request.PageSize > 0 ? request.PageSize : 100;
+        var pageSize = ClampPageSize(request.PageSize, 100, pageOptions.Value.Max);
         var token = string.IsNullOrEmpty(request.ContinuationToken) ? null : request.ContinuationToken;
 
         var result = await authorizer.ListSubjectsAsync(new Contracts.ListSubjectsRequest(
@@ -108,4 +116,7 @@ public sealed class DecisionGrpcService(
         response.Subjects.AddRange(result.Subjects.Select(ProtoMap.ToProto));
         return response;
     }
+
+    private static int ClampPageSize(int requested, int fallback, int max) =>
+        Math.Min(requested > 0 ? requested : fallback, max);
 }

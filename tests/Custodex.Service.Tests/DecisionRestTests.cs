@@ -15,12 +15,12 @@ namespace Custodex.Service.Tests;
 [Collection("service")]
 public sealed class DecisionRestTests(PostgresFixture pg)
 {
-    private WebApplicationFactory<Program> CreateFactory() =>
+    private WebApplicationFactory<Program> CreateFactory(string tenant) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
-            b.UseAdminApiKey();
+            b.UseAdminApiKey(tenant);
         });
 
     private static HttpClient CreateTenantClient(WebApplicationFactory<Program> factory, string tenant)
@@ -33,8 +33,9 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     [Fact]
     public async Task Check_returns_allowed_true_for_granted_subject()
     {
-        await using var factory = CreateFactory();
-        var (tenantId, objId) = await SetupMinimalSchema(factory);
+        var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
+        var objId = await SetupMinimalSchema(factory, tenantId);
 
         var client = CreateTenantClient(factory, tenantId);
         var req = new CheckRequestDto(
@@ -57,8 +58,9 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     [Fact]
     public async Task Check_returns_allowed_false_for_ungranted_subject()
     {
-        await using var factory = CreateFactory();
-        var (tenantId, objId) = await SetupMinimalSchema(factory);
+        var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
+        var objId = await SetupMinimalSchema(factory, tenantId);
 
         var client = CreateTenantClient(factory, tenantId);
         var req = new CheckRequestDto(
@@ -81,8 +83,9 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     [Fact]
     public async Task Check_with_explain_true_returns_explain_node()
     {
-        await using var factory = CreateFactory();
-        var (tenantId, objId) = await SetupMinimalSchema(factory);
+        var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
+        var objId = await SetupMinimalSchema(factory, tenantId);
 
         var client = CreateTenantClient(factory, tenantId);
         var req = new CheckRequestDto(
@@ -107,8 +110,9 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     [Fact]
     public async Task ListObjects_returns_granted_object_ids()
     {
-        await using var factory = CreateFactory();
-        var (tenantId, objId) = await SetupMinimalSchema(factory);
+        var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
+        var objId = await SetupMinimalSchema(factory, tenantId);
 
         var client = CreateTenantClient(factory, tenantId);
         var req = new ListObjectsRequestDto(
@@ -131,8 +135,9 @@ public sealed class DecisionRestTests(PostgresFixture pg)
     [Fact]
     public async Task BatchCheck_returns_aligned_true_false_results()
     {
-        await using var factory = CreateFactory();
-        var (tenantId, objId) = await SetupMinimalSchema(factory);
+        var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
+        var objId = await SetupMinimalSchema(factory, tenantId);
 
         var client = CreateTenantClient(factory, tenantId);
         var ctx = new RequestContextDto(
@@ -157,10 +162,9 @@ public sealed class DecisionRestTests(PostgresFixture pg)
         result.Results[1].Allowed.ShouldBeFalse();
     }
 
-    private static async Task<(string tenant, string objId)>
-        SetupMinimalSchema(WebApplicationFactory<Program> factory)
+    private static async Task<string>
+        SetupMinimalSchema(WebApplicationFactory<Program> factory, string tenant)
     {
-        var tenant = $"tenant-{Guid.NewGuid():N}";
         var objId = $"obj-{Guid.NewGuid():N}";
         var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
@@ -184,6 +188,6 @@ public sealed class DecisionRestTests(PostgresFixture pg)
             new RelationTuple(new EntityRef("widget", objId), "owner", new SubjectRef("user", "u-1")),
         ]);
 
-        return (tenant, objId);
+        return objId;
     }
 }

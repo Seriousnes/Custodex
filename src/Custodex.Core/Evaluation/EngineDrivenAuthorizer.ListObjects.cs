@@ -18,7 +18,7 @@ public sealed partial class EngineDrivenAuthorizer
         foreach (var u in universeIds) candidates.Add(u);
 
         var after = ContinuationCursor.DecodeAfter(request.ContinuationToken);
-        var confirmed = new List<string>(request.PageSize);
+        var confirmed = new List<string>(Math.Min(request.PageSize, 256));
         string? lastConfirmed = null;
         var exhausted = true;
 

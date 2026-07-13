@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 using Custodex.Abstractions;
 
@@ -85,6 +86,9 @@ public static class ConditionEvaluator
             throw new EvalException($"parameter '{name}' is not declared.");
         if (!parameters.TryGetValue(name, out var raw) || raw is null)
             throw new EvalException($"parameter '{name}' is missing.");
+        raw = UnwrapJsonElement(raw);
+        if (raw is null)
+            throw new EvalException($"parameter '{name}' is missing.");
         return type switch
         {
             ConditionType.Bool when raw is bool b => CelValue.Bool(b),
@@ -103,8 +107,9 @@ public static class ConditionEvaluator
         string field, ConditionType? declaredType,
         IReadOnlyDictionary<string, object?> attributes, RequestContext context)
     {
-        if (!TryResolveAttributeValue(field, attributes, context, out var raw))
+        if (!TryResolveAttributeValue(field, attributes, context, out var resolved))
             return CelValue.Unknown([field]);
+        var raw = UnwrapJsonElement(resolved);
         if (declaredType == ConditionType.Timestamp)
             return raw switch
             {
@@ -141,6 +146,29 @@ public static class ConditionEvaluator
         }
         raw = null!;
         return false;
+    }
+
+    private static object? UnwrapJsonElement(object? raw)
+    {
+        if (raw is not JsonElement element)
+            return raw;
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.True:
+                return true;
+            case JsonValueKind.False:
+                return false;
+            case JsonValueKind.String:
+                return element.GetString();
+            case JsonValueKind.Number:
+                if (element.TryGetInt64(out var l))
+                    return l;
+                return element.GetDouble();
+            case JsonValueKind.Null:
+                return null;
+            default:
+                return element;
+        }
     }
 
     private static CelValue EvalHour(

@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 
 using Custodex.Core;
+using Custodex.Service;
 using Custodex.Service.Auth;
 using Custodex.Service.Health;
 using Custodex.Service.Metrics;
@@ -15,6 +17,7 @@ using Custodex.Studio.Metrics;
 using Custodex.Studio.Views;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 
@@ -28,6 +31,7 @@ builder.Services.AddOpenTelemetry()
     .WithMetrics(m => m.AddCustodexInstrumentation());
 builder.Services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
 builder.Services.AddSingleton<CustodexExceptionInterceptor>();
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ObjectJsonConverter()));
 builder.Services.AddOpenApi(o =>
 {
     o.AddDocumentTransformer<CustodexOpenApiDocumentTransformer>();
@@ -36,6 +40,15 @@ builder.Services.AddOpenApi(o =>
 
 var jwtSection = builder.Configuration.GetSection("Custodex:Jwt");
 var signingKeyB64 = jwtSection["SigningKey"];
+
+if (!string.IsNullOrEmpty(signingKeyB64))
+{
+    var configuredIssuer = jwtSection["Issuer"];
+    var configuredAudience = jwtSection["Audience"];
+    if (string.IsNullOrEmpty(configuredIssuer) || string.IsNullOrEmpty(configuredAudience))
+        throw new InvalidOperationException(
+            "Custodex:Jwt:Issuer and Custodex:Jwt:Audience are required when a symmetric SigningKey is configured.");
+}
 
 builder.Services
     .AddAuthentication("Custodex-any")
@@ -60,10 +73,11 @@ builder.Services
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = key,
-                ValidateIssuer = !string.IsNullOrEmpty(issuer),
+                ValidateIssuer = true,
                 ValidIssuer = issuer,
-                ValidateAudience = !string.IsNullOrEmpty(audience),
+                ValidateAudience = true,
                 ValidAudience = audience,
+                ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                 NameClaimType = ClaimTypes.NameIdentifier,
                 RoleClaimType = roleClaim,
             };
@@ -78,11 +92,63 @@ builder.Services
                 RoleClaimType = roleClaim,
             };
         }
+
+        jwt.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = ctx =>
+            {
+                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Custodex.Service.Auth.JwtBearer")
+                    .LogWarning(
+                        ctx.Exception,
+                        "JWT authentication failed from {RemoteIp}.",
+                        ctx.HttpContext.Connection.RemoteIpAddress);
+                return Task.CompletedTask;
+            },
+            OnChallenge = ctx =>
+            {
+                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Custodex.Service.Auth.JwtBearer")
+                    .LogWarning(
+                        "JWT authentication challenge issued from {RemoteIp}: {Reason}.",
+                        ctx.HttpContext.Connection.RemoteIpAddress,
+                        ctx.AuthenticateFailure?.Message ?? ctx.ErrorDescription ?? "no token presented");
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
     .Configure<IConfiguration>((opts, config) =>
-        config.GetSection("Custodex:ApiKeys").Bind(opts.Keys));
+        config.GetSection("Custodex:ApiKeys").Bind(opts.Keys))
+    .Validate(
+        opts => opts.Keys.All(k =>
+            !string.IsNullOrWhiteSpace(k.Key) && !string.IsNullOrWhiteSpace(k.Store) && !string.IsNullOrWhiteSpace(k.Role)),
+        "Custodex:ApiKeys entries must have non-empty Key, Store, and Role values.")
+    .ValidateOnStart();
+
+builder.Services.Configure<PageSizeOptions>(o =>
+    o.Max = builder.Configuration.GetValue("Custodex:MaxPageSize", PageSizeOptions.DefaultMax));
+
+builder.Services.Configure<BatchCheckOptions>(o =>
+    o.MaxItems = builder.Configuration.GetValue("Custodex:MaxBatchItems", BatchCheckOptions.DefaultMaxItems));
+
+var rateLimitPermitLimit = builder.Configuration.GetValue("Custodex:RateLimit:PermitLimit", RateLimitOptions.DefaultPermitLimit);
+var rateLimitWindowSeconds = builder.Configuration.GetValue("Custodex:RateLimit:WindowSeconds", RateLimitOptions.DefaultWindowSeconds);
+
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(RateLimitCallerKey(httpContext), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = rateLimitPermitLimit,
+            Window = TimeSpan.FromSeconds(rateLimitWindowSeconds),
+        }));
+});
+
+builder.WebHost.ConfigureKestrel(o =>
+    o.Limits.MaxRequestBodySize = builder.Configuration.GetValue("Custodex:MaxRequestBodyBytes", 10_000_000L));
 
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()
@@ -106,6 +172,12 @@ builder.Services.AddSingleton<IMetricsSnapshotProvider>(sp => sp.GetRequiredServ
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CustodexMeterAggregator>());
 builder.Services.AddHealthChecks()
     .AddCheck<PostgresReadyHealthCheck>("postgres", tags: ["ready"]);
+builder.Services.AddHsts(o =>
+{
+    o.Preload = true;
+    o.IncludeSubDomains = true;
+    o.MaxAge = TimeSpan.FromDays(365);
+});
 
 var app = builder.Build();
 
@@ -118,20 +190,51 @@ if (app.Configuration.GetValue("Custodex:ApplyMigrationsOnStartup", true))
 
 app.UseCustodexProblemDetails();
 
+app.Use(SecurityHeadersMiddleware);
+
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
+
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.UseAntiforgery();
 app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.MapStaticAssets();
 app.MapDefaultEndpoints();
-app.MapOpenApi();
+if (app.Environment.IsDevelopment())
+    app.MapOpenApi();
 app.MapGrpcService<DecisionGrpcService>().RequireAuthorization("Custodex:decide");
 app.MapGrpcService<RelationsGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapGrpcService<SchemaGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapCustodexRest();
-app.MapCustodexStudio();
+app.MapCustodexStudio("Custodex:manage");
 
 app.Run();
+
+static string RateLimitCallerKey(HttpContext context)
+{
+    var store = context.User.FindFirst("Custodex:store")?.Value;
+    var subject = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (store is not null && subject is not null)
+        return $"{store}:{subject}";
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
+
+static Task SecurityHeadersMiddleware(HttpContext context, RequestDelegate next)
+{
+    context.Response.OnStarting(static state =>
+    {
+        var headers = ((HttpContext)state).Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+        headers["Content-Security-Policy"] =
+            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+        return Task.CompletedTask;
+    }, context);
+    return next(context);
+}

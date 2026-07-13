@@ -17,11 +17,17 @@ internal sealed class ClaimsHeaderCustodexTenantResolver(IOptions<CustodexAuthor
         if (string.IsNullOrEmpty(store))
             return ValueTask.FromResult<TenantContext?>(null);
 
+        var entitled = user.FindAll(o.TenantClaim).Select(c => c.Value).ToList();
+
         string? tenantId = null;
         if (httpContext is not null && httpContext.Request.Headers.TryGetValue(o.TenantHeader, out var header))
-            tenantId = header.ToString();
-        if (string.IsNullOrEmpty(tenantId))
-            tenantId = user.FindFirstValue(o.TenantClaim);
+        {
+            var requested = header.ToString();
+            if (!string.IsNullOrEmpty(requested) && entitled.Contains(requested, StringComparer.Ordinal))
+                tenantId = requested;
+        }
+
+        tenantId ??= entitled.Count > 0 ? entitled[0] : null;
         if (string.IsNullOrEmpty(tenantId))
             return ValueTask.FromResult<TenantContext?>(null);
 
