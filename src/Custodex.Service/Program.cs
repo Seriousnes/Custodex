@@ -88,6 +88,9 @@ builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
 builder.Services.Configure<PageSizeOptions>(o =>
     o.Max = builder.Configuration.GetValue("Custodex:MaxPageSize", PageSizeOptions.DefaultMax));
 
+builder.Services.Configure<BatchCheckOptions>(o =>
+    o.MaxItems = builder.Configuration.GetValue("Custodex:MaxBatchItems", BatchCheckOptions.DefaultMaxItems));
+
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()
         .RequireClaim("Custodex:role", "reader", "admin"))

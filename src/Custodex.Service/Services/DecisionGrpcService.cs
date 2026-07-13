@@ -17,7 +17,8 @@ namespace Custodex.Service.Services;
 public sealed class DecisionGrpcService(
     Contracts.IAuthorizer authorizer,
     ITenantContextAccessor tc,
-    IOptions<PageSizeOptions> pageOptions) : Decision.DecisionBase
+    IOptions<PageSizeOptions> pageOptions,
+    IOptions<BatchCheckOptions> batchOptions) : Decision.DecisionBase
 {
     /// <inheritdoc />
     public override async Task<CheckResponse> Check(CheckRequest request, ServerCallContext context)
@@ -51,6 +52,10 @@ public sealed class DecisionGrpcService(
     /// <inheritdoc />
     public override async Task<BatchCheckResponse> BatchCheck(BatchCheckRequest request, ServerCallContext context)
     {
+        var maxItems = batchOptions.Value.MaxItems;
+        if (request.Items.Count > maxItems)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Batch exceeds the maximum of {maxItems} items."));
+
         var items = request.Items
             .Select(i => new Contracts.CheckItem(
                 ProtoMap.FromProto(i.Object),

@@ -25,8 +25,15 @@ public static partial class RestEndpoints
         .WithName("Check")
         .WithSummary("Evaluate a single authorization check.");
 
-        group.MapPost("/batch-check", async (BatchCheckRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
+        group.MapPost("/batch-check", async (BatchCheckRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, IOptions<BatchCheckOptions> batchOptions, CancellationToken ct) =>
         {
+            var maxItems = batchOptions.Value.MaxItems;
+            if (req.Checks.Count > maxItems)
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["checks"] = [$"Batch exceeds the maximum of {maxItems} items."],
+                });
+
             var ctx = RestMap.FromDto(req.Context);
             var items = req.Checks.Select(c =>
                 new CheckItem(RestMap.FromDto(c.Object), c.Permission, ctx.Subject)).ToList();
