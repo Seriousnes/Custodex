@@ -23,6 +23,8 @@ public sealed class OidcAuthTests(PostgresFixture pg)
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
             b.UseSetting("Custodex:Jwt:SigningKey", System.Convert.ToBase64String(SigningKeyBytes));
+            b.UseSetting("Custodex:Jwt:Issuer", "test-issuer");
+            b.UseSetting("Custodex:Jwt:Audience", "test-audience");
             b.UseSetting("Custodex:Jwt:StoreClaim", "Custodex:store");
             b.UseSetting("Custodex:Jwt:RoleClaim", "Custodex:role");
         });
@@ -77,6 +79,7 @@ public sealed class OidcAuthTests(PostgresFixture pg)
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
             b.UseSetting("Custodex:Jwt:SigningKey", System.Convert.ToBase64String(SigningKeyBytes));
+            b.UseSetting("Custodex:Jwt:Issuer", "test-issuer");
             b.UseSetting("Custodex:Jwt:Audience", "custodex-expected-audience");
         });
         var client = factory.CreateClient();
@@ -94,5 +97,47 @@ public sealed class OidcAuthTests(PostgresFixture pg)
         });
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Check_with_wrong_issuer_when_issuer_is_configured_returns_401()
+    {
+        var store = $"s-{Guid.NewGuid():N}";
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
+            b.UseEnvironment("Development");
+            b.UseSetting("Custodex:Jwt:SigningKey", System.Convert.ToBase64String(SigningKeyBytes));
+            b.UseSetting("Custodex:Jwt:Issuer", "custodex-expected-issuer");
+            b.UseSetting("Custodex:Jwt:Audience", "test-audience");
+        });
+        var client = factory.CreateClient();
+        var token = CreateToken(store, "reader");
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var resp = await client.PostAsJsonAsync("/api/check", new
+        {
+            store,
+            tenant = $"t-{Guid.NewGuid():N}",
+            @object = new { type = "res", id = "1" },
+            permission = "view",
+            context = new { subject = new { type = "user", id = "alice" }, attributes = new { } },
+        });
+
+        resp.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public void Building_host_with_signing_key_and_no_issuer_or_audience_throws()
+    {
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
+            b.UseEnvironment("Development");
+            b.UseSetting("Custodex:Jwt:SigningKey", System.Convert.ToBase64String(SigningKeyBytes));
+        });
+
+        Should.Throw<InvalidOperationException>(() => factory.Server);
     }
 }

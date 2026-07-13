@@ -40,6 +40,15 @@ builder.Services.AddOpenApi(o =>
 var jwtSection = builder.Configuration.GetSection("Custodex:Jwt");
 var signingKeyB64 = jwtSection["SigningKey"];
 
+if (!string.IsNullOrEmpty(signingKeyB64))
+{
+    var configuredIssuer = jwtSection["Issuer"];
+    var configuredAudience = jwtSection["Audience"];
+    if (string.IsNullOrEmpty(configuredIssuer) || string.IsNullOrEmpty(configuredAudience))
+        throw new InvalidOperationException(
+            "Custodex:Jwt:Issuer and Custodex:Jwt:Audience are required when a symmetric SigningKey is configured.");
+}
+
 builder.Services
     .AddAuthentication("Custodex-any")
     .AddPolicyScheme("Custodex-any", "ApiKey or Bearer", o =>
@@ -63,10 +72,11 @@ builder.Services
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = key,
-                ValidateIssuer = !string.IsNullOrEmpty(issuer),
+                ValidateIssuer = true,
                 ValidIssuer = issuer,
-                ValidateAudience = !string.IsNullOrEmpty(audience),
+                ValidateAudience = true,
                 ValidAudience = audience,
+                ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                 NameClaimType = ClaimTypes.NameIdentifier,
                 RoleClaimType = roleClaim,
             };
