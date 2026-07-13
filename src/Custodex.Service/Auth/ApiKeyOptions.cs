@@ -31,8 +31,8 @@ public sealed class ApiKeyEntry
     /// The tenants this key may act as. Each value is emitted as a <c>Custodex:tenant</c> claim, and an
     /// <c>X-Custodex-Tenant</c> header is honored only when its value is one of them. Empty (the default)
     /// means the key carries no tenant entitlement, so data-plane requests must supply a tenant the key
-    /// is entitled to. The single value <c>"*"</c> entitles a store-admin key to any concrete tenant in
-    /// its store: the header may then name any tenant except the reserved <c>"*"</c> id itself.
+    /// is entitled to. The single value <c>"*"</c> entitles the key to any concrete tenant in its store:
+    /// the header may then name any tenant except the reserved <c>"*"</c> id itself.
     /// </summary>
     public List<string> Tenants { get; set; } = [];
 }
