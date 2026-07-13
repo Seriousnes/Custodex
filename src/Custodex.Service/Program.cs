@@ -210,7 +210,8 @@ app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.MapStaticAssets();
 app.MapDefaultEndpoints();
-app.MapOpenApi();
+if (app.Environment.IsDevelopment())
+    app.MapOpenApi();
 app.MapGrpcService<DecisionGrpcService>().RequireAuthorization("Custodex:decide");
 app.MapGrpcService<RelationsGrpcService>().RequireAuthorization("Custodex:manage");
 app.MapGrpcService<SchemaGrpcService>().RequireAuthorization("Custodex:manage");
