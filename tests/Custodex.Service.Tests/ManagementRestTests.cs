@@ -14,12 +14,12 @@ namespace Custodex.Service.Tests;
 [Collection("service")]
 public sealed class ManagementRestTests(PostgresFixture pg)
 {
-    private WebApplicationFactory<Program> CreateFactory() =>
+    private WebApplicationFactory<Program> CreateFactory(params string[] tenants) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
-            b.UseAdminApiKey();
+            b.UseAdminApiKey(tenants);
         });
 
     private static HttpClient CreateTenantClient(WebApplicationFactory<Program> factory, string tenant)
@@ -32,8 +32,8 @@ public sealed class ManagementRestTests(PostgresFixture pg)
     [Fact]
     public async Task Provision_set_schema_write_read_tuples_and_read_change_log()
     {
-        await using var factory = CreateFactory();
         var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
         var adminClient = factory.CreateAuthenticatedClient();
         var tenantClient = CreateTenantClient(factory, tenantId);
 
@@ -122,8 +122,8 @@ public sealed class ManagementRestTests(PostgresFixture pg)
     [Fact]
     public async Task Write_then_delete_tuple_leaves_query_empty()
     {
-        await using var factory = CreateFactory();
         var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
         var adminClient = factory.CreateAuthenticatedClient();
         var tenantClient = CreateTenantClient(factory, tenantId);
 

@@ -24,6 +24,14 @@ public sealed class ApiKeyEntry
     /// <summary>The store this key authorizes access to.</summary>
     public string Store { get; set; } = string.Empty;
 
-    /// <summary>The role this key grants — either <c>reader</c> or <c>admin</c>.</summary>
+    /// <summary>The role this key grants - either <c>reader</c> or <c>admin</c>.</summary>
     public string Role { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The tenants this key may act as. Each value is emitted as a <c>Custodex:tenant</c> claim, and an
+    /// <c>X-Custodex-Tenant</c> header is honored only when its value is one of them. Empty (the default)
+    /// means the key carries no tenant entitlement, so data-plane requests must supply a tenant the key
+    /// is entitled to.
+    /// </summary>
+    public List<string> Tenants { get; set; } = [];
 }

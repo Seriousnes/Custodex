@@ -10,7 +10,10 @@ namespace Custodex.Service.Auth;
 
 /// <summary>
 /// Validates the <c>X-Custodex-Key</c> request header against the configured key map,
-/// emitting <c>Custodex:store</c>, <c>Custodex:role</c>, and <c>NameIdentifier</c> claims on success.
+/// emitting <c>Custodex:store</c>, <c>Custodex:role</c>, <c>NameIdentifier</c>, and one
+/// <c>Custodex:tenant</c> claim per configured tenant on success. The tenant claims bound the tenants
+/// the key may act as, so a client-supplied <c>X-Custodex-Tenant</c> header can only select a tenant
+/// the key is entitled to.
 /// Returns <see cref="AuthenticateResult.NoResult"/> when the header is absent so other schemes may run;
 /// returns <see cref="AuthenticateResult.Fail(string)"/> for an unrecognized key value.
 /// </summary>
@@ -38,12 +41,15 @@ public sealed class ApiKeyAuthenticationHandler(
         if (entry is null)
             return Task.FromResult(AuthenticateResult.Fail("Unrecognized API key."));
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, $"apikey:{entry.Store}"),
-            new Claim("Custodex:store", entry.Store),
-            new Claim("Custodex:role", entry.Role),
+            new(ClaimTypes.NameIdentifier, $"apikey:{entry.Store}"),
+            new("Custodex:store", entry.Store),
+            new("Custodex:role", entry.Role),
         };
+        foreach (var tenant in entry.Tenants)
+            claims.Add(new Claim("Custodex:tenant", tenant));
+
         var identity = new ClaimsIdentity(claims, Scheme.Name);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, Scheme.Name);

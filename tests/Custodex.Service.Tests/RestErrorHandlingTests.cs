@@ -15,19 +15,19 @@ namespace Custodex.Service.Tests;
 [Collection("service")]
 public sealed class RestErrorHandlingTests(PostgresFixture pg)
 {
-    private WebApplicationFactory<Program> CreateFactory() =>
+    private WebApplicationFactory<Program> CreateFactory(params string[] tenants) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
-            b.UseAdminApiKey();
+            b.UseAdminApiKey(tenants);
         });
 
     [Fact]
     public async Task Check_against_undefined_permission_returns_400()
     {
-        await using var factory = CreateFactory();
         var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
 
         var adminClient = factory.CreateAuthenticatedClient();
 
@@ -63,8 +63,8 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
     [Fact]
     public async Task Check_with_a_malformed_consistency_token_returns_400()
     {
-        await using var factory = CreateFactory();
         var tenantId = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenantId);
 
         var adminClient = factory.CreateAuthenticatedClient();
 
@@ -108,7 +108,7 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
                 "Host=127.0.0.1;Port=1;Database=nope;Username=u;Password=p;Timeout=1;Command Timeout=1");
             b.UseSetting("Custodex:ApplyMigrationsOnStartup", "false");
             b.UseEnvironment("Development");
-            b.UseAdminApiKey();
+            b.UseAdminApiKey("t-1");
         });
 
         var client = factory.CreateAuthenticatedClient();

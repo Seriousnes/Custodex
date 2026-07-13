@@ -17,12 +17,12 @@ namespace Custodex.Service.Tests;
 [Collection("service")]
 public sealed class DecisionServiceTests(PostgresFixture pg)
 {
-    private WebApplicationFactory<Program> CreateFactory() =>
+    private WebApplicationFactory<Program> CreateFactory(string tenant) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
-            b.UseAdminApiKey();
+            b.UseAdminApiKey(tenant);
         });
 
     private static GrpcChannel CreateChannel(WebApplicationFactory<Program> factory) =>
@@ -31,10 +31,9 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     private static Metadata TenantHeaders(string tenant) =>
         new() { { "x-custodex-tenant", tenant } };
 
-    private static async Task<string> ProvisionAsync(
-        IServiceProvider services, Schema schema)
+    private static async Task ProvisionAsync(
+        IServiceProvider services, Schema schema, string tenant)
     {
-        var tenant = $"tenant-{Guid.NewGuid():N}";
         var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var storeMgr = services.GetRequiredService<IStoreManager>();
@@ -44,14 +43,13 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
         await storeMgr.CreateStoreAsync(TestAuthHelper.AdminStore);
         await tenantMgr.CreateTenantAsync(tc);
         await schemaMgr.SetActiveSchemaAsync(TestAuthHelper.AdminStore, schema);
-
-        return tenant;
     }
 
     [Fact]
     public async Task Check_granted_subject_returns_allowed_true()
     {
-        await using var factory = CreateFactory();
+        var tenant = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenant);
         using var scope = factory.Services.CreateScope();
 
         var schema = new SchemaBuilder("v1")
@@ -60,7 +58,7 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        await ProvisionAsync(scope.ServiceProvider, schema, tenant);
         var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();
@@ -87,7 +85,8 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     [Fact]
     public async Task Check_with_at_least_as_fresh_token_from_the_write_sees_the_write()
     {
-        await using var factory = CreateFactory();
+        var tenant = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenant);
         using var scope = factory.Services.CreateScope();
 
         var schema = new SchemaBuilder("v1")
@@ -96,7 +95,7 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        await ProvisionAsync(scope.ServiceProvider, schema, tenant);
         var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();
@@ -132,7 +131,8 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     [Fact]
     public async Task Check_ungranted_subject_returns_allowed_false()
     {
-        await using var factory = CreateFactory();
+        var tenant = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenant);
         using var scope = factory.Services.CreateScope();
 
         var schema = new SchemaBuilder("v1")
@@ -141,7 +141,7 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        await ProvisionAsync(scope.ServiceProvider, schema, tenant);
 
         var channel = CreateChannel(factory);
         var client = new Proto.Decision.DecisionClient(channel);
@@ -161,7 +161,8 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     [Fact]
     public async Task Check_with_a_malformed_consistency_token_returns_invalid_argument()
     {
-        await using var factory = CreateFactory();
+        var tenant = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenant);
         using var scope = factory.Services.CreateScope();
 
         var schema = new SchemaBuilder("v1")
@@ -170,7 +171,7 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        await ProvisionAsync(scope.ServiceProvider, schema, tenant);
 
         var channel = CreateChannel(factory);
         var client = new Proto.Decision.DecisionClient(channel);
@@ -197,7 +198,8 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     [Fact]
     public async Task ListObjects_returns_both_granted_object_ids_sorted()
     {
-        await using var factory = CreateFactory();
+        var tenant = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenant);
         using var scope = factory.Services.CreateScope();
 
         var schema = new SchemaBuilder("v1")
@@ -206,7 +208,7 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        await ProvisionAsync(scope.ServiceProvider, schema, tenant);
         var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();
@@ -237,7 +239,8 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
     [Fact]
     public async Task BatchCheck_returns_aligned_results()
     {
-        await using var factory = CreateFactory();
+        var tenant = $"tenant-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(tenant);
         using var scope = factory.Services.CreateScope();
 
         var schema = new SchemaBuilder("v1")
@@ -246,7 +249,7 @@ public sealed class DecisionServiceTests(PostgresFixture pg)
                 .Permission("view", p => p.Relation("owner")))
             .Build();
 
-        var tenant = await ProvisionAsync(scope.ServiceProvider, schema);
+        await ProvisionAsync(scope.ServiceProvider, schema, tenant);
         var tc = new TenantContext(TestAuthHelper.AdminStore, tenant);
 
         var relMgr = scope.ServiceProvider.GetRequiredService<IRelationManager>();

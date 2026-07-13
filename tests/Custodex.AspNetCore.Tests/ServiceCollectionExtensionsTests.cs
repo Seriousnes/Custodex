@@ -23,7 +23,7 @@ public class ServiceCollectionExtensionsTests
         provider.GetRequiredService<IAuthorizationPolicyProvider>().ShouldBeOfType<CustodexPolicyProvider>();
         provider.GetServices<IAuthorizationHandler>().OfType<CustodexAuthorizationHandler>().ShouldHaveSingleItem();
         provider.GetRequiredService<ICustodexSubjectResolver>().ShouldBeOfType<ClaimsCustodexSubjectResolver>();
-        provider.GetRequiredService<ICustodexTenantResolver>().ShouldBeOfType<ClaimsHeaderCustodexTenantResolver>();
+        provider.GetRequiredService<ICustodexTenantResolver>().ShouldBeOfType<ClaimsCustodexTenantResolver>();
         provider.GetRequiredService<IRequestContextFactory>().ShouldBeOfType<DefaultRequestContextFactory>();
     }
 
@@ -90,6 +90,17 @@ public class ServiceCollectionExtensionsTests
 
         var provider = services.BuildServiceProvider();
         provider.GetRequiredService<ICustodexTenantResolver>().ShouldBeOfType<ClaimsCustodexTenantResolver>();
+    }
+
+    [Fact]
+    public void UseHeaderTenantResolver_opts_into_the_header_resolver()
+    {
+        var services = new ServiceCollection();
+
+        services.AddCustodexAuthorization().UseHeaderTenantResolver();
+
+        var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<ICustodexTenantResolver>().ShouldBeOfType<ClaimsHeaderCustodexTenantResolver>();
     }
 
     [Fact]

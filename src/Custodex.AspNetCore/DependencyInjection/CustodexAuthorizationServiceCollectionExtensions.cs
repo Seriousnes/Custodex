@@ -29,7 +29,7 @@ public static class CustodexAuthorizationServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, CustodexAuthorizationHandler>());
 
         services.TryAddSingleton<ICustodexSubjectResolver, ClaimsCustodexSubjectResolver>();
-        services.TryAddSingleton<ICustodexTenantResolver, ClaimsHeaderCustodexTenantResolver>();
+        services.TryAddSingleton<ICustodexTenantResolver, ClaimsCustodexTenantResolver>();
         services.TryAddSingleton<IRequestContextFactory, DefaultRequestContextFactory>();
 
         services.TryAddEnumerable(
@@ -56,6 +56,22 @@ public static class CustodexAuthorizationServiceCollectionExtensions
     public static IServiceCollection UseClaimOnlyTenantResolver(this IServiceCollection services)
     {
         services.Replace(ServiceDescriptor.Singleton<ICustodexTenantResolver, ClaimsCustodexTenantResolver>());
+        return services;
+    }
+
+    /// <summary>
+    /// Replaces the tenant resolver with the built-in header resolver, which honors the
+    /// <c>X-Custodex-Tenant</c> header only for a tenant the principal is provably entitled to (a value
+    /// present among the principal's tenant claims, compared ordinal). An absent or un-entitled header
+    /// falls back to the principal's first tenant claim, so a client-supplied header can never select a
+    /// tenant the token does not already grant. Opt in only for callers whose token carries every tenant
+    /// they may act as. Order-independent with respect to <see cref="AddCustodexAuthorization"/>.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    public static IServiceCollection UseHeaderTenantResolver(this IServiceCollection services)
+    {
+        services.Replace(ServiceDescriptor.Singleton<ICustodexTenantResolver, ClaimsHeaderCustodexTenantResolver>());
         return services;
     }
 }
