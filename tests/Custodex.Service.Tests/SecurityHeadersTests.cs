@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Http.Json;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -26,6 +29,29 @@ public sealed class SecurityHeadersTests(PostgresFixture pg)
         response.Headers.GetValues("X-Content-Type-Options").ShouldContain("nosniff");
         response.Headers.GetValues("X-Frame-Options").ShouldContain("DENY");
         response.Headers.GetValues("Referrer-Policy").ShouldContain("no-referrer");
+        response.Headers.GetValues("Content-Security-Policy").First().ShouldContain("frame-ancestors 'none'");
+    }
+
+    [Fact]
+    public async Task Error_response_carries_security_headers()
+    {
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
+            b.UseEnvironment("Development");
+            b.UseAdminApiKey();
+        });
+        var client = factory.CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("/api/check", new
+        {
+            @object = new { type = "res", id = "1" },
+            permission = "view",
+            context = new { subject = new { type = "user", id = "u-1" }, attributes = new { } },
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Headers.GetValues("X-Content-Type-Options").ShouldContain("nosniff");
         response.Headers.GetValues("Content-Security-Policy").First().ShouldContain("frame-ancestors 'none'");
     }
 
