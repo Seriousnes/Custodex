@@ -13,11 +13,12 @@ RUN mkdir -p /https && dotnet dev-certs https -ep /https/custodex.pfx -p custode
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-COPY --from=build /https/custodex.pfx /https/custodex.pfx
+COPY --from=build --chown=$APP_UID:$APP_UID /https/custodex.pfx /https/custodex.pfx
 ENV ASPNETCORE_URLS=https://+:8080 \
     ASPNETCORE_Kestrel__Certificates__Default__Path=/https/custodex.pfx \
     ASPNETCORE_Kestrel__Certificates__Default__Password=custodex-dev
 EXPOSE 8080
 WORKDIR /app
 COPY --from=build /app/publish .
+USER $APP_UID
 ENTRYPOINT ["dotnet", "Custodex.Service.dll"]
