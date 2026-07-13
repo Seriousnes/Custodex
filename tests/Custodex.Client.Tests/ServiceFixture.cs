@@ -33,6 +33,7 @@ public sealed class ServiceFixture : IAsyncLifetime
                 b.UseSetting("Custodex:ApiKeys:0:Key", AdminKey);
                 b.UseSetting("Custodex:ApiKeys:0:Store", "fixture-store");
                 b.UseSetting("Custodex:ApiKeys:0:Role", "admin");
+                b.UseSetting("Custodex:ApiKeys:0:Tenants:0", "*");
             });
         var handler = new ApiKeyHeaderHandler(AdminKey, Factory.Server.CreateHandler());
         GrpcChannel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions

@@ -107,6 +107,40 @@ public sealed class TenantResolutionTests(PostgresFixture pg)
         result!.Allowed.ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task Wildcard_entitled_key_resolves_any_concrete_tenant_via_header()
+    {
+        var store = $"s-{Guid.NewGuid():N}";
+        var tenantId = $"t-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(store, "*");
+        await SeedGrantAsync(factory, store, grantTenant: tenantId, tenantId);
+
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Custodex-Key", ReaderKey);
+        client.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenantId);
+
+        var resp = await client.PostAsJsonAsync("/api/check", CheckBody());
+
+        resp.EnsureSuccessStatusCode();
+        var result = await resp.Content.ReadFromJsonAsync<CheckResponseDto>();
+        result!.Allowed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Wildcard_tenant_header_value_is_never_honored()
+    {
+        var store = $"s-{Guid.NewGuid():N}";
+        await using var factory = CreateFactory(store, "*");
+
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Custodex-Key", ReaderKey);
+        client.DefaultRequestHeaders.Add("X-Custodex-Tenant", "*");
+
+        var resp = await client.PostAsJsonAsync("/api/check", CheckBody());
+
+        resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     private static object CheckBody() => new
     {
         @object = new { type = "widget", id = "1" },
