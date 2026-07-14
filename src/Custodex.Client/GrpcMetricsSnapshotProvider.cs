@@ -8,15 +8,16 @@ namespace Custodex.Client;
 
 /// <summary>
 /// Implements <see cref="IMetricsSnapshotProvider"/> by fetching the live engine's snapshot from a
-/// remote <c>Custodex.Service</c> over gRPC. Because the interface is synchronous, the blocking unary
-/// call is used; typed engine exceptions are preserved via <see cref="RemoteStatus"/>.
+/// remote <c>Custodex.Service</c> over gRPC via a non-blocking asynchronous unary call; typed engine
+/// exceptions are preserved via <see cref="RemoteStatus"/>.
 /// </summary>
 public sealed class GrpcMetricsSnapshotProvider(Proto.Metrics.MetricsClient client) : IMetricsSnapshotProvider
 {
     /// <inheritdoc/>
-    public MetricsSnapshot Capture()
+    public async Task<MetricsSnapshot> CaptureAsync(CancellationToken ct = default)
     {
-        var response = RemoteStatus.Unwrap(() => client.GetSnapshot(new Proto.GetMetricsSnapshotRequest()));
+        var response = await RemoteStatus.UnwrapAsync(() =>
+            client.GetSnapshotAsync(new Proto.GetMetricsSnapshotRequest(), cancellationToken: ct).ResponseAsync);
         return ProtoMap.FromProto(response);
     }
 }

@@ -22,7 +22,7 @@ public sealed class MetricsDashboardTests
 
         public FakeMetricsSnapshotProvider(MetricsSnapshot snapshot) => _snapshot = snapshot;
 
-        public MetricsSnapshot Capture() => _snapshot;
+        public Task<MetricsSnapshot> CaptureAsync(CancellationToken ct = default) => Task.FromResult(_snapshot);
     }
 
     private static BunitContext CreateContext(IMetricsSnapshotProvider provider)

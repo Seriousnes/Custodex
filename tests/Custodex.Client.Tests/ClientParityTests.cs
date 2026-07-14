@@ -227,7 +227,7 @@ public sealed class ClientParityTests(ServiceFixture fx) : IDisposable
             new SubjectRef("user", userId, null), Ctx(new SubjectRef("user", userId, null))));
 
         var provider = new GrpcMetricsSnapshotProvider(new MetricsGrpcClient(fx.GrpcChannel));
-        var snapshot = provider.Capture();
+        var snapshot = await provider.CaptureAsync();
 
         snapshot.ShouldNotBeNull();
         snapshot.CapturedAt.ShouldNotBe(default);

@@ -15,6 +15,6 @@ namespace Custodex.AspNetCore;
 public sealed class MetricsGrpcService(Contracts.IMetricsSnapshotProvider snapshots) : Metrics.MetricsBase
 {
     /// <inheritdoc />
-    public override Task<MetricsSnapshot> GetSnapshot(GetMetricsSnapshotRequest request, ServerCallContext context) =>
-        Task.FromResult(ProtoMap.ToProto(snapshots.Capture()));
+    public override async Task<MetricsSnapshot> GetSnapshot(GetMetricsSnapshotRequest request, ServerCallContext context) =>
+        ProtoMap.ToProto(await snapshots.CaptureAsync(context.CancellationToken));
 }

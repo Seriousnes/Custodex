@@ -74,7 +74,10 @@ public sealed class CustodexMeterAggregator : IMetricsSnapshotProvider, IHostedS
     }
 
     /// <inheritdoc/>
-    public MetricsSnapshot Capture()
+    public Task<MetricsSnapshot> CaptureAsync(CancellationToken ct = default) =>
+        Task.FromResult(Capture());
+
+    private MetricsSnapshot Capture()
     {
         var now = _time.GetUtcNow();
         lock (_gate)

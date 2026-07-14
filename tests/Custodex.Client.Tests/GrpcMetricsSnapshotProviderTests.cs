@@ -7,7 +7,7 @@ namespace Custodex.Client.Tests;
 public sealed class GrpcMetricsSnapshotProviderTests
 {
     [Fact]
-    public void Capture_returns_the_served_snapshot()
+    public async Task Capture_returns_the_served_snapshot()
     {
         var captured = new DateTimeOffset(2026, 7, 14, 9, 15, 0, TimeSpan.Zero);
         var served = new Custodex.Api.MetricsSnapshot
@@ -23,7 +23,7 @@ public sealed class GrpcMetricsSnapshotProviderTests
         };
 
         var provider = new GrpcMetricsSnapshotProvider(new FakeMetricsClient(served));
-        var snapshot = provider.Capture();
+        var snapshot = await provider.CaptureAsync();
 
         snapshot.CapturedAt.ShouldBe(captured);
         snapshot.CheckCount.ShouldBe(7);
@@ -39,8 +39,14 @@ public sealed class GrpcMetricsSnapshotProviderTests
     {
         private readonly Custodex.Api.MetricsSnapshot _response = response;
 
-        public override Custodex.Api.MetricsSnapshot GetSnapshot(
+        public override AsyncUnaryCall<Custodex.Api.MetricsSnapshot> GetSnapshotAsync(
             Custodex.Api.GetMetricsSnapshotRequest request,
-            CallOptions options) => _response;
+            CallOptions options) =>
+            new(
+                Task.FromResult(_response),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => [],
+                () => { });
     }
 }
