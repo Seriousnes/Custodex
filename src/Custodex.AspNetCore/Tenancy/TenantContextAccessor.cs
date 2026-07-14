@@ -8,7 +8,11 @@ internal sealed class TenantContextAccessor : ITenantContextAccessor
 
     internal string? Store { get; set; }
 
+    internal bool Operator { get; set; }
+
     public TenantContext Current => Value ?? throw new MissingTenantContextException();
 
     public string? AuthenticatedStore => Store;
+
+    public bool IsOperator => Operator;
 }

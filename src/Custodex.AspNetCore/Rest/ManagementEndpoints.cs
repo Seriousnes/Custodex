@@ -82,7 +82,7 @@ public static partial class RestEndpoints
         group.MapPut("/schema/{store}", async (
             string store, SetActiveSchemaRequestDto req, ISchemaManager schemas, ITenantContextAccessor tc, CancellationToken ct) =>
         {
-            if (!string.Equals(store, tc.AuthenticatedStore, StringComparison.Ordinal))
+            if (!tc.IsStoreAuthorized(store))
                 return Results.Forbid();
 
             var schema = SchemaJson.Deserialize(req.SchemaJson);
@@ -111,7 +111,7 @@ public static partial class RestEndpoints
         group.MapGet("/schema/{store}", async (
             string store, ISchemaManager schemas, ITenantContextAccessor tc, CancellationToken ct) =>
         {
-            if (!string.Equals(store, tc.AuthenticatedStore, StringComparison.Ordinal))
+            if (!tc.IsStoreAuthorized(store))
                 return Results.Forbid();
 
             var schema = await schemas.GetActiveSchemaAsync(store, ct);
@@ -125,7 +125,7 @@ public static partial class RestEndpoints
         group.MapPost("/stores", async (
             CreateStoreRequestDto req, IStoreManager stores, ITenantContextAccessor tc, CancellationToken ct) =>
         {
-            if (!string.Equals(req.Store, tc.AuthenticatedStore, StringComparison.Ordinal))
+            if (!tc.IsStoreAuthorized(req.Store))
                 return Results.Forbid();
 
             await stores.CreateStoreAsync(req.Store, ct);
@@ -137,7 +137,7 @@ public static partial class RestEndpoints
         group.MapPost("/tenants", async (
             CreateTenantRequestDto req, ITenantManager tenants, ITenantContextAccessor tc, CancellationToken ct) =>
         {
-            if (!string.Equals(req.Store, tc.AuthenticatedStore, StringComparison.Ordinal))
+            if (!tc.IsStoreAuthorized(req.Store))
                 return Results.Forbid();
 
             await tenants.CreateTenantAsync(new TenantContext(req.Store, req.Tenant), ct);

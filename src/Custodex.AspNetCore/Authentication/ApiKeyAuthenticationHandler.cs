@@ -11,7 +11,8 @@ namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Validates the <c>X-Custodex-Key</c> request header against the configured key map,
-/// emitting <c>Custodex:store</c>, <c>Custodex:role</c>, and <c>NameIdentifier</c> claims on success.
+/// emitting <c>Custodex:store</c>, <c>Custodex:role</c>, and <c>NameIdentifier</c> claims on success,
+/// plus <c>Custodex:allowAllStores</c> when the matched key carries the operator capability.
 /// Returns <see cref="AuthenticateResult.NoResult"/> when the header is absent so other schemes may run;
 /// returns <see cref="AuthenticateResult.Fail(string)"/> for an unrecognized key value.
 /// </summary>
@@ -39,12 +40,14 @@ public sealed class ApiKeyAuthenticationHandler(
         if (entry is null)
             return Task.FromResult(AuthenticateResult.Fail("Unrecognized API key."));
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, $"apikey:{entry.Store}"),
-            new Claim("Custodex:store", entry.Store),
-            new Claim("Custodex:role", entry.Role),
+            new(ClaimTypes.NameIdentifier, $"apikey:{entry.Store}"),
+            new("Custodex:store", entry.Store),
+            new("Custodex:role", entry.Role),
         };
+        if (entry.AllowAllStores)
+            claims.Add(new Claim("Custodex:allowAllStores", "true"));
         var identity = new ClaimsIdentity(claims, Scheme.Name);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, Scheme.Name);

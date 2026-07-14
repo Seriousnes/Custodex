@@ -14,7 +14,7 @@ public sealed class SchemaGrpcService(Contracts.ISchemaManager schemas, ITenantC
 {
     private void RequireStore(string store)
     {
-        if (!string.Equals(store, tc.AuthenticatedStore, StringComparison.Ordinal))
+        if (!tc.IsStoreAuthorized(store))
             throw new RpcException(new Status(
                 StatusCode.PermissionDenied, "The authenticated principal is not scoped to the targeted store."));
     }

@@ -26,4 +26,19 @@ public sealed class ApiKeyEntry
 
     /// <summary>The role this key grants — either <c>reader</c> or <c>admin</c>.</summary>
     public string Role { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Opt-in operator capability. When <see langword="true"/>, this credential is <b>not</b> bound to
+    /// <see cref="Store"/>: it may act on <b>any</b> store and <b>any</b> tenant, with the target chosen
+    /// per call from the <c>x-custodex-store</c> and <c>x-custodex-tenant</c> request headers. This
+    /// grants cross-store and cross-tenant reach and defeats the per-credential store isolation that
+    /// holds by default, so it is intended only for development and administrative tooling. Provision
+    /// such a credential only behind a gate and restrict it to a trusted network; never issue it to an
+    /// untrusted caller. Note that the bundled <c>/studio</c> console is currently unauthenticated, so
+    /// exposing it alongside an operator credential exposes every store and tenant. An operator key
+    /// still needs a <see cref="Role"/> of <c>reader</c> or <c>admin</c> to clear the endpoint
+    /// authorization policies. Defaults to <see langword="false"/>, which keeps the secure
+    /// single-store-per-credential behavior.
+    /// </summary>
+    public bool AllowAllStores { get; set; }
 }
