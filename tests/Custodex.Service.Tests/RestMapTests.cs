@@ -1,5 +1,5 @@
 using Custodex.Abstractions;
-using Custodex.Service.Rest;
+using Custodex.AspNetCore;
 using Custodex.TestKit;
 
 using Shouldly;
@@ -122,6 +122,24 @@ public sealed class RestMapTests
             Attributes: null);
 
         RestMap.FromDto(dto).Consistency.ShouldBeNull();
+    }
+
+    [Fact]
+    public void MetricsSnapshot_maps_all_fields_to_dto()
+    {
+        var captured = new DateTimeOffset(2026, 7, 14, 9, 15, 0, TimeSpan.Zero);
+        var snapshot = new MetricsSnapshot(captured, 7, 1.5, 2.5, 3.5, 11, 22, 33);
+
+        var dto = RestMap.ToDto(snapshot);
+
+        dto.CapturedAt.ShouldBe(captured);
+        dto.CheckCount.ShouldBe(7);
+        dto.CheckP50Ms.ShouldBe(1.5);
+        dto.CheckP95Ms.ShouldBe(2.5);
+        dto.CheckP99Ms.ShouldBe(3.5);
+        dto.CacheHits.ShouldBe(11);
+        dto.CacheMisses.ShouldBe(22);
+        dto.CacheSwept.ShouldBe(33);
     }
 
     [Fact]

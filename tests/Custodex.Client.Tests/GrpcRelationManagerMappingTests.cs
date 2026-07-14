@@ -30,13 +30,32 @@ public sealed class GrpcRelationManagerMappingTests
         token.Decode().Tenant.ShouldBe(world.Tenant.Tenant);
     }
 
+    [Fact]
+    public async Task WriteTuples_sends_the_tenant_and_store_headers()
+    {
+        var world = TestWorld.New();
+        var fake = new FakeRelationsClient(new Custodex.Api.WriteTuplesResponse { Count = 0 });
+        var manager = new GrpcRelationManager(fake);
+
+        await manager.WriteTuplesAsync(world.Tenant, world.SubjectId(), []);
+
+        fake.LastHeaders.ShouldNotBeNull();
+        fake.LastHeaders.GetValue("x-custodex-tenant").ShouldBe(world.Tenant.Tenant);
+        fake.LastHeaders.GetValue("x-custodex-store").ShouldBe(world.Tenant.Store);
+    }
+
     private sealed class FakeRelationsClient(Custodex.Api.WriteTuplesResponse response) : Custodex.Api.Relations.RelationsClient
     {
         private readonly Custodex.Api.WriteTuplesResponse _response = response;
 
+        public Metadata? LastHeaders { get; private set; }
+
         public override AsyncUnaryCall<Custodex.Api.WriteTuplesResponse> WriteTuplesAsync(
-            Custodex.Api.WriteTuplesRequest request, CallOptions options) =>
-            new(Task.FromResult(_response), Task.FromResult(new Metadata()),
+            Custodex.Api.WriteTuplesRequest request, CallOptions options)
+        {
+            LastHeaders = options.Headers;
+            return new(Task.FromResult(_response), Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess, () => [], () => { });
+        }
     }
 }

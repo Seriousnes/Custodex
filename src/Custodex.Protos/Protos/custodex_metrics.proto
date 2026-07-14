@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package Custodex.Api;
+
+option csharp_namespace = "Custodex.Api";
+
+import "google/protobuf/timestamp.proto";
+
+service Metrics {
+  rpc GetSnapshot (GetMetricsSnapshotRequest) returns (MetricsSnapshot);
+}
+
+message GetMetricsSnapshotRequest {}
+
+message MetricsSnapshot {
+  google.protobuf.Timestamp captured_at = 1;
+  int64 check_count = 2;
+  double check_p50_ms = 3;
+  double check_p95_ms = 4;
+  double check_p99_ms = 5;
+  int64 cache_hits = 6;
+  int64 cache_misses = 7;
+  int64 cache_swept = 8;
+}

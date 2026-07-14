@@ -1,4 +1,4 @@
-using Custodex.Service.Rest;
+using Custodex.AspNetCore;
 
 using Shouldly;
 

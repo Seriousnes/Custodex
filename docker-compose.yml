@@ -26,6 +26,7 @@ services:
       Custodex__ApiKeys__0__Key: "admin-key"
       Custodex__ApiKeys__0__Store: "default"
       Custodex__ApiKeys__0__Role: "admin"
+      Custodex__ApiKeys__0__Tenants__0: "*"
       ASPNETCORE_ENVIRONMENT: Development
     depends_on:
       db:

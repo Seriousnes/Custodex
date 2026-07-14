@@ -31,6 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Custodex.Client\Custodex.Client.csproj" />
     <ProjectReference Include="..\..\src\Custodex.Studio\Custodex.Studio.csproj" />
     <ProjectReference Include="..\Custodex.TestKit\Custodex.TestKit.csproj" />
   </ItemGroup>

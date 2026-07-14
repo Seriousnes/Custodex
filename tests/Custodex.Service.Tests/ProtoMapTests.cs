@@ -179,6 +179,32 @@ public sealed class ProtoMapTests
     }
 
     [Fact]
+    public void MetricsSnapshot_round_trips_all_fields()
+    {
+        var captured = new DateTimeOffset(2026, 7, 14, 9, 15, 0, TimeSpan.Zero);
+        var record = new Abstractions.MetricsSnapshot(captured, 7, 1.5, 2.5, 3.5, 11, 22, 33);
+
+        var back = ProtoMap.FromProto(ProtoMap.ToProto(record));
+
+        back.CapturedAt.ShouldBe(captured);
+        back.CheckCount.ShouldBe(7);
+        back.CheckP50Ms.ShouldBe(1.5);
+        back.CheckP95Ms.ShouldBe(2.5);
+        back.CheckP99Ms.ShouldBe(3.5);
+        back.CacheHits.ShouldBe(11);
+        back.CacheMisses.ShouldBe(22);
+        back.CacheSwept.ShouldBe(33);
+    }
+
+    [Fact]
+    public void MetricsSnapshot_missing_captured_at_decodes_to_epoch()
+    {
+        var proto = new Api.MetricsSnapshot { CheckCount = 0 };
+
+        ProtoMap.FromProto(proto).CapturedAt.ShouldBe(DateTimeOffset.UnixEpoch);
+    }
+
+    [Fact]
     public void DateTimeOffset_attribute_serializes_as_invariant_iso8601()
     {
         var when = new DateTimeOffset(2026, 6, 25, 8, 30, 0, TimeSpan.Zero);

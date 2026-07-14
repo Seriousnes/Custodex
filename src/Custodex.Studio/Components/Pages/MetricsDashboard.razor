@@ -1,6 +1,6 @@
 @page "/studio/metrics"
 @using MudBlazor
-@using Custodex.Studio.Metrics
+@using Custodex.Abstractions
 @implements IAsyncDisposable
 @inject IMetricsSnapshotProvider Snapshots
 
@@ -56,9 +56,9 @@
     private CancellationTokenSource? _cts;
     private Task? _loop;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        _latest = Snapshots.Capture();
+        _latest = await Snapshots.CaptureAsync();
         Append(_latest);
     }
 
@@ -78,7 +78,7 @@
         {
             while (_timer is not null && await _timer.WaitForNextTickAsync(ct))
             {
-                _latest = Snapshots.Capture();
+                _latest = await Snapshots.CaptureAsync(ct);
                 Append(_latest);
                 await InvokeAsync(StateHasChanged);
             }

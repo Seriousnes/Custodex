@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Custodex.Core;
-using Custodex.Service.Rest;
+using Custodex.AspNetCore;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -42,7 +42,7 @@ public sealed class ManagementRestTests(PostgresFixture pg)
                 .Relation("owner", s => s.Type("user"))
                 .Permission("edit", p => p.Relation("owner")))
             .Build();
-        var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
+        var schemaJson = Custodex.AspNetCore.SchemaJson.Serialize(schema);
 
         var createStore = await adminClient.PostAsJsonAsync("/api/stores",
             new CreateStoreRequestDto(TestAuthHelper.AdminStore));
@@ -97,7 +97,7 @@ public sealed class ManagementRestTests(PostgresFixture pg)
             .Type("doc", t => t
                 .Permission("edit", p => p.Relation("nonexistent")))
             .Build();
-        var badJson = Custodex.Service.Mapping.SchemaJson.Serialize(badSchema);
+        var badJson = Custodex.AspNetCore.SchemaJson.Serialize(badSchema);
 
         var resp = await adminClient.PutAsJsonAsync(
             $"/api/schema/{TestAuthHelper.AdminStore}", new SetActiveSchemaRequestDto(badJson));
@@ -132,7 +132,7 @@ public sealed class ManagementRestTests(PostgresFixture pg)
                 .Relation("owner", s => s.Type("user"))
                 .Permission("edit", p => p.Relation("owner")))
             .Build();
-        var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
+        var schemaJson = Custodex.AspNetCore.SchemaJson.Serialize(schema);
 
         await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
         await adminClient.PostAsJsonAsync("/api/tenants",
@@ -177,7 +177,7 @@ public sealed class ManagementRestTests(PostgresFixture pg)
                 .Relation("owner", s => s.Type("user"))
                 .Permission("edit", p => p.Relation("owner")))
             .Build();
-        var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
+        var schemaJson = Custodex.AspNetCore.SchemaJson.Serialize(schema);
 
         await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
         await adminClient.PostAsJsonAsync("/api/tenants",

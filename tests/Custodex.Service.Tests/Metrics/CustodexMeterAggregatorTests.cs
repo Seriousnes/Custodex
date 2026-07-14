@@ -53,7 +53,7 @@ public sealed class CustodexMeterAggregatorTests
         for (var value = 1; value <= 100; value++)
             rig.CheckDuration.Record(value);
 
-        var snapshot = aggregator.Capture();
+        var snapshot = await aggregator.CaptureAsync();
         await aggregator.StopAsync(CancellationToken.None);
 
         snapshot.CheckCount.ShouldBe(100);
@@ -77,7 +77,7 @@ public sealed class CustodexMeterAggregatorTests
         rig.CacheMisses.Add(7);
         rig.CacheSwept.Add(4);
 
-        var snapshot = aggregator.Capture();
+        var snapshot = await aggregator.CaptureAsync();
         await aggregator.StopAsync(CancellationToken.None);
 
         snapshot.CacheHits.ShouldBe(5);
@@ -102,7 +102,7 @@ public sealed class CustodexMeterAggregatorTests
         for (var i = 0; i < 5; i++)
             rig.CheckDuration.Record(2);
 
-        var snapshot = aggregator.Capture();
+        var snapshot = await aggregator.CaptureAsync();
         await aggregator.StopAsync(CancellationToken.None);
 
         snapshot.CheckCount.ShouldBe(5);
@@ -120,7 +120,7 @@ public sealed class CustodexMeterAggregatorTests
         using var aggregator = new CustodexMeterAggregator(time, meterName);
         await aggregator.StartAsync(CancellationToken.None);
 
-        var snapshot = aggregator.Capture();
+        var snapshot = await aggregator.CaptureAsync();
         await aggregator.StopAsync(CancellationToken.None);
 
         snapshot.CheckCount.ShouldBe(0);

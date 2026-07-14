@@ -1,7 +1,6 @@
 using System.Diagnostics.Metrics;
 
 using Custodex.Abstractions;
-using Custodex.Studio.Metrics;
 
 using Microsoft.Extensions.Hosting;
 
@@ -75,7 +74,13 @@ public sealed class CustodexMeterAggregator : IMetricsSnapshotProvider, IHostedS
     }
 
     /// <inheritdoc/>
-    public MetricsSnapshot Capture()
+    public Task<MetricsSnapshot> CaptureAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(Capture());
+    }
+
+    private MetricsSnapshot Capture()
     {
         var now = _time.GetUtcNow();
         lock (_gate)

@@ -16,7 +16,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Grpc.AspNetCore" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Custodex.Abstractions\Custodex.Abstractions.csproj" />
+		<ProjectReference Include="..\Custodex.Core\Custodex.Core.csproj" />
+		<ProjectReference Include="..\Custodex.Protos\Custodex.Protos.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
