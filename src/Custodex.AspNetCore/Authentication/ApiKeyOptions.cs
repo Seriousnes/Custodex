@@ -9,7 +9,7 @@ namespace Custodex.AspNetCore;
 public sealed class ApiKeyOptions : AuthenticationSchemeOptions
 {
     /// <summary>The HTTP header name inspected for an API key. Defaults to <c>X-Custodex-Key</c>.</summary>
-    public string HeaderName { get; set; } = "X-Custodex-Key";
+    public string HeaderName { get; set; } = CustodexHeaders.ApiKey;
 
     /// <summary>Configured API keys. Each entry maps a key value to the store it authorizes and the role it grants.</summary>
     public List<ApiKeyEntry> Keys { get; set; } = [];

@@ -18,7 +18,7 @@ internal sealed class CustodexOpenApiDocumentTransformer : IOpenApiDocumentTrans
             {
                 Type = SecuritySchemeType.ApiKey,
                 In = ParameterLocation.Header,
-                Name = "X-Custodex-Key",
+                Name = CustodexHeaders.ApiKey,
                 Description = "A store-scoped API key supplied via the X-Custodex-Key header.",
             },
             ["Bearer"] = new OpenApiSecurityScheme

@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 using Custodex.AspNetCore;
 
 using Microsoft.AspNetCore.Authorization;
@@ -66,6 +68,44 @@ public class CustodexServiceCollectionExtensionsTests
         entry.Key.ShouldBe("the-key");
         entry.Store.ShouldBe("the-store");
         entry.Role.ShouldBe("admin");
+    }
+
+    [Fact]
+    public async Task Policies_honour_a_role_delivered_under_a_custom_claim_type()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddCustodexService(EmptyConfiguration());
+        var provider = services.BuildServiceProvider();
+        var authorization = provider.GetRequiredService<IAuthorizationService>();
+
+        var identity = new ClaimsIdentity("jwt", ClaimsIdentity.DefaultNameClaimType, "role");
+        identity.AddClaim(new Claim("role", "admin"));
+        var principal = new ClaimsPrincipal(identity);
+
+        (await authorization.AuthorizeAsync(principal, null, CustodexServiceCollectionExtensions.DecidePolicy))
+            .Succeeded.ShouldBeTrue();
+        (await authorization.AuthorizeAsync(principal, null, CustodexServiceCollectionExtensions.ManagePolicy))
+            .Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Manage_policy_denies_a_reader_role_delivered_under_the_default_claim_type()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddCustodexService(EmptyConfiguration());
+        var provider = services.BuildServiceProvider();
+        var authorization = provider.GetRequiredService<IAuthorizationService>();
+
+        var identity = new ClaimsIdentity("ApiKey", ClaimsIdentity.DefaultNameClaimType, CustodexClaimTypes.Role);
+        identity.AddClaim(new Claim(CustodexClaimTypes.Role, "reader"));
+        var principal = new ClaimsPrincipal(identity);
+
+        (await authorization.AuthorizeAsync(principal, null, CustodexServiceCollectionExtensions.DecidePolicy))
+            .Succeeded.ShouldBeTrue();
+        (await authorization.AuthorizeAsync(principal, null, CustodexServiceCollectionExtensions.ManagePolicy))
+            .Succeeded.ShouldBeFalse();
     }
 
     [Fact]

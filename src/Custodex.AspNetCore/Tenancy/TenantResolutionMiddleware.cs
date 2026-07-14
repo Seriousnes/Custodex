@@ -6,11 +6,11 @@ namespace Custodex.AspNetCore;
 
 internal sealed class TenantResolutionMiddleware(RequestDelegate next)
 {
-    internal const string TenantHeader = "X-Custodex-Tenant";
-    internal const string StoreHeader = "X-Custodex-Store";
-    private const string StoreClaim = "Custodex:store";
-    private const string TenantClaim = "Custodex:tenant";
-    private const string AllowAllStoresClaim = "Custodex:allowAllStores";
+    internal const string TenantHeader = CustodexHeaders.Tenant;
+    internal const string StoreHeader = CustodexHeaders.Store;
+    private const string StoreClaim = CustodexClaimTypes.Store;
+    private const string TenantClaim = CustodexClaimTypes.Tenant;
+    private const string AllowAllStoresClaim = CustodexClaimTypes.AllowAllStores;
     private const string Wildcard = "*";
 
     public async Task InvokeAsync(HttpContext context, TenantContextAccessor accessor)

@@ -58,13 +58,13 @@ public static class CustodexServiceCollectionExtensions
             .AddPolicyScheme("Custodex-any", "ApiKey or Bearer", o =>
             {
                 o.ForwardDefaultSelector = ctx =>
-                    ctx.Request.Headers.ContainsKey("X-Custodex-Key") ? "ApiKey" : JwtBearerDefaults.AuthenticationScheme;
+                    ctx.Request.Headers.ContainsKey(CustodexHeaders.ApiKey) ? "ApiKey" : JwtBearerDefaults.AuthenticationScheme;
                 o.ForwardChallenge = JwtBearerDefaults.AuthenticationScheme;
             })
             .AddScheme<ApiKeyOptions, ApiKeyAuthenticationHandler>("ApiKey", _ => { })
             .AddJwtBearer(jwt =>
             {
-                var roleClaim = jwtSection["RoleClaim"] ?? "Custodex:role";
+                var roleClaim = jwtSection["RoleClaim"] ?? CustodexClaimTypes.Role;
 
                 if (!string.IsNullOrEmpty(signingKeyB64))
                 {
@@ -125,7 +125,7 @@ public static class CustodexServiceCollectionExtensions
             .Validate(
                 opts => opts.Keys.All(k =>
                     !string.IsNullOrWhiteSpace(k.Key) && !string.IsNullOrWhiteSpace(k.Store) && !string.IsNullOrWhiteSpace(k.Role)),
-                "Custodex:ApiKeys entries must have non-empty Key, Store, and Role values.")
+                $"{sectionName}:ApiKeys entries must have non-empty Key, Store, and Role values.")
             .ValidateOnStart();
 
         services.Configure<PageSizeOptions>(o =>
@@ -135,9 +135,9 @@ public static class CustodexServiceCollectionExtensions
 
         services.AddAuthorizationBuilder()
             .AddPolicy(DecidePolicy, p => p.RequireAuthenticatedUser()
-                .RequireClaim("Custodex:role", "reader", "admin"))
+                .RequireRole("reader", "admin"))
             .AddPolicy(ManagePolicy, p => p.RequireAuthenticatedUser()
-                .RequireClaim("Custodex:role", "admin"));
+                .RequireRole("admin"));
 
         services.AddScoped<TenantContextAccessor>();
         services.AddScoped<ITenantContextAccessor>(sp => sp.GetRequiredService<TenantContextAccessor>());

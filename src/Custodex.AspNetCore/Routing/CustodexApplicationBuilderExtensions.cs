@@ -29,7 +29,10 @@ public static class CustodexApplicationBuilderExtensions
 
     /// <summary>
     /// Adds the tenant-resolution middleware, which derives the request's store and tenant from the
-    /// authenticated principal's claims and the <c>X-Custodex-Tenant</c> header. Place this after the
+    /// authenticated principal's claims and the <c>X-Custodex-Tenant</c> header. A client-supplied
+    /// tenant header is honored only when the principal is entitled to that tenant. When the principal
+    /// is an operator (it carries the <c>Custodex:allowAllStores</c> claim), the target store is taken
+    /// from the <c>X-Custodex-Store</c> header instead of the store claim. Place this after the
     /// authentication and authorization middleware so the principal is available.
     /// </summary>
     /// <param name="app">The web application.</param>

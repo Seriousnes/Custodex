@@ -57,15 +57,16 @@ public sealed class ApiKeyAuthenticationHandler(
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, $"apikey:{entry.Store}"),
-            new("Custodex:store", entry.Store),
-            new("Custodex:role", entry.Role),
+            new(CustodexClaimTypes.Store, entry.Store),
+            new(CustodexClaimTypes.Role, entry.Role),
         };
         if (entry.AllowAllStores)
-            claims.Add(new Claim("Custodex:allowAllStores", "true"));
+            claims.Add(new Claim(CustodexClaimTypes.AllowAllStores, "true"));
         foreach (var tenant in entry.Tenants)
-            claims.Add(new Claim("Custodex:tenant", tenant));
+            claims.Add(new Claim(CustodexClaimTypes.Tenant, tenant));
 
-        var identity = new ClaimsIdentity(claims, Scheme.Name);
+        var identity = new ClaimsIdentity(
+            claims, Scheme.Name, ClaimsIdentity.DefaultNameClaimType, CustodexClaimTypes.Role);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, Scheme.Name);
 

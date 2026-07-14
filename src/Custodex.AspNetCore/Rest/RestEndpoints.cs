@@ -6,7 +6,7 @@ namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Extension methods that wire the Custodex REST API onto a <see cref="WebApplication"/>,
-/// mapping the decision and management endpoint groups onto the application.
+/// mapping the decision, metrics, and management endpoint groups onto the application.
 /// </summary>
 public static partial class RestEndpoints
 {
@@ -17,13 +17,16 @@ public static partial class RestEndpoints
     {
         var api = app.MapGroup("/api");
 
-        var decision = api.MapGroup(string.Empty).WithTags("decision").RequireAuthorization("Custodex:decide");
+        var decision = api.MapGroup(string.Empty).WithTags("decision")
+            .RequireAuthorization(CustodexServiceCollectionExtensions.DecidePolicy);
         MapDecisionEndpoints(decision);
 
-        var metrics = api.MapGroup(string.Empty).WithTags("metrics").RequireAuthorization("Custodex:decide");
+        var metrics = api.MapGroup(string.Empty).WithTags("metrics")
+            .RequireAuthorization(CustodexServiceCollectionExtensions.DecidePolicy);
         MapMetricsEndpoints(metrics);
 
-        var management = api.MapGroup(string.Empty).WithTags("management").RequireAuthorization("Custodex:manage");
+        var management = api.MapGroup(string.Empty).WithTags("management")
+            .RequireAuthorization(CustodexServiceCollectionExtensions.ManagePolicy);
         MapManagementEndpoints(management);
 
         return app;

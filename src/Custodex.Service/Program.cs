@@ -97,7 +97,7 @@ app.Run();
 
 static string RateLimitCallerKey(HttpContext context)
 {
-    var store = context.User.FindFirst("Custodex:store")?.Value;
+    var store = context.User.FindFirst(CustodexClaimTypes.Store)?.Value;
     var subject = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     if (store is not null && subject is not null)
         return $"{store}:{subject}";
