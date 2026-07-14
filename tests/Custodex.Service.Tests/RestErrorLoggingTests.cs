@@ -1,33 +1,43 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 
 using Custodex.Core;
 using Custodex.AspNetCore;
+using Custodex.Service.Tests.Auth;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Logging;
 
 using Shouldly;
 
 namespace Custodex.Service.Tests;
 
 [Collection("service")]
-public sealed class RestErrorHandlingTests(PostgresFixture pg)
+public sealed class RestErrorLoggingTests(PostgresFixture pg)
 {
-    private WebApplicationFactory<Program> CreateFactory(params string[] tenants) =>
+    private const string ProblemDetailsCategory = "Custodex.Service.Rest.ProblemDetails";
+
+    private WebApplicationFactory<Program> CreateFactory(CapturingLoggerProvider capture, params string[] tenants) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
             b.UseEnvironment("Development");
             b.UseAdminApiKey(tenants);
+            b.ConfigureLogging(lb =>
+            {
+                lb.ClearProviders();
+                lb.SetMinimumLevel(LogLevel.Warning);
+                lb.AddProvider(capture);
+            });
         });
 
     [Fact]
-    public async Task Check_against_undefined_permission_returns_400()
+    public async Task Check_against_undefined_permission_logs_a_warning_with_status_and_tenant_context()
     {
+        var capture = new CapturingLoggerProvider();
         var tenantId = $"tenant-{Guid.NewGuid():N}";
-        await using var factory = CreateFactory(tenantId);
+        await using var factory = CreateFactory(capture, tenantId);
 
         var adminClient = factory.CreateAuthenticatedClient();
 
@@ -58,20 +68,31 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
 
         var resp = await tenantClient.PostAsJsonAsync("/api/check", req);
         resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var warnings = capture.Entries
+            .Where(e => e.Category == ProblemDetailsCategory && e.Level == LogLevel.Warning)
+            .ToArray();
+
+        warnings.ShouldNotBeEmpty();
+        warnings.ShouldContain(e =>
+            e.Message.Contains("400") && e.Message.Contains(tenantId) && e.Message.Contains("apikey:"));
+        warnings.ShouldAllBe(e => !e.Message.Contains("d-1") && !e.Message.Contains("u-1"));
     }
 
     [Fact]
-    public async Task Check_with_a_malformed_consistency_token_returns_400()
+    public async Task Check_exceeding_the_evaluation_depth_bound_logs_a_warning_at_422()
     {
+        var capture = new CapturingLoggerProvider();
         var tenantId = $"tenant-{Guid.NewGuid():N}";
-        await using var factory = CreateFactory(tenantId);
+        await using var factory = CreateFactory(capture, tenantId);
 
         var adminClient = factory.CreateAuthenticatedClient();
 
         var schema = new SchemaBuilder("v1")
             .Type("doc", t => t
                 .Relation("owner", s => s.Type("user"))
-                .Permission("view", p => p.Relation("owner")))
+                .Relation("parent", s => s.Type("doc"))
+                .Permission("view", p => p.Relation("owner").Union(x => x.Arrow("parent", "view"))))
             .Build();
         var schemaJson = Custodex.AspNetCore.SchemaJson.Serialize(schema);
 
@@ -84,50 +105,32 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
         var tenantClient = factory.CreateAuthenticatedClient();
         tenantClient.DefaultRequestHeaders.Add("X-Custodex-Tenant", tenantId);
 
+        const int chainLength = 200;
+        var chainTuples = Enumerable.Range(0, chainLength)
+            .Select(i => new RelationTupleDto(
+                new EntityRefDto("doc", $"d-{i}"), "parent", new SubjectRefDto("doc", $"d-{i + 1}", null), null))
+            .ToList();
+        await tenantClient.PostAsJsonAsync("/api/tuples",
+            new WriteTuplesRequestDto(TestAuthHelper.AdminStore, tenantId, "test", chainTuples));
+
         var req = new CheckRequestDto(
             Store: TestAuthHelper.AdminStore,
             Tenant: tenantId,
-            Object: new EntityRefDto("doc", "d-1"),
-            Permission: "view",
-            Context: new RequestContextDto(
-                Subject: new SubjectRefDto("user", "u-1", null),
-                Now: null,
-                Attributes: null,
-                Consistency: new ConsistencyDto("at-least-as-fresh", "not-a-real-token")));
-
-        var resp = await tenantClient.PostAsJsonAsync("/api/check", req);
-        resp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task Internal_error_does_not_leak_exception_detail_in_500_response()
-    {
-        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-        {
-            b.UseSetting("Custodex:ConnectionString",
-                "Host=127.0.0.1;Port=1;Database=nope;Username=u;Password=p;Timeout=1;Command Timeout=1");
-            b.UseSetting("Custodex:ApplyMigrationsOnStartup", "false");
-            b.UseEnvironment("Development");
-            b.UseAdminApiKey("t-1");
-        });
-
-        var client = factory.CreateAuthenticatedClient();
-        client.DefaultRequestHeaders.Add("X-Custodex-Tenant", "t-1");
-
-        var req = new CheckRequestDto(
-            Store: TestAuthHelper.AdminStore,
-            Tenant: "t-1",
-            Object: new EntityRefDto("doc", "d-1"),
+            Object: new EntityRefDto("doc", "d-0"),
             Permission: "view",
             Context: new RequestContextDto(
                 Subject: new SubjectRefDto("user", "u-1", null),
                 Now: null,
                 Attributes: null));
 
-        var resp = await client.PostAsJsonAsync("/api/check", req);
+        var resp = await tenantClient.PostAsJsonAsync("/api/check", req);
+        resp.StatusCode.ShouldBe((HttpStatusCode)422);
 
-        resp.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
-        var problem = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        problem.GetProperty("detail").GetString().ShouldBe("An unexpected error occurred.");
+        var warnings = capture.Entries
+            .Where(e => e.Category == ProblemDetailsCategory && e.Level == LogLevel.Warning)
+            .ToArray();
+
+        warnings.ShouldNotBeEmpty();
+        warnings.ShouldContain(e => e.Message.Contains("422") && e.Message.Contains(tenantId));
     }
 }

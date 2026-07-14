@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 using Custodex.Abstractions;
 
 using Microsoft.AspNetCore.Builder;
@@ -41,12 +43,36 @@ public static partial class RestEndpoints
                     _ => (500, "An unexpected error occurred."),
                 };
 
+                var logger = context.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Custodex.Service.Rest.ProblemDetails");
+
                 if (status == 500)
                 {
-                    context.RequestServices
-                        .GetRequiredService<ILoggerFactory>()
-                        .CreateLogger("Custodex.Service.Rest.ProblemDetails")
-                        .LogError(ex, "Unhandled exception in the REST request pipeline.");
+                    logger.LogError(ex, "Unhandled exception in the REST request pipeline.");
+                }
+                else if (status is 422 or 400)
+                {
+                    var caller = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                    TenantContext? tenantContext = null;
+                    try
+                    {
+                        tenantContext = context.RequestServices
+                            .GetService<ITenantContextAccessor>()?.Current;
+                    }
+                    catch (MissingTenantContextException)
+                    {
+                    }
+
+                    logger.LogWarning(
+                        "Rejected request: status {Status}, reason {Reason}, caller {Caller}, store {Store}, tenant {Tenant}, detail {Detail}",
+                        status,
+                        title,
+                        caller,
+                        tenantContext?.Store,
+                        tenantContext?.Tenant,
+                        ex.Message);
                 }
 
                 context.Response.StatusCode = status;

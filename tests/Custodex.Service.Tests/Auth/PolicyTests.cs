@@ -29,6 +29,7 @@ public sealed class PolicyTests(PostgresFixture pg)
             b.UseSetting("Custodex:ApiKeys:1:Key", AdminKey);
             b.UseSetting("Custodex:ApiKeys:1:Store", Store);
             b.UseSetting("Custodex:ApiKeys:1:Role", "admin");
+            b.UseSetting("Custodex:ApiKeys:1:Tenants:0", "tnt-admin");
         });
 
     [Fact]

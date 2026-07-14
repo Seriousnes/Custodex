@@ -10,21 +10,30 @@ public sealed record RelationTupleDto(
     SubjectRefDto Subject,
     ConditionRefDto? Condition);
 
-/// <summary>Request body for writing relation tuples.</summary>
+/// <summary>
+/// Request body for writing relation tuples. The <c>Actor</c> field is ignored for audit attribution;
+/// the persisted change-log actor is derived server-side from the authenticated caller.
+/// </summary>
 public sealed record WriteTuplesRequestDto(
     string Store,
     string Tenant,
     string Actor,
     IReadOnlyList<RelationTupleDto> Tuples);
 
-/// <summary>Request body for deleting relation tuples.</summary>
+/// <summary>
+/// Request body for deleting relation tuples. The <c>Actor</c> field is ignored for audit attribution;
+/// the persisted change-log actor is derived server-side from the authenticated caller.
+/// </summary>
 public sealed record DeleteTuplesRequestDto(
     string Store,
     string Tenant,
     string Actor,
     IReadOnlyList<RelationTupleDto> Tuples);
 
-/// <summary>Request body for writing attributes onto an entity.</summary>
+/// <summary>
+/// Request body for writing attributes onto an entity. The <c>Actor</c> field is ignored for audit
+/// attribution; the persisted change-log actor is derived server-side from the authenticated caller.
+/// </summary>
 public sealed record WriteAttributesRequestDto(
     string Store,
     string Tenant,

@@ -30,7 +30,7 @@ public sealed partial class IndexedAuthorizer
             await CollectConfirmedAsync(request, schema.Version, wildcard, candidates, recheckAll: true, ct);
 
         var after = ContinuationCursor.DecodeAfter(request.ContinuationToken);
-        var confirmed = new List<string>(request.PageSize);
+        var confirmed = new List<string>(Math.Min(request.PageSize, 256));
         string? lastConfirmed = null;
         var exhausted = true;
 

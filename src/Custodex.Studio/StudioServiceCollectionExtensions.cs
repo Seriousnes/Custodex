@@ -11,10 +11,11 @@ namespace Custodex.Studio;
 public static class StudioServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds Razor component rendering with the interactive server render mode and registers the
-    /// per-session <see cref="StudioConnectionState"/> along with defaults that let the console
-    /// compose standalone: an in-memory <see cref="IStudioViewStore"/> so saved views work with no
-    /// configuration, and <see cref="TimeProvider.System"/>. Register a durable view store (for
+    /// Adds Razor component rendering with the interactive server render mode, flows the caller's
+    /// authentication state into the render pipeline so the console can enforce authorization, and
+    /// registers the per-session <see cref="StudioConnectionState"/> along with defaults that let the
+    /// console compose standalone: an in-memory <see cref="IStudioViewStore"/> so saved views work with
+    /// no configuration, and <see cref="TimeProvider.System"/>. Register a durable view store (for
     /// example with <see cref="AddCustodexStudioPostgresViewStore"/>) before or after this call to
     /// override the in-memory default.
     /// </summary>
@@ -23,6 +24,7 @@ public static class StudioServiceCollectionExtensions
     public static IServiceCollection AddCustodexStudio(this IServiceCollection services)
     {
         services.AddRazorComponents().AddInteractiveServerComponents();
+        services.AddCascadingAuthenticationState();
         services.AddMudServices();
         services.TryAddScoped<StudioConnectionState>();
         services.TryAddSingleton<IStudioViewStore, InMemoryStudioViewStore>();

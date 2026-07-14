@@ -55,7 +55,8 @@ public class OperatorCredentialTests
         var accessor = await RunMiddlewareAsync(
             Principal(
                 new Claim("Custodex:store", boundStore),
-                new Claim("Custodex:allowAllStores", "true")),
+                new Claim("Custodex:allowAllStores", "true"),
+                new Claim("Custodex:tenant", "*")),
             (TenantResolutionMiddleware.StoreHeader, targetStore),
             (TenantResolutionMiddleware.TenantHeader, world.Tenant.Tenant));
 
@@ -111,7 +112,8 @@ public class OperatorCredentialTests
         var accessor = await RunMiddlewareAsync(
             Principal(
                 new Claim("Custodex:store", world.Tenant.Store),
-                new Claim("Custodex:allowAllStores", "true")),
+                new Claim("Custodex:allowAllStores", "true"),
+                new Claim("Custodex:tenant", "*")),
             (TenantResolutionMiddleware.StoreHeader, targetStore),
             (TenantResolutionMiddleware.TenantHeader, world.Tenant.Tenant));
 

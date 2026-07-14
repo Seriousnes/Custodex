@@ -26,13 +26,15 @@ public sealed class OpenApiTests
         "/api/tenants",
     ];
 
-    private static WebApplicationFactory<Program> CreateFactory() =>
+    private static WebApplicationFactory<Program> CreateFactory(string environment) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
-            b.UseEnvironment("Production");
+            b.UseEnvironment(environment);
             b.UseSetting("Custodex:ConnectionString", "Host=localhost;Database=custodex;Username=custodex;Password=custodex");
             b.UseSetting("Custodex:ApplyMigrationsOnStartup", "false");
         });
+
+    private static WebApplicationFactory<Program> CreateFactory() => CreateFactory("Development");
 
     private static async Task<JsonDocument> FetchDocumentAsync(HttpClient client)
     {
@@ -44,14 +46,14 @@ public sealed class OpenApiTests
     }
 
     [Fact]
-    public async Task Document_route_returns_200_json_in_production_without_authentication()
+    public async Task Document_route_is_not_exposed_in_production()
     {
-        await using var factory = CreateFactory();
+        await using var factory = CreateFactory("Production");
         var client = factory.CreateClient();
 
-        using var doc = await FetchDocumentAsync(client);
+        var response = await client.GetAsync("/openapi/v1.json");
 
-        doc.RootElement.GetProperty("openapi").GetString().ShouldNotBeNullOrWhiteSpace();
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]

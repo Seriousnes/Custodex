@@ -22,15 +22,54 @@ public class TenantResolverTests
     private static ClaimsPrincipal Principal(params Claim[] claims) => new(new ClaimsIdentity(claims, "Test"));
 
     [Fact]
-    public async Task Store_from_claim_tenant_from_header()
+    public async Task Entitled_header_is_honored()
     {
         var world = TestWorld.New();
         var http = new DefaultHttpContext();
         http.Request.Headers["X-Custodex-Tenant"] = world.Tenant.Tenant;
 
-        var tenant = await Resolver.ResolveAsync(Principal(new Claim("Custodex:store", world.Tenant.Store)), http, CancellationToken.None);
+        var tenant = await Resolver.ResolveAsync(
+            Principal(
+                new Claim("Custodex:store", world.Tenant.Store),
+                new Claim("Custodex:tenant", world.Tenant.Tenant)),
+            http, CancellationToken.None);
 
         tenant.ShouldBe(world.Tenant);
+    }
+
+    [Fact]
+    public async Task Header_for_an_unentitled_tenant_falls_back_to_the_tenant_claim()
+    {
+        var world = TestWorld.New();
+        var otherTenant = world.EntityType();
+        var http = new DefaultHttpContext();
+        http.Request.Headers["X-Custodex-Tenant"] = otherTenant;
+
+        var tenant = await Resolver.ResolveAsync(
+            Principal(
+                new Claim("Custodex:store", world.Tenant.Store),
+                new Claim("Custodex:tenant", world.Tenant.Tenant)),
+            http, CancellationToken.None);
+
+        tenant.ShouldBe(world.Tenant);
+    }
+
+    [Fact]
+    public async Task Header_among_multiple_entitled_tenants_is_honored()
+    {
+        var world = TestWorld.New();
+        var secondTenant = world.EntityType();
+        var http = new DefaultHttpContext();
+        http.Request.Headers["X-Custodex-Tenant"] = secondTenant;
+
+        var tenant = await Resolver.ResolveAsync(
+            Principal(
+                new Claim("Custodex:store", world.Tenant.Store),
+                new Claim("Custodex:tenant", world.Tenant.Tenant),
+                new Claim("Custodex:tenant", secondTenant)),
+            http, CancellationToken.None);
+
+        tenant.ShouldBe(new TenantContext(world.Tenant.Store, secondTenant));
     }
 
     [Fact]

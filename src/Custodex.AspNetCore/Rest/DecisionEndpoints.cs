@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
+using Microsoft.Extensions.Options;
+
 namespace Custodex.AspNetCore;
 
 public static partial class RestEndpoints
@@ -26,8 +28,15 @@ public static partial class RestEndpoints
         .WithName("Check")
         .WithSummary("Evaluate a single authorization check.");
 
-        group.MapPost("/batch-check", async (BatchCheckRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
+        group.MapPost("/batch-check", async (BatchCheckRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, IOptions<BatchCheckOptions> batchOptions, CancellationToken ct) =>
         {
+            var maxItems = batchOptions.Value.MaxItems;
+            if (req.Checks.Count > maxItems)
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["checks"] = [$"Batch exceeds the maximum of {maxItems} items."],
+                });
+
             var ctx = RestMap.FromDto(req.Context);
             var items = req.Checks.Select(c =>
                 new CheckItem(RestMap.FromDto(c.Object), c.Permission, ctx.Subject)).ToList();
@@ -39,7 +48,7 @@ public static partial class RestEndpoints
         .WithName("BatchCheck")
         .WithSummary("Evaluate multiple authorization checks sharing one request context.");
 
-        group.MapPost("/list-objects", async (ListObjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
+        group.MapPost("/list-objects", async (ListObjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, IOptions<PageSizeOptions> pageOptions, CancellationToken ct) =>
         {
             var ctx = RestMap.FromDto(req.Context);
             var result = await auth.ListObjectsAsync(new ListObjectsRequest(
@@ -48,7 +57,7 @@ public static partial class RestEndpoints
                 req.ObjectType,
                 req.Permission,
                 ctx,
-                req.PageSize > 0 ? req.PageSize : 50,
+                ClampPageSize(req.PageSize, 50, pageOptions.Value.Max),
                 req.ContinuationToken), ct);
 
             return Results.Ok(new ListObjectsResponseDto(result.ObjectIds, result.ContinuationToken));
@@ -56,7 +65,7 @@ public static partial class RestEndpoints
         .WithName("ListObjects")
         .WithSummary("List objects of a given type that a subject may access via a permission.");
 
-        group.MapPost("/list-subjects", async (ListSubjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, CancellationToken ct) =>
+        group.MapPost("/list-subjects", async (ListSubjectsRequestDto req, IAuthorizer auth, ITenantContextAccessor tc, IOptions<PageSizeOptions> pageOptions, CancellationToken ct) =>
         {
             var ctx = RestMap.FromDto(req.Context);
             var result = await auth.ListSubjectsAsync(new ListSubjectsRequest(
@@ -64,7 +73,7 @@ public static partial class RestEndpoints
                 RestMap.FromDto(req.Object),
                 req.Permission,
                 ctx,
-                req.PageSize > 0 ? req.PageSize : 50,
+                ClampPageSize(req.PageSize, 50, pageOptions.Value.Max),
                 req.ContinuationToken), ct);
 
             return Results.Ok(new ListSubjectsResponseDto(
@@ -74,4 +83,7 @@ public static partial class RestEndpoints
         .WithName("ListSubjects")
         .WithSummary("List subjects who may access an object via a permission.");
     }
+
+    private static int ClampPageSize(int requested, int fallback, int max) =>
+        Math.Min(requested > 0 ? requested : fallback, max);
 }

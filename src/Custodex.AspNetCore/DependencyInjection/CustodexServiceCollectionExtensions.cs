@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Custodex.AspNetCore;
@@ -25,7 +26,9 @@ public static class CustodexServiceCollectionExtensions
     /// authentication. Assumes the engine itself (<c>IAuthorizer</c> and the management seams) is
     /// already registered via <c>AddCustodex()</c>. Binds authentication from the given configuration:
     /// <c>{section}:ApiKeys</c> for store-scoped API keys and <c>{section}:Jwt</c> for bearer tokens.
-    /// Call <see cref="CustodexApplicationBuilderExtensions.MapCustodex"/> to map the endpoints.
+    /// The request-size bounds <c>{section}:MaxPageSize</c> and <c>{section}:MaxBatchItems</c> cap the
+    /// list and batch surfaces. Call <see cref="CustodexApplicationBuilderExtensions.MapCustodex"/> to
+    /// map the endpoints.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">Configuration carrying the authentication settings.</param>
@@ -36,9 +39,19 @@ public static class CustodexServiceCollectionExtensions
     {
         services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
         services.AddSingleton<CustodexExceptionInterceptor>();
+        services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ObjectJsonConverter()));
 
         var jwtSection = configuration.GetSection($"{sectionName}:Jwt");
         var signingKeyB64 = jwtSection["SigningKey"];
+
+        if (!string.IsNullOrEmpty(signingKeyB64))
+        {
+            var configuredIssuer = jwtSection["Issuer"];
+            var configuredAudience = jwtSection["Audience"];
+            if (string.IsNullOrEmpty(configuredIssuer) || string.IsNullOrEmpty(configuredAudience))
+                throw new InvalidOperationException(
+                    $"{sectionName}:Jwt:Issuer and {sectionName}:Jwt:Audience are required when a symmetric SigningKey is configured.");
+        }
 
         services
             .AddAuthentication("Custodex-any")
@@ -62,10 +75,11 @@ public static class CustodexServiceCollectionExtensions
                     {
                         ValidateIssuerSigningKey = true,
                         IssuerSigningKey = key,
-                        ValidateIssuer = !string.IsNullOrEmpty(issuer),
+                        ValidateIssuer = true,
                         ValidIssuer = issuer,
-                        ValidateAudience = !string.IsNullOrEmpty(audience),
+                        ValidateAudience = true,
                         ValidAudience = audience,
+                        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                         NameClaimType = ClaimTypes.NameIdentifier,
                         RoleClaimType = roleClaim,
                     };
@@ -80,10 +94,44 @@ public static class CustodexServiceCollectionExtensions
                         RoleClaimType = roleClaim,
                     };
                 }
+
+                jwt.Events = new JwtBearerEvents
+                {
+                    OnAuthenticationFailed = ctx =>
+                    {
+                        ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("Custodex.AspNetCore.JwtBearer")
+                            .LogWarning(
+                                ctx.Exception,
+                                "JWT authentication failed from {RemoteIp}.",
+                                ctx.HttpContext.Connection.RemoteIpAddress);
+                        return Task.CompletedTask;
+                    },
+                    OnChallenge = ctx =>
+                    {
+                        ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("Custodex.AspNetCore.JwtBearer")
+                            .LogWarning(
+                                "JWT authentication challenge issued from {RemoteIp}: {Reason}.",
+                                ctx.HttpContext.Connection.RemoteIpAddress,
+                                ctx.AuthenticateFailure?.Message ?? ctx.ErrorDescription ?? "no token presented");
+                        return Task.CompletedTask;
+                    },
+                };
             });
 
         services.AddOptions<ApiKeyOptions>("ApiKey")
-            .Configure(opts => configuration.GetSection($"{sectionName}:ApiKeys").Bind(opts.Keys));
+            .Configure(opts => configuration.GetSection($"{sectionName}:ApiKeys").Bind(opts.Keys))
+            .Validate(
+                opts => opts.Keys.All(k =>
+                    !string.IsNullOrWhiteSpace(k.Key) && !string.IsNullOrWhiteSpace(k.Store) && !string.IsNullOrWhiteSpace(k.Role)),
+                "Custodex:ApiKeys entries must have non-empty Key, Store, and Role values.")
+            .ValidateOnStart();
+
+        services.Configure<PageSizeOptions>(o =>
+            o.Max = configuration.GetValue($"{sectionName}:MaxPageSize", PageSizeOptions.DefaultMax));
+        services.Configure<BatchCheckOptions>(o =>
+            o.MaxItems = configuration.GetValue($"{sectionName}:MaxBatchItems", BatchCheckOptions.DefaultMaxItems));
 
         services.AddAuthorizationBuilder()
             .AddPolicy(DecidePolicy, p => p.RequireAuthenticatedUser()
