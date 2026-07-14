@@ -14,17 +14,17 @@ namespace Custodex.Client;
 public static class CustodexClientServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers a <see cref="GrpcChannel"/> and all five Custodex facades against the
+    /// Registers a <see cref="GrpcChannel"/> and the Custodex facades against the
     /// <see cref="IAuthorizer"/>, <see cref="IRelationManager"/>, <see cref="ISchemaManager"/>,
-    /// <see cref="IStoreManager"/>, and <see cref="ITenantManager"/> interfaces.
-    /// Swap in-process evaluation for the remote service by replacing
+    /// <see cref="IStoreManager"/>, <see cref="ITenantManager"/>, and <see cref="IMetricsSnapshotProvider"/>
+    /// interfaces. Swap in-process evaluation for the remote service by replacing
     /// <c>AddCustodex().UsePostgres(…)</c> with this call — all other code is unchanged.
     /// </summary>
     public static IServiceCollection AddCustodexClient(this IServiceCollection services, string address) =>
         services.AddCustodexClient(new Uri(address));
 
     /// <summary>
-    /// Registers a <see cref="GrpcChannel"/> and all five Custodex facades using the
+    /// Registers a <see cref="GrpcChannel"/> and the Custodex facades using the
     /// provided <paramref name="address"/> URI.
     /// </summary>
     public static IServiceCollection AddCustodexClient(this IServiceCollection services, Uri address)
@@ -34,8 +34,11 @@ public static class CustodexClientServiceCollectionExtensions
         services.AddSingleton(sp => new Proto.Relations.RelationsClient(sp.GetRequiredService<GrpcChannel>()));
         services.AddSingleton(sp => new Proto.Schema.SchemaClient(sp.GetRequiredService<GrpcChannel>()));
         services.AddSingleton(sp => new Proto.Provisioning.ProvisioningClient(sp.GetRequiredService<GrpcChannel>()));
+        services.AddSingleton(sp => new Proto.Metrics.MetricsClient(sp.GetRequiredService<GrpcChannel>()));
         services.AddSingleton<IAuthorizer>(sp =>
             new GrpcAuthorizer(sp.GetRequiredService<Proto.Decision.DecisionClient>()));
+        services.AddSingleton<IMetricsSnapshotProvider>(sp =>
+            new GrpcMetricsSnapshotProvider(sp.GetRequiredService<Proto.Metrics.MetricsClient>()));
         services.AddSingleton<IRelationManager>(sp =>
             new GrpcRelationManager(sp.GetRequiredService<Proto.Relations.RelationsClient>()));
         services.AddSingleton<ISchemaManager>(sp =>

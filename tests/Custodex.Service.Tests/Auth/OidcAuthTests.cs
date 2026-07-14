@@ -29,13 +29,13 @@ public sealed class OidcAuthTests(PostgresFixture pg)
             b.UseSetting("Custodex:Jwt:RoleClaim", "Custodex:role");
         });
 
-    private static string CreateToken(string store, string role)
+    private static string CreateToken(string store, string role, string storeClaimType = "Custodex:store")
     {
         var key = new SymmetricSecurityKey(SigningKeyBytes);
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var claims = new[]
         {
-            new Claim("Custodex:store", store),
+            new Claim(storeClaimType, store),
             new Claim("Custodex:role", role),
             new Claim(ClaimTypes.NameIdentifier, $"bearer:{store}"),
         };
@@ -126,6 +126,30 @@ public sealed class OidcAuthTests(PostgresFixture pg)
         });
 
         resp.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Bearer_token_carrying_the_store_under_a_custom_claim_can_act_on_that_store()
+    {
+        var store = $"s-{Guid.NewGuid():N}";
+        const string storeClaim = "https://custodex.example/claims/store";
+        await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Custodex:ConnectionString", pg.ConnectionString);
+            b.UseEnvironment("Development");
+            b.UseSetting("Custodex:Jwt:SigningKey", System.Convert.ToBase64String(SigningKeyBytes));
+            b.UseSetting("Custodex:Jwt:Issuer", "test-issuer");
+            b.UseSetting("Custodex:Jwt:Audience", "test-audience");
+            b.UseSetting("Custodex:Jwt:StoreClaim", storeClaim);
+        });
+        var client = factory.CreateClient();
+        var token = CreateToken(store, "admin", storeClaim);
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var resp = await client.PostAsJsonAsync("/api/stores", new { store });
+
+        resp.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     [Fact]

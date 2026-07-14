@@ -155,6 +155,30 @@ public static class ProtoMap
     public static Abstractions.UnmetCondition FromProto(Api.UnmetCondition p) =>
         new(p.Condition, [.. p.MissingKeys]);
 
+    /// <summary>Converts a domain <see cref="Abstractions.MetricsSnapshot"/> to its proto form.</summary>
+    public static Api.MetricsSnapshot ToProto(Abstractions.MetricsSnapshot s) => new()
+    {
+        CapturedAt = Timestamp.FromDateTimeOffset(s.CapturedAt),
+        CheckCount = s.CheckCount,
+        CheckP50Ms = s.CheckP50Ms,
+        CheckP95Ms = s.CheckP95Ms,
+        CheckP99Ms = s.CheckP99Ms,
+        CacheHits = s.CacheHits,
+        CacheMisses = s.CacheMisses,
+        CacheSwept = s.CacheSwept,
+    };
+
+    /// <summary>Converts a proto <see cref="Api.MetricsSnapshot"/> to its domain form. A missing <c>captured_at</c> decodes to the Unix epoch.</summary>
+    public static Abstractions.MetricsSnapshot FromProto(Api.MetricsSnapshot p) => new(
+        p.CapturedAt is null ? DateTimeOffset.UnixEpoch : p.CapturedAt.ToDateTimeOffset(),
+        p.CheckCount,
+        p.CheckP50Ms,
+        p.CheckP95Ms,
+        p.CheckP99Ms,
+        p.CacheHits,
+        p.CacheMisses,
+        p.CacheSwept);
+
     /// <summary>
     /// Converts a domain attribute dictionary to a <see cref="Struct"/>. Integers (<see cref="int"/>,
     /// <see cref="long"/>), floats, bools and strings map to their JSON value kinds;

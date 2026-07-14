@@ -1,25 +1,17 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 
+using Custodex.Abstractions;
+using Custodex.AspNetCore;
 using Custodex.Core;
 using Custodex.Service;
-using Custodex.Service.Auth;
 using Custodex.Service.Health;
 using Custodex.Service.Metrics;
-using Custodex.Service.OpenApi;
-using Custodex.Service.Rest;
-using Custodex.Service.Services;
-using Custodex.Service.Tenancy;
-using Custodex.Service.Views;
 using Custodex.Storage.Postgres;
 using Custodex.Studio;
-using Custodex.Studio.Metrics;
-using Custodex.Studio.Views;
 
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.IdentityModel.Tokens;
 
 using Npgsql;
 
@@ -29,109 +21,9 @@ builder.AddServiceDefaults();
 builder.Services.AddOpenTelemetry()
     .WithTracing(t => t.AddCustodexInstrumentation())
     .WithMetrics(m => m.AddCustodexInstrumentation());
-builder.Services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
-builder.Services.AddSingleton<CustodexExceptionInterceptor>();
-builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ObjectJsonConverter()));
-builder.Services.AddOpenApi(o =>
-{
-    o.AddDocumentTransformer<CustodexOpenApiDocumentTransformer>();
-    o.AddOperationTransformer<CustodexOpenApiOperationTransformer>();
-});
 
-var jwtSection = builder.Configuration.GetSection("Custodex:Jwt");
-var signingKeyB64 = jwtSection["SigningKey"];
-
-if (!string.IsNullOrEmpty(signingKeyB64))
-{
-    var configuredIssuer = jwtSection["Issuer"];
-    var configuredAudience = jwtSection["Audience"];
-    if (string.IsNullOrEmpty(configuredIssuer) || string.IsNullOrEmpty(configuredAudience))
-        throw new InvalidOperationException(
-            "Custodex:Jwt:Issuer and Custodex:Jwt:Audience are required when a symmetric SigningKey is configured.");
-}
-
-builder.Services
-    .AddAuthentication("Custodex-any")
-    .AddPolicyScheme("Custodex-any", "ApiKey or Bearer", o =>
-    {
-        o.ForwardDefaultSelector = ctx =>
-            ctx.Request.Headers.ContainsKey("X-Custodex-Key") ? "ApiKey" : JwtBearerDefaults.AuthenticationScheme;
-        o.ForwardChallenge = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddScheme<ApiKeyOptions, ApiKeyAuthenticationHandler>("ApiKey", _ => { })
-    .AddJwtBearer(jwt =>
-    {
-        var storeClaim = jwtSection["StoreClaim"] ?? "Custodex:store";
-        var roleClaim = jwtSection["RoleClaim"] ?? "Custodex:role";
-
-        if (!string.IsNullOrEmpty(signingKeyB64))
-        {
-            var key = new SymmetricSecurityKey(Convert.FromBase64String(signingKeyB64));
-            var issuer = jwtSection["Issuer"];
-            var audience = jwtSection["Audience"];
-            jwt.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = key,
-                ValidateIssuer = true,
-                ValidIssuer = issuer,
-                ValidateAudience = true,
-                ValidAudience = audience,
-                ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
-                NameClaimType = ClaimTypes.NameIdentifier,
-                RoleClaimType = roleClaim,
-            };
-        }
-        else if (!string.IsNullOrEmpty(jwtSection["Authority"]))
-        {
-            jwt.Authority = jwtSection["Authority"];
-            jwt.Audience = jwtSection["Audience"];
-            jwt.TokenValidationParameters = new TokenValidationParameters
-            {
-                NameClaimType = ClaimTypes.NameIdentifier,
-                RoleClaimType = roleClaim,
-            };
-        }
-
-        jwt.Events = new JwtBearerEvents
-        {
-            OnAuthenticationFailed = ctx =>
-            {
-                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-                    .CreateLogger("Custodex.Service.Auth.JwtBearer")
-                    .LogWarning(
-                        ctx.Exception,
-                        "JWT authentication failed from {RemoteIp}.",
-                        ctx.HttpContext.Connection.RemoteIpAddress);
-                return Task.CompletedTask;
-            },
-            OnChallenge = ctx =>
-            {
-                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-                    .CreateLogger("Custodex.Service.Auth.JwtBearer")
-                    .LogWarning(
-                        "JWT authentication challenge issued from {RemoteIp}: {Reason}.",
-                        ctx.HttpContext.Connection.RemoteIpAddress,
-                        ctx.AuthenticateFailure?.Message ?? ctx.ErrorDescription ?? "no token presented");
-                return Task.CompletedTask;
-            },
-        };
-    });
-
-builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
-    .Configure<IConfiguration>((opts, config) =>
-        config.GetSection("Custodex:ApiKeys").Bind(opts.Keys))
-    .Validate(
-        opts => opts.Keys.All(k =>
-            !string.IsNullOrWhiteSpace(k.Key) && !string.IsNullOrWhiteSpace(k.Store) && !string.IsNullOrWhiteSpace(k.Role)),
-        "Custodex:ApiKeys entries must have non-empty Key, Store, and Role values.")
-    .ValidateOnStart();
-
-builder.Services.Configure<PageSizeOptions>(o =>
-    o.Max = builder.Configuration.GetValue("Custodex:MaxPageSize", PageSizeOptions.DefaultMax));
-
-builder.Services.Configure<BatchCheckOptions>(o =>
-    o.MaxItems = builder.Configuration.GetValue("Custodex:MaxBatchItems", BatchCheckOptions.DefaultMaxItems));
+builder.Services.AddCustodexService(builder.Configuration);
+builder.Services.AddOpenApi(o => o.AddCustodexApiDocumentation());
 
 var rateLimitPermitLimit = builder.Configuration.GetValue("Custodex:RateLimit:PermitLimit", RateLimitOptions.DefaultPermitLimit);
 var rateLimitWindowSeconds = builder.Configuration.GetValue("Custodex:RateLimit:WindowSeconds", RateLimitOptions.DefaultWindowSeconds);
@@ -150,21 +42,13 @@ builder.Services.AddRateLimiter(o =>
 builder.WebHost.ConfigureKestrel(o =>
     o.Limits.MaxRequestBodySize = builder.Configuration.GetValue("Custodex:MaxRequestBodyBytes", 10_000_000L));
 
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()
-        .RequireClaim("Custodex:role", "reader", "admin"))
-    .AddPolicy("Custodex:manage", p => p.RequireAuthenticatedUser()
-        .RequireClaim("Custodex:role", "admin"));
-builder.Services.AddScoped<TenantContextAccessor>();
-builder.Services.AddScoped<ITenantContextAccessor>(sp => sp.GetRequiredService<TenantContextAccessor>());
-
 var connectionString = builder.Configuration.GetConnectionString("Custodex")
     ?? builder.Configuration["Custodex:ConnectionString"]
     ?? throw new InvalidOperationException("Custodex:ConnectionString is required.");
 
 builder.Services.AddCustodex().UsePostgres(connectionString);
+builder.Services.AddCustodexStudioPostgresViewStore(connectionString);
 builder.Services.AddCustodexStudio();
-builder.Services.AddSingleton<IStudioViewStore>(_ => new PostgresStudioViewStore(connectionString));
 
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CustodexMeterAggregator>();
@@ -200,24 +84,20 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 app.UseAntiforgery();
-app.UseMiddleware<TenantResolutionMiddleware>();
+app.UseCustodexTenantResolution();
 
 app.MapStaticAssets();
 app.MapDefaultEndpoints();
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
-app.MapGrpcService<DecisionGrpcService>().RequireAuthorization("Custodex:decide");
-app.MapGrpcService<RelationsGrpcService>().RequireAuthorization("Custodex:manage");
-app.MapGrpcService<SchemaGrpcService>().RequireAuthorization("Custodex:manage");
-app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization("Custodex:manage");
-app.MapCustodexRest();
+app.MapCustodex();
 app.MapCustodexStudio("Custodex:manage");
 
 app.Run();
 
 static string RateLimitCallerKey(HttpContext context)
 {
-    var store = context.User.FindFirst("Custodex:store")?.Value;
+    var store = context.User.FindFirst(CustodexClaimTypes.Store)?.Value;
     var subject = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     if (store is not null && subject is not null)
         return $"{store}:{subject}";

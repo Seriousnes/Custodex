@@ -1,9 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Custodex.AspNetCore;
 using Custodex.Core;
-using Custodex.Service.Mapping;
-using Custodex.Service.Rest;
 
 using Grpc.Core;
 using Grpc.Net.Client;

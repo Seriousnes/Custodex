@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 
 using DecisionClient = Custodex.Api.Decision.DecisionClient;
+using MetricsGrpcClient = Custodex.Api.Metrics.MetricsClient;
 using ProvisioningClient = Custodex.Api.Provisioning.ProvisioningClient;
 using RelationsClient = Custodex.Api.Relations.RelationsClient;
 using SchemaGrpcClient = Custodex.Api.Schema.SchemaClient;
@@ -206,6 +207,34 @@ public sealed class ClientParityTests(ServiceFixture fx) : IDisposable
 
         (await remote.CheckAsync(req)).Allowed.ShouldBeTrue();
         (await remote.CheckAsync(req)).Allowed.ShouldBe((await inProcess.CheckAsync(req)).Allowed);
+    }
+
+    [Fact]
+    public async Task Metrics_snapshot_via_remote_returns_the_served_engine_snapshot()
+    {
+        var schema = new SchemaBuilder("v1")
+            .Type("res", t => t
+                .Relation("owner", s => s.Type("user"))
+                .Permission("read", p => p.Relation("owner")))
+            .Build();
+        var objId = $"obj-{Guid.NewGuid():N}";
+        var userId = $"u-{Guid.NewGuid():N}";
+        var (remote, _, tc) = await SetupAsync(schema, [
+            new RelationTuple(new EntityRef("res", objId), "owner", new SubjectRef("user", userId, null), null)
+        ]);
+
+        await remote.CheckAsync(new CheckRequest(tc, new EntityRef("res", objId), "read",
+            new SubjectRef("user", userId, null), Ctx(new SubjectRef("user", userId, null))));
+
+        var provider = new GrpcMetricsSnapshotProvider(new MetricsGrpcClient(fx.GrpcChannel));
+        var snapshot = await provider.CaptureAsync();
+
+        snapshot.ShouldNotBeNull();
+        snapshot.CapturedAt.ShouldNotBe(default);
+        snapshot.CheckCount.ShouldBeGreaterThanOrEqualTo(0);
+        snapshot.CacheHits.ShouldBeGreaterThanOrEqualTo(0);
+        snapshot.CacheMisses.ShouldBeGreaterThanOrEqualTo(0);
+        snapshot.CacheSwept.ShouldBeGreaterThanOrEqualTo(0);
     }
 
     [Fact]

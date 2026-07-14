@@ -16,7 +16,7 @@ public sealed class GrpcStoreManager(Proto.Provisioning.ProvisioningClient clien
     {
         var proto = new Proto.CreateStoreRequest { Store = store };
         await RemoteStatus.UnwrapAsync(() =>
-            client.CreateStoreAsync(proto, cancellationToken: ct).ResponseAsync);
+            client.CreateStoreAsync(proto, headers: ClientHeaders.StoreMeta(store), cancellationToken: ct).ResponseAsync);
     }
 }
 
@@ -30,6 +30,6 @@ public sealed class GrpcTenantManager(Proto.Provisioning.ProvisioningClient clie
     {
         var proto = new Proto.CreateTenantRequest { Tenant = ProtoMap.ToProto(tenant) };
         await RemoteStatus.UnwrapAsync(() =>
-            client.CreateTenantAsync(proto, cancellationToken: ct).ResponseAsync);
+            client.CreateTenantAsync(proto, headers: ClientHeaders.StoreMeta(tenant.Store), cancellationToken: ct).ResponseAsync);
     }
 }

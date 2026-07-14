@@ -30,7 +30,7 @@ public sealed class GrpcSchemaManager(Proto.Schema.SchemaClient client) : ISchem
             SchemaJson = SchemaJson.Serialize(schema),
         };
         await RemoteStatus.UnwrapAsync(() =>
-            client.SetActiveAsync(proto, cancellationToken: ct).ResponseAsync);
+            client.SetActiveAsync(proto, headers: ClientHeaders.StoreMeta(store), cancellationToken: ct).ResponseAsync);
     }
 
     /// <inheritdoc/>
@@ -38,7 +38,7 @@ public sealed class GrpcSchemaManager(Proto.Schema.SchemaClient client) : ISchem
     {
         var proto = new Proto.GetActiveSchemaRequest { Store = store };
         var response = await RemoteStatus.UnwrapAsync(() =>
-            client.GetActiveAsync(proto, cancellationToken: ct).ResponseAsync);
+            client.GetActiveAsync(proto, headers: ClientHeaders.StoreMeta(store), cancellationToken: ct).ResponseAsync);
         if (!response.Found || string.IsNullOrEmpty(response.SchemaJson))
             return null;
         return SchemaJson.Deserialize(response.SchemaJson);

@@ -25,6 +25,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\Custodex.AspNetCore\Custodex.AspNetCore.csproj" />
 	  <ProjectReference Include="..\Custodex.Core\Custodex.Core.csproj" />
 	  <ProjectReference Include="..\Custodex.Protos\Custodex.Protos.csproj" />
 	  <ProjectReference Include="..\Custodex.ServiceDefaults\Custodex.ServiceDefaults.csproj" />

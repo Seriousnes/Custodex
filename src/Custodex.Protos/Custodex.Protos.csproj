@@ -23,6 +23,7 @@
     <Protobuf Include="Protos\custodex_common.proto" GrpcServices="None" />
     <Protobuf Include="Protos\custodex_decision.proto" GrpcServices="Both" />
     <Protobuf Include="Protos\custodex_management.proto" GrpcServices="Both" />
+    <Protobuf Include="Protos\custodex_metrics.proto" GrpcServices="Both" />
   </ItemGroup>
 
 </Project>

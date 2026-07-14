@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 
 using Custodex.Abstractions;
 using Custodex.Core;
-using Custodex.Service.Rest;
+using Custodex.AspNetCore;
 
 using Grpc.Core;
 using Grpc.Net.Client;
