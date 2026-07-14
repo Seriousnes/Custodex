@@ -65,6 +65,7 @@ public static class CustodexServiceCollectionExtensions
             .AddJwtBearer(jwt =>
             {
                 var roleClaim = jwtSection["RoleClaim"] ?? CustodexClaimTypes.Role;
+                var storeClaim = jwtSection["StoreClaim"] ?? CustodexClaimTypes.Store;
 
                 if (!string.IsNullOrEmpty(signingKeyB64))
                 {
@@ -97,6 +98,17 @@ public static class CustodexServiceCollectionExtensions
 
                 jwt.Events = new JwtBearerEvents
                 {
+                    OnTokenValidated = ctx =>
+                    {
+                        if (!string.Equals(storeClaim, CustodexClaimTypes.Store, StringComparison.Ordinal)
+                            && ctx.Principal?.Identities.FirstOrDefault() is { } identity
+                            && identity.FindFirst(CustodexClaimTypes.Store) is null
+                            && identity.FindFirst(storeClaim) is { Value.Length: > 0 } source)
+                        {
+                            identity.AddClaim(new Claim(CustodexClaimTypes.Store, source.Value));
+                        }
+                        return Task.CompletedTask;
+                    },
                     OnAuthenticationFailed = ctx =>
                     {
                         ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
