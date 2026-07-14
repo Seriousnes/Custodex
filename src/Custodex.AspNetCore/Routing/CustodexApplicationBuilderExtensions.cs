@@ -9,9 +9,9 @@ public static class CustodexApplicationBuilderExtensions
 {
     /// <summary>
     /// Maps the Custodex gRPC services and the REST API onto the application. Each gRPC service is
-    /// guarded by its policy: the decision service requires <c>Custodex:decide</c>; the relations,
-    /// schema, and provisioning services require <c>Custodex:manage</c>. The REST endpoints carry the
-    /// same policies per group. Requires <see cref="CustodexServiceCollectionExtensions.AddCustodexService"/>
+    /// guarded by its policy: the decision and metrics services require <c>Custodex:decide</c>; the
+    /// relations, schema, and provisioning services require <c>Custodex:manage</c>. The REST endpoints
+    /// carry the same policies per group. Requires <see cref="CustodexServiceCollectionExtensions.AddCustodexService"/>
     /// and the authentication/authorization middleware to be in the pipeline.
     /// </summary>
     /// <param name="app">The web application.</param>
@@ -19,6 +19,7 @@ public static class CustodexApplicationBuilderExtensions
     public static WebApplication MapCustodex(this WebApplication app)
     {
         app.MapGrpcService<DecisionGrpcService>().RequireAuthorization(CustodexServiceCollectionExtensions.DecidePolicy);
+        app.MapGrpcService<MetricsGrpcService>().RequireAuthorization(CustodexServiceCollectionExtensions.DecidePolicy);
         app.MapGrpcService<RelationsGrpcService>().RequireAuthorization(CustodexServiceCollectionExtensions.ManagePolicy);
         app.MapGrpcService<SchemaGrpcService>().RequireAuthorization(CustodexServiceCollectionExtensions.ManagePolicy);
         app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization(CustodexServiceCollectionExtensions.ManagePolicy);

@@ -1,7 +1,6 @@
 using System.Diagnostics.Metrics;
 
 using Custodex.Abstractions;
-using Custodex.Studio.Metrics;
 
 using Microsoft.Extensions.Hosting;
 

@@ -20,6 +20,9 @@ public static partial class RestEndpoints
         var decision = api.MapGroup(string.Empty).WithTags("decision").RequireAuthorization("Custodex:decide");
         MapDecisionEndpoints(decision);
 
+        var metrics = api.MapGroup(string.Empty).WithTags("metrics").RequireAuthorization("Custodex:decide");
+        MapMetricsEndpoints(metrics);
+
         var management = api.MapGroup(string.Empty).WithTags("management").RequireAuthorization("Custodex:manage");
         MapManagementEndpoints(management);
 
@@ -27,5 +30,6 @@ public static partial class RestEndpoints
     }
 
     static partial void MapDecisionEndpoints(RouteGroupBuilder group);
+    static partial void MapMetricsEndpoints(RouteGroupBuilder group);
     static partial void MapManagementEndpoints(RouteGroupBuilder group);
 }

@@ -1,3 +1,4 @@
+using Custodex.Abstractions;
 using Custodex.AspNetCore;
 using Custodex.Core;
 using Custodex.Service.Health;
@@ -5,7 +6,6 @@ using Custodex.Service.Metrics;
 using Custodex.Service.Views;
 using Custodex.Storage.Postgres;
 using Custodex.Studio;
-using Custodex.Studio.Metrics;
 using Custodex.Studio.Views;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;

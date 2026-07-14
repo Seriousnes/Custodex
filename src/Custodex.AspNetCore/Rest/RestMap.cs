@@ -75,4 +75,9 @@ public static class RestMap
     public static RelationTupleDto ToDto(RelationTuple t) =>
         new(ToDto(t.Object), t.Relation, ToDto(t.Subject),
             t.Condition is not null ? ToDto(t.Condition) : null);
+
+    /// <summary>Converts a contract <see cref="MetricsSnapshot"/> to its DTO.</summary>
+    public static MetricsSnapshotDto ToDto(MetricsSnapshot s) =>
+        new(s.CapturedAt, s.CheckCount, s.CheckP50Ms, s.CheckP95Ms, s.CheckP99Ms,
+            s.CacheHits, s.CacheMisses, s.CacheSwept);
 }

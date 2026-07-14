@@ -1,8 +1,9 @@
 using Bunit;
 
+using Custodex.Abstractions;
+
 using Custodex.Studio;
 using Custodex.Studio.Components.Pages;
-using Custodex.Studio.Metrics;
 
 using Microsoft.Extensions.DependencyInjection;
 

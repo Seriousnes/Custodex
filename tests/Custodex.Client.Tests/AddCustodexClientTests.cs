@@ -9,7 +9,7 @@ namespace Custodex.Client.Tests;
 public sealed class AddCustodexClientTests
 {
     [Fact]
-    public void AddCustodexClient_registers_all_five_interfaces()
+    public void AddCustodexClient_registers_all_client_interfaces()
     {
         var services = new ServiceCollection();
         services.AddCustodexClient("http://localhost:9999");
@@ -21,5 +21,6 @@ public sealed class AddCustodexClientTests
         provider.GetRequiredService<ISchemaManager>().ShouldBeOfType<GrpcSchemaManager>();
         provider.GetRequiredService<IStoreManager>().ShouldBeOfType<GrpcStoreManager>();
         provider.GetRequiredService<ITenantManager>().ShouldBeOfType<GrpcTenantManager>();
+        provider.GetRequiredService<IMetricsSnapshotProvider>().ShouldBeOfType<GrpcMetricsSnapshotProvider>();
     }
 }
