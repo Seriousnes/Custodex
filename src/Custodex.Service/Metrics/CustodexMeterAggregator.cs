@@ -74,8 +74,11 @@ public sealed class CustodexMeterAggregator : IMetricsSnapshotProvider, IHostedS
     }
 
     /// <inheritdoc/>
-    public Task<MetricsSnapshot> CaptureAsync(CancellationToken ct = default) =>
-        Task.FromResult(Capture());
+    public Task<MetricsSnapshot> CaptureAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(Capture());
+    }
 
     private MetricsSnapshot Capture()
     {
