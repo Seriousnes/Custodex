@@ -1,6 +1,8 @@
 using System.Security.Claims;
 
-namespace Custodex.Service.Tenancy;
+using Microsoft.AspNetCore.Http;
+
+namespace Custodex.AspNetCore;
 
 internal sealed class TenantResolutionMiddleware(RequestDelegate next)
 {

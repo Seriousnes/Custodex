@@ -1,4 +1,4 @@
-namespace Custodex.Service.Rest;
+namespace Custodex.AspNetCore;
 
 /// <summary>Identifies a condition applied to a relation tuple.</summary>
 public sealed record ConditionRefDto(string Name, Dictionary<string, object?> Parameters);

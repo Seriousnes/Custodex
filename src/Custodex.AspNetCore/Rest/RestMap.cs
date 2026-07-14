@@ -1,6 +1,6 @@
 using Custodex.Abstractions;
 
-namespace Custodex.Service.Rest;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Bidirectional converter between REST request/response DTOs and

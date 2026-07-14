@@ -1,7 +1,11 @@
 using Custodex.Abstractions;
-using Custodex.Service.Tenancy;
 
-namespace Custodex.Service.Rest;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Extension method that maps Custodex engine exceptions to RFC 9457 problem details responses.

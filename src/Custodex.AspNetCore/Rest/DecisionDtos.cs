@@ -1,4 +1,4 @@
-namespace Custodex.Service.Rest;
+namespace Custodex.AspNetCore;
 
 /// <summary>Identifies a specific entity by type and id.</summary>
 public sealed record EntityRefDto(string Type, string Id);

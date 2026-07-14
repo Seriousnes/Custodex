@@ -1,6 +1,6 @@
 using Custodex.Abstractions;
 
-namespace Custodex.Service.Tenancy;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Request-scoped accessor for the resolved <see cref="TenantContext"/>.

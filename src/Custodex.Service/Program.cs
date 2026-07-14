@@ -1,22 +1,14 @@
-using System.Security.Claims;
-
+using Custodex.AspNetCore;
 using Custodex.Core;
-using Custodex.Service.Auth;
 using Custodex.Service.Health;
 using Custodex.Service.Metrics;
-using Custodex.Service.OpenApi;
-using Custodex.Service.Rest;
-using Custodex.Service.Services;
-using Custodex.Service.Tenancy;
 using Custodex.Service.Views;
 using Custodex.Storage.Postgres;
 using Custodex.Studio;
 using Custodex.Studio.Metrics;
 using Custodex.Studio.Views;
 
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.IdentityModel.Tokens;
 
 using Npgsql;
 
@@ -26,71 +18,9 @@ builder.AddServiceDefaults();
 builder.Services.AddOpenTelemetry()
     .WithTracing(t => t.AddCustodexInstrumentation())
     .WithMetrics(m => m.AddCustodexInstrumentation());
-builder.Services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
-builder.Services.AddSingleton<CustodexExceptionInterceptor>();
-builder.Services.AddOpenApi(o =>
-{
-    o.AddDocumentTransformer<CustodexOpenApiDocumentTransformer>();
-    o.AddOperationTransformer<CustodexOpenApiOperationTransformer>();
-});
 
-var jwtSection = builder.Configuration.GetSection("Custodex:Jwt");
-var signingKeyB64 = jwtSection["SigningKey"];
-
-builder.Services
-    .AddAuthentication("Custodex-any")
-    .AddPolicyScheme("Custodex-any", "ApiKey or Bearer", o =>
-    {
-        o.ForwardDefaultSelector = ctx =>
-            ctx.Request.Headers.ContainsKey("X-Custodex-Key") ? "ApiKey" : JwtBearerDefaults.AuthenticationScheme;
-        o.ForwardChallenge = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddScheme<ApiKeyOptions, ApiKeyAuthenticationHandler>("ApiKey", _ => { })
-    .AddJwtBearer(jwt =>
-    {
-        var storeClaim = jwtSection["StoreClaim"] ?? "Custodex:store";
-        var roleClaim = jwtSection["RoleClaim"] ?? "Custodex:role";
-
-        if (!string.IsNullOrEmpty(signingKeyB64))
-        {
-            var key = new SymmetricSecurityKey(Convert.FromBase64String(signingKeyB64));
-            var issuer = jwtSection["Issuer"];
-            var audience = jwtSection["Audience"];
-            jwt.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = key,
-                ValidateIssuer = !string.IsNullOrEmpty(issuer),
-                ValidIssuer = issuer,
-                ValidateAudience = !string.IsNullOrEmpty(audience),
-                ValidAudience = audience,
-                NameClaimType = ClaimTypes.NameIdentifier,
-                RoleClaimType = roleClaim,
-            };
-        }
-        else if (!string.IsNullOrEmpty(jwtSection["Authority"]))
-        {
-            jwt.Authority = jwtSection["Authority"];
-            jwt.Audience = jwtSection["Audience"];
-            jwt.TokenValidationParameters = new TokenValidationParameters
-            {
-                NameClaimType = ClaimTypes.NameIdentifier,
-                RoleClaimType = roleClaim,
-            };
-        }
-    });
-
-builder.Services.AddOptions<ApiKeyOptions>("ApiKey")
-    .Configure<IConfiguration>((opts, config) =>
-        config.GetSection("Custodex:ApiKeys").Bind(opts.Keys));
-
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("Custodex:decide", p => p.RequireAuthenticatedUser()
-        .RequireClaim("Custodex:role", "reader", "admin"))
-    .AddPolicy("Custodex:manage", p => p.RequireAuthenticatedUser()
-        .RequireClaim("Custodex:role", "admin"));
-builder.Services.AddScoped<TenantContextAccessor>();
-builder.Services.AddScoped<ITenantContextAccessor>(sp => sp.GetRequiredService<TenantContextAccessor>());
+builder.Services.AddCustodexService(builder.Configuration);
+builder.Services.AddOpenApi(o => o.AddCustodexApiDocumentation());
 
 var connectionString = builder.Configuration.GetConnectionString("Custodex")
     ?? builder.Configuration["Custodex:ConnectionString"]
@@ -122,16 +52,12 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
-app.UseMiddleware<TenantResolutionMiddleware>();
+app.UseCustodexTenantResolution();
 
 app.MapStaticAssets();
 app.MapDefaultEndpoints();
 app.MapOpenApi();
-app.MapGrpcService<DecisionGrpcService>().RequireAuthorization("Custodex:decide");
-app.MapGrpcService<RelationsGrpcService>().RequireAuthorization("Custodex:manage");
-app.MapGrpcService<SchemaGrpcService>().RequireAuthorization("Custodex:manage");
-app.MapGrpcService<ProvisioningGrpcService>().RequireAuthorization("Custodex:manage");
-app.MapCustodexRest();
+app.MapCustodex();
 app.MapCustodexStudio();
 
 app.Run();

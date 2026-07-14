@@ -1,5 +1,5 @@
 using Custodex.Core;
-using Custodex.Service.Mapping;
+using Custodex.AspNetCore;
 
 using Grpc.Core;
 using Grpc.Net.Client;

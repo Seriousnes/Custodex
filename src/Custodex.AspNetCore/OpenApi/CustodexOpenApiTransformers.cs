@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
-namespace Custodex.Service.OpenApi;
+namespace Custodex.AspNetCore;
 
 internal sealed class CustodexOpenApiDocumentTransformer : IOpenApiDocumentTransformer
 {

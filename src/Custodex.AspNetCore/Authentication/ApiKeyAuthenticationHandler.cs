@@ -4,9 +4,10 @@ using System.Text;
 using System.Text.Encodings.Web;
 
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Custodex.Service.Auth;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Validates the <c>X-Custodex-Key</c> request header against the configured key map,

@@ -1,11 +1,10 @@
 using Custodex.Abstractions;
 using Custodex.Protos;
-using Custodex.Service.Tenancy;
 using Custodex.Api;
 
 using Grpc.Core;
 
-namespace Custodex.Service.Services;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// gRPC service for store and tenant provisioning, delegating to

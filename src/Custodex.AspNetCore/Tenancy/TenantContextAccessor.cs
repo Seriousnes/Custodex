@@ -1,6 +1,6 @@
 using Custodex.Abstractions;
 
-namespace Custodex.Service.Tenancy;
+namespace Custodex.AspNetCore;
 
 internal sealed class TenantContextAccessor : ITenantContextAccessor
 {

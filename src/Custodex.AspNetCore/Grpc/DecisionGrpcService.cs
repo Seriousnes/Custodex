@@ -1,12 +1,11 @@
 using Custodex.Protos;
-using Custodex.Service.Tenancy;
 using Custodex.Api;
 
 using Grpc.Core;
 
 using Contracts = Custodex.Abstractions;
 
-namespace Custodex.Service.Services;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// gRPC service implementation for the <c>Decision</c> service.

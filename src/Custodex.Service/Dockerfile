@@ -4,6 +4,7 @@ COPY Directory.Build.props Directory.Packages.props ./
 COPY src/Custodex.Abstractions/ src/Custodex.Abstractions/
 COPY src/Custodex.Protos/ src/Custodex.Protos/
 COPY src/Custodex.Core/ src/Custodex.Core/
+COPY src/Custodex.AspNetCore/ src/Custodex.AspNetCore/
 COPY src/Custodex.Storage.Postgres/ src/Custodex.Storage.Postgres/
 COPY src/Custodex.ServiceDefaults/ src/Custodex.ServiceDefaults/
 COPY src/Custodex.Studio/ src/Custodex.Studio/

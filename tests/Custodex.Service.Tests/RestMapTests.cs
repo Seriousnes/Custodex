@@ -1,5 +1,5 @@
 using Custodex.Abstractions;
-using Custodex.Service.Rest;
+using Custodex.AspNetCore;
 using Custodex.TestKit;
 
 using Shouldly;

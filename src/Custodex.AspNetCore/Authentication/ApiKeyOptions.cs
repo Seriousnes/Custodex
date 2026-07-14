@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 
-namespace Custodex.Service.Auth;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Configuration options for the <c>ApiKey</c> authentication scheme.

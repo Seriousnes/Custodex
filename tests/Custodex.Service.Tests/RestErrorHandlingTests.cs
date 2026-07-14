@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Custodex.Core;
-using Custodex.Service.Rest;
+using Custodex.AspNetCore;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -35,7 +35,7 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
             .Type("doc", t => t
                 .Relation("owner", s => s.Type("user")))
             .Build();
-        var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
+        var schemaJson = Custodex.AspNetCore.SchemaJson.Serialize(schema);
 
         await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
         await adminClient.PostAsJsonAsync("/api/tenants",
@@ -73,7 +73,7 @@ public sealed class RestErrorHandlingTests(PostgresFixture pg)
                 .Relation("owner", s => s.Type("user"))
                 .Permission("view", p => p.Relation("owner")))
             .Build();
-        var schemaJson = Custodex.Service.Mapping.SchemaJson.Serialize(schema);
+        var schemaJson = Custodex.AspNetCore.SchemaJson.Serialize(schema);
 
         await adminClient.PostAsJsonAsync("/api/stores", new CreateStoreRequestDto(TestAuthHelper.AdminStore));
         await adminClient.PostAsJsonAsync("/api/tenants",

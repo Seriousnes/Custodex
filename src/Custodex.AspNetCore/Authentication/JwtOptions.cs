@@ -1,4 +1,4 @@
-namespace Custodex.Service.Auth;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Configuration for the JWT bearer authentication scheme, bound from <c>Custodex:Jwt</c>.

@@ -1,10 +1,11 @@
 using Custodex.Abstractions;
-using Custodex.Service.Mapping;
-using Custodex.Service.Tenancy;
 
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 
-namespace Custodex.Service.Rest;
+namespace Custodex.AspNetCore;
 
 public static partial class RestEndpoints
 {

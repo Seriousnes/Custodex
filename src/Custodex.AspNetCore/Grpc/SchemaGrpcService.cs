@@ -1,12 +1,10 @@
-using Custodex.Service.Mapping;
-using Custodex.Service.Tenancy;
 using Custodex.Api;
 
 using Grpc.Core;
 
 using Contracts = Custodex.Abstractions;
 
-namespace Custodex.Service.Services;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// gRPC service for schema validation and activation, delegating to <see cref="Contracts.ISchemaManager"/>.

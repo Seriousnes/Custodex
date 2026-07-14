@@ -1,10 +1,9 @@
 using Custodex.Abstractions;
-using Custodex.Service.Tenancy;
 
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 
-namespace Custodex.Service.Services;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Server-side interceptor that converts Custodex typed exceptions into

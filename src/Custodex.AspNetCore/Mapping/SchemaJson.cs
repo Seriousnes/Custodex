@@ -2,7 +2,7 @@ using Custodex.Abstractions;
 
 using CoreJson = Custodex.Core.Serialization.SchemaJson;
 
-namespace Custodex.Service.Mapping;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Forwards schema serialization to the canonical <c>Custodex.Core.Serialization.SchemaJson</c>

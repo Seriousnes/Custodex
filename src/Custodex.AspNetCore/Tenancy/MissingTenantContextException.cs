@@ -1,4 +1,4 @@
-namespace Custodex.Service.Tenancy;
+namespace Custodex.AspNetCore;
 
 /// <summary>
 /// Thrown when a handler requires a resolved <see cref="Custodex.Abstractions.TenantContext"/>
