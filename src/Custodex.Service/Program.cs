@@ -3,10 +3,8 @@ using Custodex.AspNetCore;
 using Custodex.Core;
 using Custodex.Service.Health;
 using Custodex.Service.Metrics;
-using Custodex.Service.Views;
 using Custodex.Storage.Postgres;
 using Custodex.Studio;
-using Custodex.Studio.Views;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -27,8 +25,8 @@ var connectionString = builder.Configuration.GetConnectionString("Custodex")
     ?? throw new InvalidOperationException("Custodex:ConnectionString is required.");
 
 builder.Services.AddCustodex().UsePostgres(connectionString);
+builder.Services.AddCustodexStudioPostgresViewStore(connectionString);
 builder.Services.AddCustodexStudio();
-builder.Services.AddSingleton<IStudioViewStore>(_ => new PostgresStudioViewStore(connectionString));
 
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CustodexMeterAggregator>();

@@ -1,10 +1,8 @@
-using Custodex.Studio.Views;
-
 using Npgsql;
 
 using NpgsqlTypes;
 
-namespace Custodex.Service.Views;
+namespace Custodex.Studio.Views;
 
 /// <summary>
 /// Postgres-backed <see cref="IStudioViewStore"/> owned by the console. Opens a short-lived
