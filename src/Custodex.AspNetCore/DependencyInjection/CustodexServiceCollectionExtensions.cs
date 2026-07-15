@@ -1,5 +1,7 @@
 using System.Security.Claims;
 
+using Custodex.Core;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +40,7 @@ public static class CustodexServiceCollectionExtensions
         this IServiceCollection services, IConfiguration configuration, string sectionName = "Custodex")
     {
         services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
+        services.AddCustodexMetrics();
         services.AddSingleton<CustodexExceptionInterceptor>();
         services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ObjectJsonConverter()));
 
