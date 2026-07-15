@@ -57,7 +57,7 @@ public static class CustodexServiceCollectionExtensions
         }
 
         services
-            .AddAuthentication("Custodex-any")
+            .AddAuthentication()
             .AddPolicyScheme("Custodex-any", "ApiKey or Bearer", o =>
             {
                 o.ForwardDefaultSelector = ctx =>
@@ -149,9 +149,13 @@ public static class CustodexServiceCollectionExtensions
             o.MaxItems = configuration.GetValue($"{sectionName}:MaxBatchItems", BatchCheckOptions.DefaultMaxItems));
 
         services.AddAuthorizationBuilder()
-            .AddPolicy(DecidePolicy, p => p.RequireAuthenticatedUser()
+            .AddPolicy(DecidePolicy, p => p
+                .AddAuthenticationSchemes("Custodex-any")
+                .RequireAuthenticatedUser()
                 .RequireRole("reader", "admin"))
-            .AddPolicy(ManagePolicy, p => p.RequireAuthenticatedUser()
+            .AddPolicy(ManagePolicy, p => p
+                .AddAuthenticationSchemes("Custodex-any")
+                .RequireAuthenticatedUser()
                 .RequireRole("admin"));
 
         services.AddScoped<TenantContextAccessor>();

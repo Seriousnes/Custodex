@@ -21,6 +21,7 @@ builder.Services.AddOpenTelemetry()
     .WithMetrics(m => m.AddCustodexInstrumentation());
 
 builder.Services.AddCustodexService(builder.Configuration);
+builder.Services.AddAuthentication("Custodex-any");
 builder.Services.AddOpenApi(o => o.AddCustodexApiDocumentation());
 
 var rateLimitPermitLimit = builder.Configuration.GetValue("Custodex:RateLimit:PermitLimit", RateLimitOptions.DefaultPermitLimit);
