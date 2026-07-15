@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" />
     <PackageReference Include="MudBlazor" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Z.Blazor.Diagrams" />
