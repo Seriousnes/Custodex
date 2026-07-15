@@ -1,5 +1,3 @@
-using System.Security.Claims;
-
 using Custodex.AspNetCore;
 
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -13,8 +11,6 @@ namespace Custodex.AspNetCore.Tests;
 
 public sealed class AuthSchemeCompositionTests
 {
-    private const string ApiKeyScheme = "ApiKey";
-
     [Fact]
     public async Task Decide_policy_authenticates_against_the_custodex_scheme_not_the_host_default()
     {
@@ -30,6 +26,23 @@ public sealed class AuthSchemeCompositionTests
         var decide = await policyProvider.GetPolicyAsync(CustodexServiceCollectionExtensions.DecidePolicy);
         decide.ShouldNotBeNull();
         decide!.AuthenticationSchemes.ShouldContain("Custodex-any");
+    }
+
+    [Fact]
+    public async Task Manage_policy_authenticates_against_the_custodex_scheme_not_the_host_default()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAuthentication(o => o.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie();
+        services.AddCustodexService(new ConfigurationBuilder().Build());
+
+        var provider = services.BuildServiceProvider();
+        var policyProvider = provider.GetRequiredService<IAuthorizationPolicyProvider>();
+
+        var manage = await policyProvider.GetPolicyAsync(CustodexServiceCollectionExtensions.ManagePolicy);
+        manage.ShouldNotBeNull();
+        manage!.AuthenticationSchemes.ShouldContain("Custodex-any");
     }
 
     [Fact]

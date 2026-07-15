@@ -20,8 +20,8 @@ public static class CustodexClientServiceCollectionExtensions
     /// Registers a <see cref="GrpcChannel"/> and the Custodex facades against the
     /// <see cref="IAuthorizer"/>, <see cref="IRelationManager"/>, <see cref="ISchemaManager"/>,
     /// <see cref="IStoreManager"/>, <see cref="ITenantManager"/>, and <see cref="IMetricsSnapshotProvider"/>
-    /// interfaces. Swap in-process evaluation for the remote service by replacing
-    /// <c>AddCustodex().UsePostgres(…)</c> with this call — all other code is unchanged.
+    /// interfaces. Swap in-process evaluation for the remote service by replacing the
+    /// <c>AddCustodex().UsePostgres</c> call with this one; all other code is unchanged.
     /// </summary>
     public static IServiceCollection AddCustodexClient(this IServiceCollection services, string address) =>
         services.AddCustodexClient(new Uri(address));
