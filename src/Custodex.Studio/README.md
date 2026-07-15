@@ -29,3 +29,9 @@ app.MapCustodexStudio(authorizationPolicy: "custodex-admin");
 ## Transitive dependencies
 
 This package carries `MudBlazor` (the console's component library), `Npgsql` (for the optional Postgres-backed view store), and `Z.Blazor.Diagrams` (for the schema graph view) as transitive dependencies.
+
+## Framework script dependency
+
+Studio also depends on `Microsoft.AspNetCore.App.Internal.Assets` so that a host with no `.razor` files of its own still receives `_framework/blazor.web.js` and gets an interactive console; without it, a razor-less host's static asset manifest never picks up the framework script. That dependency is pinned to a fixed minimum version aligned with the AspNetCore band this package targets (currently `10.0.9`).
+
+If your host already has its own `.razor` files and targets a newer AspNetCore band, you may see a static web asset conflict on `_framework/blazor.web.js` (two versions contributing the same path). To resolve it, either pin `Microsoft.AspNetCore.App.Internal.Assets` in your own project (or central package management) to match your AspNetCore band, or rely on your host's own `.razor`-driven SDK resolution and exclude the transitive dependency from Studio.
