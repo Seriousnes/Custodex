@@ -1,10 +1,10 @@
 using System.Diagnostics.Metrics;
 
-using Custodex.Service.Metrics;
+using Custodex.Core;
 
 using Shouldly;
 
-namespace Custodex.Service.Tests.Metrics;
+namespace Custodex.Core.Tests.Metrics;
 
 public sealed class CustodexMeterAggregatorTests
 {
