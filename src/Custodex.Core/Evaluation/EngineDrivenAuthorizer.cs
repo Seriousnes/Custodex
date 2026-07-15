@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 using Custodex.Abstractions;
 using Custodex.Core.Conditions;
 
@@ -63,25 +61,16 @@ public sealed partial class EngineDrivenAuthorizer(
         activity?.SetTag("Custodex.permission", request.Permission);
         activity?.SetTag("Custodex.subject", request.Subject.ToString());
 
-        var start = Stopwatch.GetTimestamp();
-        try
-        {
-            var index = await LoadSchemaAsync(request.Tenant.Store, ct);
-            var ctx = new EvalContext(_options);
-            var roots = request.Explain ? new List<ExplainNode>() : null;
-            var outcome = await CheckPermissionAsync(
-                index, request.Tenant, request.Object, request.Permission, request.Subject,
-                request.Context, ctx, roots, ct);
+        var index = await LoadSchemaAsync(request.Tenant.Store, ct);
+        var ctx = new EvalContext(_options);
+        var roots = request.Explain ? new List<ExplainNode>() : null;
+        var outcome = await CheckPermissionAsync(
+            index, request.Tenant, request.Object, request.Permission, request.Subject,
+            request.Context, ctx, roots, ct);
 
-            activity?.SetTag("Custodex.decision", outcome.Truth.ToString());
-            activity?.SetTag("Custodex.condition_touched", ctx.ConditionTouched);
-            return (outcome, ctx.ConditionTouched, roots is { Count: > 0 } ? roots[0] : null);
-        }
-        finally
-        {
-            var elapsedMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-            CustodexDiagnostics.CheckDuration.Record(elapsedMs);
-        }
+        activity?.SetTag("Custodex.decision", outcome.Truth.ToString());
+        activity?.SetTag("Custodex.condition_touched", ctx.ConditionTouched);
+        return (outcome, ctx.ConditionTouched, roots is { Count: > 0 } ? roots[0] : null);
     }
 
     private async Task<EvalOutcome> CheckPermissionAsync(
