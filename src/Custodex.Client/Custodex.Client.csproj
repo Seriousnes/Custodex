@@ -20,4 +20,8 @@
 		<ProjectReference Include="..\Custodex.Protos\Custodex.Protos.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="Custodex.Client.Tests" />
+	</ItemGroup>
+
 </Project>
