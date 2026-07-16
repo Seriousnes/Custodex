@@ -18,7 +18,10 @@ public static class CustodexCacheServiceCollectionExtensions
     /// Decorates the last-registered <see cref="IAuthorizer"/> with a scoped
     /// <see cref="ScopedCachingAuthorizer"/>: the inner engine is preserved as a singleton under a
     /// private key, and <see cref="IAuthorizer"/> plus <see cref="ICustodexScopedCache"/> resolve to one
-    /// scoped decorator instance per scope. Idempotent: a second call only applies
+    /// scoped decorator instance per scope. The preserved inner engine is wrapped in a check-latency
+    /// metering decorator, so every check that reaches the engine records the
+    /// <c>Custodex.check.duration</c> histogram while a decision served from the scoped cache does not.
+    /// Idempotent: a second call only applies
     /// <paramref name="configure"/> to the shared <see cref="CustodexCacheOptions"/>.
     /// </summary>
     /// <param name="services">The service collection, which must already have an <see cref="IAuthorizer"/> registered.</param>
@@ -90,13 +93,19 @@ public static class CustodexCacheServiceCollectionExtensions
     private static ServiceDescriptor InnerAsKeyedSingleton(ServiceDescriptor inner)
     {
         if (inner.ImplementationInstance is not null)
-            return new ServiceDescriptor(typeof(IAuthorizer), InnerKey, inner.ImplementationInstance);
+            return new ServiceDescriptor(
+                typeof(IAuthorizer), InnerKey, new MeteredAuthorizer((IAuthorizer)inner.ImplementationInstance));
 
         if (inner.ImplementationFactory is not null)
             return new ServiceDescriptor(
-                typeof(IAuthorizer), InnerKey, (sp, _) => inner.ImplementationFactory(sp), ServiceLifetime.Singleton);
+                typeof(IAuthorizer), InnerKey,
+                (sp, _) => new MeteredAuthorizer((IAuthorizer)inner.ImplementationFactory(sp)), ServiceLifetime.Singleton);
 
-        return new ServiceDescriptor(typeof(IAuthorizer), InnerKey, inner.ImplementationType!, ServiceLifetime.Singleton);
+        return new ServiceDescriptor(
+            typeof(IAuthorizer), InnerKey,
+            (sp, _) => new MeteredAuthorizer(
+                (IAuthorizer)ActivatorUtilities.CreateInstance(sp, inner.ImplementationType!)),
+            ServiceLifetime.Singleton);
     }
 
     private sealed class DecisionCacheMarker;

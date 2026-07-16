@@ -1,5 +1,8 @@
 using Custodex.Abstractions;
+using Custodex.Client.Transport;
 
+using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -17,8 +20,8 @@ public static class CustodexClientServiceCollectionExtensions
     /// Registers a <see cref="GrpcChannel"/> and the Custodex facades against the
     /// <see cref="IAuthorizer"/>, <see cref="IRelationManager"/>, <see cref="ISchemaManager"/>,
     /// <see cref="IStoreManager"/>, <see cref="ITenantManager"/>, and <see cref="IMetricsSnapshotProvider"/>
-    /// interfaces. Swap in-process evaluation for the remote service by replacing
-    /// <c>AddCustodex().UsePostgres(…)</c> with this call — all other code is unchanged.
+    /// interfaces. Swap in-process evaluation for the remote service by replacing the
+    /// <c>AddCustodex().UsePostgres</c> call with this one; all other code is unchanged.
     /// </summary>
     public static IServiceCollection AddCustodexClient(this IServiceCollection services, string address) =>
         services.AddCustodexClient(new Uri(address));
@@ -35,6 +38,34 @@ public static class CustodexClientServiceCollectionExtensions
         services.AddSingleton(sp => new Proto.Schema.SchemaClient(sp.GetRequiredService<GrpcChannel>()));
         services.AddSingleton(sp => new Proto.Provisioning.ProvisioningClient(sp.GetRequiredService<GrpcChannel>()));
         services.AddSingleton(sp => new Proto.Metrics.MetricsClient(sp.GetRequiredService<GrpcChannel>()));
+        return services.AddCustodexClientFacades();
+    }
+
+    /// <summary>
+    /// Registers the Custodex gRPC client facades and attaches <paramref name="apiKey"/> as the
+    /// <c>X-Custodex-Key</c> credential on every call. Use an operator key (one carrying
+    /// <c>Custodex:allowAllStores</c>) to reach any store; the target store travels per call in the
+    /// tenant metadata the facades already send.
+    /// </summary>
+    public static IServiceCollection AddCustodexClient(this IServiceCollection services, string address, string apiKey) =>
+        services.AddCustodexClient(new Uri(address), apiKey);
+
+    /// <summary>Registers the credentialed client facades using the provided <paramref name="address"/> URI.</summary>
+    public static IServiceCollection AddCustodexClient(this IServiceCollection services, Uri address, string apiKey)
+    {
+        services.AddSingleton(_ => GrpcChannel.ForAddress(address));
+        services.AddSingleton<CallInvoker>(sp =>
+            sp.GetRequiredService<GrpcChannel>().Intercept(new ApiKeyInterceptor(apiKey)));
+        services.AddSingleton(sp => new Proto.Decision.DecisionClient(sp.GetRequiredService<CallInvoker>()));
+        services.AddSingleton(sp => new Proto.Relations.RelationsClient(sp.GetRequiredService<CallInvoker>()));
+        services.AddSingleton(sp => new Proto.Schema.SchemaClient(sp.GetRequiredService<CallInvoker>()));
+        services.AddSingleton(sp => new Proto.Provisioning.ProvisioningClient(sp.GetRequiredService<CallInvoker>()));
+        services.AddSingleton(sp => new Proto.Metrics.MetricsClient(sp.GetRequiredService<CallInvoker>()));
+        return services.AddCustodexClientFacades();
+    }
+
+    private static IServiceCollection AddCustodexClientFacades(this IServiceCollection services)
+    {
         services.AddSingleton<IAuthorizer>(sp =>
             new GrpcAuthorizer(sp.GetRequiredService<Proto.Decision.DecisionClient>()));
         services.AddSingleton<IMetricsSnapshotProvider>(sp =>

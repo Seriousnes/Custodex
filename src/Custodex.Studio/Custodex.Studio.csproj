@@ -1,10 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <MinVerTagPrefix>studio-v</MinVerTagPrefix>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>The Custodex Studio console as a Razor class library: schema, relation, check-playground, and live-metrics views to mount into any Blazor Server host, in-process or over the Custodex gRPC client.</Description>
+  </PropertyGroup>
+
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" />
     <PackageReference Include="MudBlazor" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Z.Blazor.Diagrams" />
@@ -12,6 +21,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Custodex.Abstractions\Custodex.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

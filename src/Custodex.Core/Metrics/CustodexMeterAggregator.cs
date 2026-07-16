@@ -4,7 +4,7 @@ using Custodex.Abstractions;
 
 using Microsoft.Extensions.Hosting;
 
-namespace Custodex.Service.Metrics;
+namespace Custodex.Core;
 
 /// <summary>
 /// Listens in-process to the engine's <c>"Custodex"</c> meter and aggregates it into a pollable

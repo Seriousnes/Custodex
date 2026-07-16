@@ -9,6 +9,7 @@ using Shouldly;
 
 namespace Custodex.Core.Tests.Evaluation;
 
+[Collection("check duration meter")]
 public class CheckObservabilityTests
 {
     private readonly TestWorld _world = TestWorld.New();
@@ -80,7 +81,7 @@ public class CheckObservabilityTests
     }
 
     [Fact]
-    public async Task Check_records_duration_histogram()
+    public async Task Check_alone_records_no_duration_histogram()
     {
         var measured = false;
         using var mlistener = new MeterListener();
@@ -95,7 +96,7 @@ public class CheckObservabilityTests
         var auth = await NewAsync();
         await auth.CheckAsync(Req(explain: false));
 
-        measured.ShouldBeTrue();
+        measured.ShouldBeFalse();
     }
 
     [Fact]

@@ -1,5 +1,7 @@
 using System.Security.Claims;
 
+using Custodex.Core;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +40,7 @@ public static class CustodexServiceCollectionExtensions
         this IServiceCollection services, IConfiguration configuration, string sectionName = "Custodex")
     {
         services.AddGrpc(o => o.Interceptors.Add<CustodexExceptionInterceptor>());
+        services.AddCustodexMetrics();
         services.AddSingleton<CustodexExceptionInterceptor>();
         services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ObjectJsonConverter()));
 
@@ -54,7 +57,7 @@ public static class CustodexServiceCollectionExtensions
         }
 
         services
-            .AddAuthentication("Custodex-any")
+            .AddAuthentication()
             .AddPolicyScheme("Custodex-any", "ApiKey or Bearer", o =>
             {
                 o.ForwardDefaultSelector = ctx =>
@@ -146,9 +149,13 @@ public static class CustodexServiceCollectionExtensions
             o.MaxItems = configuration.GetValue($"{sectionName}:MaxBatchItems", BatchCheckOptions.DefaultMaxItems));
 
         services.AddAuthorizationBuilder()
-            .AddPolicy(DecidePolicy, p => p.RequireAuthenticatedUser()
+            .AddPolicy(DecidePolicy, p => p
+                .AddAuthenticationSchemes("Custodex-any")
+                .RequireAuthenticatedUser()
                 .RequireRole("reader", "admin"))
-            .AddPolicy(ManagePolicy, p => p.RequireAuthenticatedUser()
+            .AddPolicy(ManagePolicy, p => p
+                .AddAuthenticationSchemes("Custodex-any")
+                .RequireAuthenticatedUser()
                 .RequireRole("admin"));
 
         services.AddScoped<TenantContextAccessor>();

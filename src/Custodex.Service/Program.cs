@@ -1,12 +1,10 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 
-using Custodex.Abstractions;
 using Custodex.AspNetCore;
 using Custodex.Core;
 using Custodex.Service;
 using Custodex.Service.Health;
-using Custodex.Service.Metrics;
 using Custodex.Storage.Postgres;
 using Custodex.Studio;
 
@@ -23,6 +21,7 @@ builder.Services.AddOpenTelemetry()
     .WithMetrics(m => m.AddCustodexInstrumentation());
 
 builder.Services.AddCustodexService(builder.Configuration);
+builder.Services.AddAuthentication("Custodex-any");
 builder.Services.AddOpenApi(o => o.AddCustodexApiDocumentation());
 
 var rateLimitPermitLimit = builder.Configuration.GetValue("Custodex:RateLimit:PermitLimit", RateLimitOptions.DefaultPermitLimit);
@@ -51,9 +50,6 @@ builder.Services.AddCustodexStudioPostgresViewStore(connectionString);
 builder.Services.AddCustodexStudio();
 
 builder.Services.TryAddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<CustodexMeterAggregator>();
-builder.Services.AddSingleton<IMetricsSnapshotProvider>(sp => sp.GetRequiredService<CustodexMeterAggregator>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<CustodexMeterAggregator>());
 builder.Services.AddHealthChecks()
     .AddCheck<PostgresReadyHealthCheck>("postgres", tags: ["ready"]);
 builder.Services.AddHsts(o =>
